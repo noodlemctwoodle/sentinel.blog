@@ -14,15 +14,15 @@ banner: ./defence-against-the-dark-arts.jpg
 
 First of all, you will need to create a Long-Lived Access Token in Home Assistant, to do this click on your Username in the lower-left corner of your browser and then scroll to the bottom and click "Create Token".
 
-Image
+![Image1](content/posts/microsoft-sentinel-notifications/Picture1.png)
 
 Give the token a name and make sure you copy the token before you close the pop-up as you will not be able to retrieve it at a later date.
 
-Image
+![Image2](content/posts/microsoft-sentinel-notifications/Picture2.png)
 
 Now we need to create a Home Assistant Script to carry out the actions that we want Home Assistant to carry out when a Sentinel Incident is raised.
 
-Image
+![Image3](content/posts/microsoft-sentinel-notifications/Picture3.png)
 
 In this script, I am calling WLED to carry out some specific colors based on the incident type as well as send a notification to my Discord Bot, this configuration can also be found on my GitHub.
 Using the script method the possibilities are endless, you could send a notification to your mobile device, have voice notification to your virtual assistants such as Google Home, Amazon Alexa or Siri. I look forward to seeing what you come up with.
@@ -35,7 +35,7 @@ In Azure Sentinel create a new Playbook (Logic App) and select the Trigger "When
 
 You will also need to create a [managed identity](https://medium.com/r/?url=https%3A%2F%2Ftechcommunity.microsoft.com%2Ft5%2Fazure-sentinel%2Fwhat-s-new-managed-identity-for-azure-sentinel-logic-apps%2Fba-p%2F2068204) for this playbook that has the RBAC role of **Microsoft Sentinel Contributor**.
 
-Image
+![Image4](content/posts/microsoft-sentinel-notifications/Picture4.png)
 
 The Value of the "Initialize variable" should be in the following format:
 
@@ -59,11 +59,11 @@ SecurityIncident
 | project Severity
 ```
 
-Image
+![Image5](content/posts/microsoft-sentinel-notifications/Picture5.png)
 
 Next, we need to create a "For Each" loop, some "Conditions" for each of the Azure Sentinel severity types, and an "HTTP" action as outlined below:
 
-Image
+![Image6](content/posts/microsoft-sentinel-notifications/Picture6.png)
 
 Using the Home Assitant REST API we can POST to your instance of Home Assistant using the following URI:
 
@@ -90,6 +90,6 @@ You will need to duplicate this configuration for each of the Azure Sentinel inc
 
 Finally, we just need to create an Azure Sentinel Automation to call the playbook each time an incident is raised in Azure Sentinel.
 
-Image
+![Image7](content/posts/microsoft-sentinel-notifications/Picture7.png)
 
 Hopefully, someone finds this useful if you have any questions please reach out to me in one of the following locations
