@@ -1,37 +1,95 @@
 ---
-title: Introduction to "Defence against the Dark Arts"
-date: 2019-11-07
-description: Defence Against the Dark Arts (abbreviated as DADA) is a subject taught at Hogwarts School of Witchcraft and Wizardry and Ilvermorny School of Witchcraft and Wizardry. In this class, students study and learn how to defend themselves against all aspects of the Dark Arts, including dark creatures, curses, hexes and jinxes (dark charms), and duelling.
+title: Azure Sentinel Notifications
+date: 2022-05-23
+description: Using Home Assistant REST API we can create a Microsoft Sentinel Playbook to activiate lights or send a mobile notification when an incident is created.
+You will need your Home Assistant to be publically accessible for this to work, I recommend using [Nabu Casa](https://www.nabucasa.com/) to achieve this.
 tags:
   - Tutorial
-  - Dark Arts
+  - Microsoft Sentinel
+  - Home Assistant
 banner: ./defence-against-the-dark-arts.jpg
 ---
 
-Thestral dirigible plums, Viktor Krum hexed memory charm Animagus Invisibility Cloak three-headed Dog. Half-Blood Prince Invisibility Cloak cauldron cakes, hiya Harry! Basilisk venom Umbridge swiveling blue eye Levicorpus, nitwit blubber oddment tweak. Chasers Winky quills The Boy Who Lived bat spleens cupboard under the stairs flying motorcycle. Sirius Black Holyhead Harpies, you’ve got dirt on your nose. Floating candles Sir Cadogan The Sight three hoops disciplinary hearing. Grindlewald pig’s tail Sorcerer's Stone biting teacup. Side-along dragon-scale suits Filch 20 points, Mr. Potter.
+## Home Assistant Configuration
 
-Squashy armchairs dirt on your nose brass scales crush the Sopophorous bean with flat side of silver dagger, releases juice better than cutting. Full moon Whomping Willow three turns should do it lemon drops. Locomotor trunks owl treats that will be 50 points, Mr. Potter. Witch Weekly, he will rise again and he will come for us, headmaster Erumpent horn. Fenrir Grayback horseless carriages ‘zis is a chance many would die for!
+First of all, you will need to create a Long-Lived Access Token in Home Assistant, to do this click on your Username in the lower-left corner of your browser and then scroll to the bottom and click "Create Token".
 
-![Potions Class](./potions.jpg)
+[Image]
 
-Half-giant jinxes peg-leg gillywater broken glasses large black dog Great Hall. Nearly-Headless Nick now string them together, and answer me this, which creature would you be unwilling to kiss? Poltergeist sticking charm, troll umbrella stand flying cars golden locket Lily Potter. Pumpkin juice Trevor wave your wand out glass orbs, a Grim knitted hats. Stan Shunpike doe patronus, suck his soul Muggle-Born large order of drills the trace. Bred in captivity fell through the veil, quaffle blue flame ickle diddykins Aragog. Yer a wizard, Harry Doxycide the woes of Mrs. Weasley Goblet of Fire.
+Give the token a name and make sure you copy the token before you close the pop-up as you will not be able to retrieve it at a later date.
 
-## This is a secondary heading
+[Image]
 
-Exume lumos protego leviosa. Aresto expecto engorgio engorgio leviosa legilimens stupefy incantartem mobilarbus accio funnunculus. Serpensortia locomotor incarcerous aguamenti colloportus. Totalus morsmordre stupefy charm- aresto me momentum incarcerous lacarnum locomotor. Revelio relashio veritaserum impedimenta expecto quietus. Legilimens crucio hover cruciatus alohomora tarantallegra petrificus petrificus charm mortis. Nox lumos crucio expecto aparecium lacarnum charm rictusempra pepperup.
+Now we need to create a Home Assistant Script to carry out the actions that we want Home Assistant to carry out when a Sentinel Incident is raised.
 
----
+[Image]
 
-Sectumsempra aresto exume reducio momentum tarantallegra patronum. Totalus amortentia momentum mortis quietus evanesco. Aparecium mobilicorpus aparecium petrificus engorgio evanesco aparecium. Incarcerous serpensortia petrificus conjunctivitis deletrius immobilus sonorous mortis episkey impedimenta. Immobilus lacarnum totalus protean. Funnunculus exume serpensortia inflamarae relashio alohomora locomotor inflamarae lumos. Skele-gro totalus.
+In this script, I am calling WLED to carry out some specific colors based on the incident type as well as send a notification to my Discord Bot, this configuration can also be found on my GitHub.
+Using the script method the possibilities are endless, you could send a notification to your mobile device, have voice notification to your virtual assistants such as Google Home, Amazon Alexa or Siri. I look forward to seeing what you come up with.
 
-## Another secondary heading
+## Azure Sentinel Playbook Configuration
 
-### Third heading level
+Let's look at how we create this Playbook.
 
-Legilimens colloportus aparecium aresto aparecium leviosa unctuous inflamarae. Quietus mobilarbus incarcerous stupefy confundus leviosa. Quietus funnunculus leviosa evanesco babbling evanesco lumos expecto incarcerous mortis.
+In Azure Sentinel create a new Playbook (Logic App) and select the Trigger "When Azure Sentinel incident creation rule was triggered", then we need to create the API-Key to authenticate against Home Assistant.
 
-Reparo reparo alohomora vow. Lacarnum locomotor sonorus lumos incantato reducto imperius locomotor legilimens evanesco. Locomotor patronum stupefy lumos scourgify lacarnum. Portus charm inflamarae leviosa stupefy. Incarcerous totalus incantatem impedimenta morsmordre leviosa unction ennervate. Rictusempra aparecium incendio alohomora totalus quietus serpensortia protego.
+You will also need to create a [managed identity](https://medium.com/r/?url=https%3A%2F%2Ftechcommunity.microsoft.com%2Ft5%2Fazure-sentinel%2Fwhat-s-new-managed-identity-for-azure-sentinel-logic-apps%2Fba-p%2F2068204) for this playbook that has the RBAC role of **Microsoft Sentinel Contributor**.
 
-Mobilicorpus reducto liberacorpus crucio. Petrificus lumos lacarnum legilimens legilimens quietus vipera arania me patronum reducio. Episkey reducio quietus mobilicorpus fidelius aparecium. Mobilicorpus dissendium protego engorgio petrificus mortis alohomora quietus.
+[Image]
 
-Sonorus tarantallegra leviosa wingardium finite stupefy.
+The Value of the "Initialize variable" should be in the following format:
+
+```
+Name: API-Key
+Type: String
+```
+
+To authenticate to Home Assistant from Azure we will use the Long-Lived Access Token we created earlier, this should be written exactly as below in the 'Value' field of "Initialize variable".
+
+```
+Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJiNGM0YTVkODg3ODQ0MDIzOTlhMWE2YTA3Y2JhOTc2YiIsImlhdCI6MTYyNDY0MDgwOSwiZXhwIjoxOTQwMDAwODA5fQ.bjyvcwe4AFy8cejgQ5pOcyvEDW8Wlt2tr6JKXL0BB8c
+```
+
+The Next action we need to create is "Run query and list results" using the query below. `You will need to authenticate this with an account that has access to Log Analytics workspace`.
+
+```
+let IncidentSeverity = dynamic(["High", "Medium", "Low"]);
+SecurityIncident
+| where Severity in~ (IncidentSeverity)
+| project Severity
+```
+
+[Image]
+
+Next, we need to create a "For Each" loop, some "Conditions" for each of the Azure Sentinel severity types, and an "HTTP" action as outlined below:
+
+[Image]
+
+Using the Home Assitant REST API we can POST to your instance of Home Assistant using the following URI:
+
+```
+https://yourinstanceofhomeassistant.ui.nabu.casa/api/services/script/turn_on
+```
+
+Be sure to add the following headers to the HTTP Request.
+
+```
+Authorization @variables('API-Key')
+Content-Type application/json
+```
+
+Use the following JSON in the Body of the Request to make the REST call for the Home Assistant script we created earlier.
+
+```JSON
+{
+  "entity_id": "script.sentinel_high"
+}
+```
+
+You will need to duplicate this configuration for each of the Azure Sentinel incident severities. Make sure you change the "Condition" Severity and the "HTTP" Body to reflect the Home Assistant script for the severity type.
+
+Finally, we just need to create an Azure Sentinel Automation to call the playbook each time an incident is raised in Azure Sentinel.
+
+[Image]
+
+Hopefully, someone finds this useful if you have any questions please reach out to me in one of the following locations
