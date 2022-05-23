@@ -9,7 +9,7 @@ module.exports = {
     // See all options: https://github.com/LekoArts/gatsby-themes/blob/main/themes/gatsby-theme-minimal-blog/gatsby-config.js
     siteTitle: `Sentinel Blog`,
     siteTitleAlt: `sentinel.blog`,
-    siteHeadline: 'Guides and information from a defender using the Microsoft Security stack.`,
+    siteHeadline: `Guides and information from a defender using the Microsoft Security stack.`,
     siteUrl: `https://sentinel.blog`,
     siteDescription: `Guides and information from a defender using the Microsoft Security stack. Microsoft Sentinel, Microsoft Defender for Cloud, Microsoft Defender for Cloud Apps, Microsoft Defender for Endpoint, Microsoft Defender for Identity.`,
     siteLanguage: `en`,
