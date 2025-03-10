@@ -31,7 +31,7 @@ Creating an Automation Account generates a new service principal in Microsoft En
 3. Click **+ Add**, provide the required details, and ensure **System-assigned managed identity** is checked under Advanced.
 4. Click **Review + Create** > **Create**.
 
-![Create Automation Account](.images/create-automation-account.png)
+![Create Automation Account](../../.github/.images/create-automation-account.png)
 
 ### Create a PowerShell Runbook
 
@@ -41,7 +41,7 @@ Creating an Automation Account generates a new service principal in Microsoft En
 4. Choose the **PowerShell 7.2 runtime version**.
 5. Click **Review + Create** > **Create**.
 
-![Create Runbook](.images/create-runbook.png)
+![Create Runbook](../../.github/.images/create-runbook.png)
 
 ### Edit the Runbook
 
@@ -49,7 +49,7 @@ Creating an Automation Account generates a new service principal in Microsoft En
 2. Paste in the script that corresponds to the Automation that you are implementing (Solutions, ARs, Workbooks)
 3. Click Save
 
-![Save Runbook](.images/save-runbook.png)
+![Save Runbook](../../.github/.images/save-runbook.png)
 
 ### Test the Runbook
 
@@ -62,7 +62,7 @@ Creating an Automation Account generates a new service principal in Microsoft En
 3. Click **Start** to execute the automation script.
 4. Verify successful execution.
 
-![Test Runbook](.images/test-runbook.png)
+![Test Runbook](../../.github/.images/test-runbook.png)
 
 #### Analytical Rule Query filters
 
