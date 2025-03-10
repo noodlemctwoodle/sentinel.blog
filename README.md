@@ -108,13 +108,4 @@ If you'd like to buy me a coffee to support ongoing development:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📞 Contact
-
-- Website: [Sentinel.blog](https://sentinel.blog)
-- Twitter: [@SentinelBlog](https://twitter.com/SentinelBlog)
-- LinkedIn: [Sentinel.blog](https://www.linkedin.com/company/sentinelblog)
-- GitHub: [SentinelBlog](https://github.com/sentinelblog)
-
----
-
 *The scripts and tools in this repository are provided as-is without warranty. Always test in a non-production environment before operational use.*
