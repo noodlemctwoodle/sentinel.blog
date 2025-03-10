@@ -3,6 +3,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PowerShell](https://img.shields.io/badge/PowerShell-%235391FE.svg?style=flat&logo=powershell&logoColor=white)](https://learn.microsoft.com/en-us/powershell/)
 [![Microsoft Azure](https://img.shields.io/badge/Microsoft%20Azure-0089D6?style=flat&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com/)
+[![Azure DevOps](https://img.shields.io/badge/Azure%20DevOps-0078D7?style=flat&logo=azure-devops&logoColor=white)](https://azure.microsoft.com/en-us/products/devops)
+[![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com)
+[![KQL](https://img.shields.io/badge/KQL-Query%20Language-blue)](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/)
+[![Microsoft Sentinel](https://img.shields.io/badge/Microsoft%20Sentinel-0078D4?style=flat&logo=microsoft&logoColor=white)](https://azure.microsoft.com/en-us/products/microsoft-sentinel)
+[![Azure Automation](https://img.shields.io/badge/Azure%20Automation-0089D6?style=flat&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com/en-us/products/automation)
+[![Azure Lighthouse](https://img.shields.io/badge/Azure%20Lighthouse-0089D6?style=flat&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com/en-us/services/azure-lighthouse/)
 
 Welcome to the official repository for [Sentinel.blog](https://sentinel.blog), a resource dedicated to Microsoft Sentinel automation, best practices, and security operations excellence.
 
