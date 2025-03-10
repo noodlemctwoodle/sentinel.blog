@@ -38,19 +38,23 @@ This project provides an automated solution to monitor EntraID App Registrations
 ## Setup & Deployment
 
 ### 1. Import the Runbook Script
+
 - In your Azure Automation Account, create a new PowerShell runbook.
 - Paste the provided runbook script into the editor.
 - Save and publish the runbook.
 
 ### 2. Import Required Modules
+
 - Ensure that the **Microsoft.Graph.Authentication** and **Microsoft.Graph.Applications** PowerShell modules are imported into your Automation Account.
 - Verify that the Automation Account is running on a compatible PowerShell runtime (PowerShell 7.2 is recommended).
 
 ### 3. Configure Managed Identity
+
 - Enable the system-assigned managed identity on your Automation Account.
 - Assign the necessary Microsoft Graph permissions (e.g., `Application.Read.All`) to the managed identity.
 
 ### 4. Setup the Logic App
+
 - Create a new Logic App with a **When an HTTP request is received** trigger.
 - Use the provided JSON schema and email template to process incoming data.
 - Configure an email action to send notifications (e.g., via Office 365 Outlook, SMTP, etc.).
@@ -60,7 +64,10 @@ This project provides an automated solution to monitor EntraID App Registrations
 ![Email Template](https://github.com/user-attachments/assets/489e5c14-1e9e-4cca-8aaf-4d20868124aa)
 
 ### 5. Configure Parameters
+
 - The runbook script accepts parameters for `ExpiryThreshold` and `LogicAppUrl`. Adjust these parameters according to your needs.
 - For example:  
-  ```powershell
-  -ExpiryThreshold 15 -LogicAppUrl "https://<your-logicapp-url>"
+
+```powershell
+-ExpiryThreshold 15 -LogicAppUrl "https://<your-logicapp-url>"
+```
