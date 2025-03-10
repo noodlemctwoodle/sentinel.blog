@@ -16,10 +16,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Setup PowerShell
-        uses: actions/setup-powershell@v2
-        with:
-          powershell-version: '7.4'
+      # Ubuntu runners already have PowerShell Core installed
+      - name: Check PowerShell version
+        shell: pwsh
+        run: |
+          Write-Output "Using PowerShell version: $($PSVersionTable.PSVersion)"
       
       - name: Create directory if not exists
         shell: bash
