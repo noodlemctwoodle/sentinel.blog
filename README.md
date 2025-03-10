@@ -1,7 +1,120 @@
-# sentinel.blog
+# Sentinel.blog Repository
 
-## Support the Project
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PowerShell](https://img.shields.io/badge/PowerShell-%235391FE.svg?style=flat&logo=powershell&logoColor=white)](https://learn.microsoft.com/en-us/powershell/)
+[![Microsoft Azure](https://img.shields.io/badge/Microsoft%20Azure-0089D6?style=flat&logo=microsoft-azure&logoColor=white)](https://azure.microsoft.com/)
 
-If you've found sentinel.blog useful, consider buying me a coffee! Your support helps maintain this project and develop new features.
+Welcome to the official repository for [Sentinel.blog](https://sentinel.blog), a resource dedicated to Microsoft Sentinel automation, best practices, and security operations excellence.
+
+## 📖 About This Repository
+
+This repository contains all the scripts, code samples, and solutions featured on Sentinel.blog. My goal is to provide security professionals with practical, ready-to-use tools that enhance Microsoft Sentinel deployments and streamline security operations.
+
+## 🔐 Key Areas
+
+- **Analytics Rule Management**: Scripts to update and manage Microsoft Sentinel analytics rules
+- **Content Hub Solutions**: Automated deployment and updates for Content Hub solutions
+- **Workbook Automation**: Tools to keep Sentinel workbooks current and optimised
+- **Azure Automation**: Runbooks for scheduled maintenance and operations
+- **Azure Lighthouse**: Cross-tenant management scripts for MSSPs and enterprises
+
+## 🚀 Getting Started
+
+Most scripts in this repository are designed to be used in the following ways:
+
+1. **Azure Automation Runbooks**: The primary intended use, with system-assigned managed identities
+2. **Local Execution**: For testing or on-demand operations
+3. **Pipeline Integration**: For DevOps-oriented security teams
+
+### Prerequisites
+
+- PowerShell 7.x or higher
+- Az PowerShell module
+- Appropriate Azure permissions (varies by script)
+
+### Installation
+
+```powershell
+# Clone this repository
+git clone https://github.com/yourusername/sentinel-blog.git
+
+# Navigate to the repository
+cd sentinel-blog
+
+# Review the README for specific scripts before running
+```
+
+## 📝 Documentation
+
+Each script includes detailed documentation in the following format:
+
+- **Synopsis**: Brief description of functionality
+- **Description**: Detailed explanation of what the script does
+- **Parameters**: All available parameters and their usage
+- **Examples**: Practical examples showing how to use the script
+- **Notes**: Additional information, dependencies, and considerations
+
+## 🤝 Contributing
+
+Contributions are welcome! If you'd like to contribute:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure your code follows the existing style and includes proper documentation.
+
+## 📋 Roadmap
+
+- [ ] Enhanced KQL query library for custom detections
+- [ ] Integration with Sentinel Repositories feature
+- [ ] Microsoft Defender XDR automation scripts
+- [ ] Multi-workspace management utilities
+- [ ] Performance optimization tools
+
+## 💪 Support This Project
+
+If you find this project helpful, there are several ways you can support its development:
+
+### ⭐ Give a Star
+
+If you find this repository useful, please give it a star on GitHub. This helps others discover it.
+
+### 🔄 Share Your Experience
+
+Share how you've used these scripts on [Sentinel.blog](https://sentinel.blog) or on social media, and tag me.
+
+### 🐛 Report Issues
+
+Found a bug or have a feature request? Open an issue on GitHub or submit a pull request.
+
+### 🔍 Provide Feedback
+
+Your feedback helps improve these tools. Reach out with suggestions or ideas for improvement.
+
+### 🤝 Contribute
+
+Contribute your own scripts, improvements, or documentation enhancements through pull requests.
+
+### ☕ Buy Me a Coffee
+
+If you'd like to buy me a coffee to support ongoing development:
 
 <a href="https://www.buymeacoffee.com/noodlemctwoodle" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📞 Contact
+
+- Website: [Sentinel.blog](https://sentinel.blog)
+- Twitter: [@SentinelBlog](https://twitter.com/SentinelBlog)
+- LinkedIn: [Sentinel.blog](https://www.linkedin.com/company/sentinelblog)
+- GitHub: [SentinelBlog](https://github.com/sentinelblog)
+
+---
+
+*The scripts and tools in this repository are provided as-is without warranty. Always test in a non-production environment before operational use.*
