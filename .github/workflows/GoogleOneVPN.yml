@@ -1,33 +1,243 @@
-name: Pull external data source Google One VPN IP Ranges
+name: Pull Google One VPN IP Ranges
 
 on:
   workflow_dispatch:
-
   schedule:
-    - cron: "0 0 */1 * *"
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
 
 jobs:
   pull-external-data:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v3
-
-      - name: Pull external data and modify if needed
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Check PowerShell version
         shell: pwsh
         run: |
-          $IPRanges = Invoke-WebRequest -Uri https://www.gstatic.com/g1vpn/geofeed | Select-Object -ExpandProperty Content | ConvertFrom-Csv -Header @('IPRange', 'Country', 'LanguageCode', 'City')
-          $IPRanges = $IPRanges | Where-Object { $_.IPRange -notmatch '^#' }
-          foreach ($IPRange in $IPRanges) {
-            if ($IPRange.IPRange -notmatch '^#') {
-              $AddressFamily = [IPAddress]($IPRange.IPRange -replace '/.*') | Select-Object -ExpandProperty AddressFamily 
-              $IPRange | Add-Member -MemberType NoteProperty -Name AddressFamily -Value $AddressFamily 
+          Write-Output "Using PowerShell version: $($PSVersionTable.PSVersion)"
+      
+      - name: Create directory if not exists
+        shell: bash
+        run: mkdir -p ${{ github.workspace }}/ExternalData
+      
+      - name: Pull and process Google One VPN IP Ranges
+        id: fetch-data
+        shell: pwsh
+        run: |
+          try {
+            # Define variables
+            $sourceUrl = "https://www.gstatic.com/g1vpn/geofeed"
+            $outputCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.csv"
+            $outputJsonPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.json"
+            $backupCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_backup.csv"
+            $summaryPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_summary.json"
+            
+            # Backup existing file if it exists
+            if (Test-Path $outputCsvPath) {
+              Copy-Item -Path $outputCsvPath -Destination $backupCsvPath -Force
+              Write-Output "Backed up previous data file"
             }
+            
+            # Fetch data with retry logic
+            $maxRetries = 3
+            $retryCount = 0
+            $success = $false
+            
+            while (-not $success -and $retryCount -lt $maxRetries) {
+              try {
+                Write-Output "Fetching data from $sourceUrl (Attempt $($retryCount + 1))"
+                $response = Invoke-WebRequest -Uri $sourceUrl -TimeoutSec 30
+                $success = $true
+              } catch {
+                $retryCount++
+                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
+                if ($retryCount -lt $maxRetries) {
+                  $sleepTime = 2 * $retryCount
+                  Write-Output "Waiting $sleepTime seconds before retrying..."
+                  Start-Sleep -Seconds $sleepTime
+                }
+              }
+            }
+            
+            if (-not $success) {
+              throw "Failed to fetch Google One VPN IP ranges after $maxRetries attempts"
+            }
+            
+            if ($response.StatusCode -eq 200) {
+              $content = $response.Content
+              
+              # Parse CSV data
+              $IPRanges = $content | ConvertFrom-Csv -Header @('IPRange', 'Country', 'LanguageCode', 'City')
+              $IPRanges = $IPRanges | Where-Object { $_.IPRange -notmatch '^#' }
+              
+              # Process IP ranges and add address family
+              $processedRanges = @()
+              $ipv4Count = 0
+              $ipv6Count = 0
+              $countryStats = @{}
+              
+              foreach ($IPRange in $IPRanges) {
+                try {
+                  $ipAddress = $IPRange.IPRange -replace '/.*'
+                  $AddressFamily = [System.Net.IPAddress]::Parse($ipAddress).AddressFamily.ToString()
+                  
+                  $IPRange | Add-Member -MemberType NoteProperty -Name 'AddressFamily' -Value $AddressFamily -Force
+                  
+                  # Count by address family
+                  if ($AddressFamily -eq 'InterNetwork') {
+                    $ipv4Count++
+                  } elseif ($AddressFamily -eq 'InterNetworkV6') {
+                    $ipv6Count++
+                  }
+                  
+                  # Count by country
+                  if (-not [string]::IsNullOrEmpty($IPRange.Country)) {
+                    if (-not $countryStats.ContainsKey($IPRange.Country)) {
+                      $countryStats[$IPRange.Country] = 0
+                    }
+                    $countryStats[$IPRange.Country]++
+                  }
+                  
+                  $processedRanges += $IPRange
+                } catch {
+                  Write-Output "Warning: Could not process IP range $($IPRange.IPRange): $($_.Exception.Message)"
+                }
+              }
+              
+              # Save CSV output
+              $processedRanges | Export-Csv -Path $outputCsvPath -Force -NoTypeInformation
+              
+              # Create JSON output with same data
+              $processedRanges | ConvertTo-Json -Depth 4 | Set-Content -Path $outputJsonPath -Force -Encoding UTF8
+              
+              # Create summary data
+              $summary = @{
+                metadata = @{
+                  source = $sourceUrl
+                  updated = (Get-Date).ToUniversalTime().ToString("o")
+                  total_count = $processedRanges.Count
+                }
+                statistics = @{
+                  ipv4_count = $ipv4Count
+                  ipv6_count = $ipv6Count
+                  country_distribution = $countryStats
+                }
+              }
+              
+              $summary | ConvertTo-Json -Depth 4 | Set-Content -Path $summaryPath -Force -Encoding UTF8
+              
+              # Set outputs for use in later steps
+              "updated=true" >> $env:GITHUB_OUTPUT
+              "ip_count=$($processedRanges.Count)" >> $env:GITHUB_OUTPUT
+              "ipv4_count=$ipv4Count" >> $env:GITHUB_OUTPUT
+              "ipv6_count=$ipv6Count" >> $env:GITHUB_OUTPUT
+              
+              Write-Output "✅ Successfully updated Google One VPN IP ranges."
+              Write-Output "Found $($processedRanges.Count) IP ranges ($ipv4Count IPv4, $ipv6Count IPv6)"
+            } else {
+              throw "Failed to fetch Google One VPN IP ranges. Status code: $($response.StatusCode)"
+            }
+          } catch {
+            # If we have a backup, restore it
+            if (Test-Path $backupCsvPath) {
+              Copy-Item -Path $backupCsvPath -Destination $outputCsvPath -Force
+              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
+            } else {
+              Write-Output "❌ Error: $($_.Exception.Message)"
+            }
+            
+            "updated=false" >> $env:GITHUB_OUTPUT
+            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
+            exit 1
           }
-          if (-not (Test-Path -Path "${{ github.workspace }}/ExternalData/")) { New-Item -ItemType Directory -Path "${{ github.workspace }}/ExternalData/" -ErrorAction SilentlyContinue }
-          $IPRanges | Export-Csv -Path ${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.csv -Force
+      
+      - name: Compare with previous data
+        id: compare
+        if: steps.fetch-data.outputs.updated == 'true' && success()
+        shell: pwsh
+        run: |
+          $backupCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_backup.csv"
+          $currentCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.csv"
+          
+          if (Test-Path $backupCsvPath) {
+            $oldData = Import-Csv -Path $backupCsvPath
+            $newData = Import-Csv -Path $currentCsvPath
+            
+            $oldIPs = $oldData | ForEach-Object { $_.IPRange }
+            $newIPs = $newData | ForEach-Object { $_.IPRange }
+            
+            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
+            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
+            
+            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
+            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
+            
+            # Create a changelog file
+            $changelog = @"
+# Google One VPN IP Ranges Update - $(Get-Date -Format "yyyy-MM-dd")
 
+## Summary
+- Total IP ranges: ${{ steps.fetch-data.outputs.ip_count }}
+- IPv4 ranges: ${{ steps.fetch-data.outputs.ipv4_count }}
+- IPv6 ranges: ${{ steps.fetch-data.outputs.ipv6_count }}
+- Added: $($added.Count)
+- Removed: $($removed.Count)
+
+## Changed IP Ranges
+
+### Added
+$($added | ForEach-Object { "- $_" } | Out-String)
+
+### Removed
+$($removed | ForEach-Object { "- $_" } | Out-String)
+"@
+            
+            Set-Content -Path "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_changelog.md" -Value $changelog -Force
+            
+            Write-Output "Changes detected: $($added.Count) new IPs, $($removed.Count) removed IPs"
+          } else {
+            "added_count=${{ steps.fetch-data.outputs.ip_count }}" >> $env:GITHUB_OUTPUT
+            "removed_count=0" >> $env:GITHUB_OUTPUT
+            
+            # Create initial changelog file
+            $changelog = @"
+# Google One VPN IP Ranges - Initial Import $(Get-Date -Format "yyyy-MM-dd")
+
+## Summary
+- Total IP ranges: ${{ steps.fetch-data.outputs.ip_count }}
+- IPv4 ranges: ${{ steps.fetch-data.outputs.ipv4_count }}
+- IPv6 ranges: ${{ steps.fetch-data.outputs.ipv6_count }}
+"@
+            
+            Set-Content -Path "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_changelog.md" -Value $changelog -Force
+            
+            Write-Output "Initial data import - no previous data to compare with"
+          }
+      
       - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update Google One VPN IP ranges: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }}"
+          file_pattern: 'ExternalData/GoogleOneVPNIPRanges*.*'
+          commit_user_name: 'Google VPN Data Updater'
+          commit_user_email: 'actions@github.com'
+          commit_options: '--no-verify'
+          push_options: '--no-verify'
+      
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Google One VPN IP Ranges update failed',
+              body: `The workflow run failed on ${new Date().toISOString()}.\n\nError: ${{ steps.fetch-data.outputs.error_message || 'Unknown error' }}\n\n[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+            console.log(`Created issue #${issue.data.number}`);
