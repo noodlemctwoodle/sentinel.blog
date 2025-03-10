@@ -1,48 +1,160 @@
-name: Pull external data source TOR Exit Nodes
+name: Pull TOR Exit Nodes Data
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 0 */1 * *"
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
 
 jobs:
   pull-external-data:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v3
-
-      - name: Pull external data and modify if needed
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup PowerShell
+        uses: actions/setup-powershell@v2
+        with:
+          powershell-version: '7.4'
+      
+      - name: Create directory if not exists
+        shell: bash
+        run: mkdir -p ${{ github.workspace }}/ExternalData
+      
+      - name: Pull TOR exit nodes and process data
+        id: fetch-data
         shell: pwsh
         run: |
-          $torExitNodesUrl = "https://check.torproject.org/torbulkexitlist"
-          $outputJsonPath = "${{ github.workspace }}/ExternalData/TorExitNodes.json"
-          
-          $response = Invoke-WebRequest -Uri $torExitNodesUrl
-          if ($response.StatusCode -eq 200) {
+          try {
+            # Define variables
+            $torExitNodesUrl = "https://check.torproject.org/torbulkexitlist"
+            $outputJsonPath = "${{ github.workspace }}/ExternalData/TorExitNodes.json"
+            $backupPath = "${{ github.workspace }}/ExternalData/TorExitNodes_backup.json"
+            
+            # Backup existing file if it exists
+            if (Test-Path $outputJsonPath) {
+              Copy-Item -Path $outputJsonPath -Destination $backupPath -Force
+              Write-Output "Backed up previous data file"
+            }
+            
+            # Fetch data with retry logic
+            $maxRetries = 3
+            $retryCount = 0
+            $success = $false
+            
+            while (-not $success -and $retryCount -lt $maxRetries) {
+              try {
+                $response = Invoke-WebRequest -Uri $torExitNodesUrl -TimeoutSec 30
+                $success = $true
+              } catch {
+                $retryCount++
+                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
+                if ($retryCount -lt $maxRetries) {
+                  Start-Sleep -Seconds (2 * $retryCount)
+                }
+              }
+            }
+            
+            if (-not $success) {
+              throw "Failed to fetch TOR exit nodes after $maxRetries attempts"
+            }
+            
+            if ($response.StatusCode -eq 200) {
               $content = [System.Text.Encoding]::UTF8.GetString($response.Content)
               $exitNodeIPs = @()
-          
+              
               foreach ($line in $content -split "`n") {
-                  if ($line.Trim() -ne "") {
-                      $exitNodeIPs += $line.Trim()
-                  }
+                if ($line.Trim() -ne "") {
+                  $exitNodeIPs += $line.Trim()
+                }
               }
-          
+              
+              # Add metadata to the JSON
               $customObject = [PSCustomObject]@{
-                  TorExitNodes = $exitNodeIPs
+                metadata = [PSCustomObject]@{
+                  source = $torExitNodesUrl
+                  updated = (Get-Date).ToUniversalTime().ToString("o")
+                  count = $exitNodeIPs.Count
+                }
+                TorExitNodes = $exitNodeIPs
               }
-          
-              $jsonContent = $customObject | ConvertTo-Json
+              
+              $jsonContent = $customObject | ConvertTo-Json -Depth 4
               Set-Content -Path $outputJsonPath -Value $jsonContent -Force -Encoding UTF8
-              Write-Output "TOR exit nodes have been saved to $outputJsonPath"
-          } else {
-              Write-Error "Failed to fetch the TOR exit nodes. Status code: $($response.StatusCode)"
+              
+              # Set outputs for use in later steps
+              "updated=true" >> $env:GITHUB_OUTPUT
+              "ip_count=$($exitNodeIPs.Count)" >> $env:GITHUB_OUTPUT
+              
+              Write-Output "✅ Successfully updated TOR exit nodes. Found $($exitNodeIPs.Count) IPs."
+            } else {
+              throw "Failed to fetch the TOR exit nodes. Status code: $($response.StatusCode)"
+            }
+          } catch {
+            # If we have a backup, restore it
+            if (Test-Path $backupPath) {
+              Copy-Item -Path $backupPath -Destination $outputJsonPath -Force
+              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
+            } else {
+              Write-Output "❌ Error: $($_.Exception.Message)"
+            }
+            
+            "updated=false" >> $env:GITHUB_OUTPUT
+            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
+            exit 1
           }
-
+      
+      - name: Compare with previous data
+        id: compare
+        if: steps.fetch-data.outputs.updated == 'true'
+        shell: pwsh
+        run: |
+          $backupPath = "${{ github.workspace }}/ExternalData/TorExitNodes_backup.json"
+          $currentPath = "${{ github.workspace }}/ExternalData/TorExitNodes.json"
+          
+          if (Test-Path $backupPath) {
+            $oldData = Get-Content -Path $backupPath -Raw | ConvertFrom-Json
+            $newData = Get-Content -Path $currentPath -Raw | ConvertFrom-Json
+            
+            $oldIPs = $oldData.TorExitNodes
+            $newIPs = $newData.TorExitNodes
+            
+            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
+            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
+            
+            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
+            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
+            
+            Write-Output "Changes detected: $($added.Count) new IPs, $($removed.Count) removed IPs"
+          } else {
+            "added_count=${{ steps.fetch-data.outputs.ip_count }}" >> $env:GITHUB_OUTPUT
+            "removed_count=0" >> $env:GITHUB_OUTPUT
+            Write-Output "No previous data to compare with"
+          }
+      
       - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update TOR exit nodes"
+          commit_message: "Update TOR exit nodes: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }}"
+          file_pattern: 'ExternalData/TorExitNodes.json'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          commit_options: '--no-verify'
+          push_options: '--no-verify'
+      
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ TOR Exit Node update failed',
+              body: `The workflow run failed on ${new Date().toISOString()}.\n\nError: ${{ steps.fetch-data.outputs.error_message || 'Unknown error' }}\n\n[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`
+            });
+            console.log(`Created issue #${issue.data.number}`);
