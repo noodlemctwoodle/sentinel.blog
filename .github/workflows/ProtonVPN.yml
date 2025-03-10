@@ -1,0 +1,47 @@
+name: Pull external data source Proton VPN Server Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 */1 * *'
+
+jobs:
+  pull-protonvpn-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+
+      - name: Fetch ProtonVPN server data and create CSV
+        shell: pwsh
+        run: |
+          $jsonUrl = "https://api.protonmail.ch/vpn/logicals"
+          $jsonData = Invoke-RestMethod -Uri $jsonUrl -ContentType "application/json"
+          $csvObjects = @()
+          
+          foreach ($logicalServer in $jsonData.LogicalServers) {
+              $city = $logicalServer.City
+              $exitCountry = $logicalServer.ExitCountry
+              foreach ($server in $logicalServer.Servers) {
+                  $servicesDownBool = $server.ServicesDown -eq 1
+                  $csvObjects += [PSCustomObject]@{
+                      ExitIP = $server.ExitIP
+                      ServicesDown = $servicesDownBool
+                      City = $city
+                      ExitCountry = $exitCountry
+                  }
+              }
+          }
+          
+          $sortedCsvObjects = $csvObjects | Sort-Object { [version] $_.ExitIP }        
+          $csvData = $sortedCsvObjects | ConvertTo-Csv -NoTypeInformation
+          $csvData = $csvData -replace '"', ''
+          $csvPath = Join-Path ${{ github.workspace }} "/ExternalData/ProtonVPNExitNodes.csv"
+          $csvData | Out-File -FilePath $csvPath -Encoding utf8
+
+      - name: Commit updated CSV to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Update VPN server data CSV

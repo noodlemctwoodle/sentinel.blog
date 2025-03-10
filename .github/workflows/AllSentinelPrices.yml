@@ -1,0 +1,48 @@
+name: Pull external data source Sentinel All prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 */1 * *'
+
+jobs:
+  pull-sentinel-prices:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v3
+
+      - name: Fetch Microsoft Sentinel Prices in GBP, USD, and EUR
+        shell: pwsh
+        run: |
+          $currencies = @("GBP", "USD", "EUR")
+          $allItems = @()
+
+          foreach ($currency in $currencies) {
+              $apiUrl = "https://prices.azure.com/api/retail/prices?currencyCode=$currency&`$filter=productName eq 'Sentinel'"
+              $response = Invoke-RestMethod -Uri $apiUrl -Method Get
+              $allItems += $response.Items
+          }
+
+          $sortedItems = $allItems | Sort-Object location, skuName
+          $selectedItems = $sortedItems | Select-Object skuName, unitOfMeasure, type, retailPrice, unitPrice, currencyCode, location, effectiveStartDate, meterId, meterName, skuId, productName, serviceFamily
+          
+          $csvFilePath = "AllSentinelPrices.csv"
+          $jsonFilePath = "AllSentinelPrices.json"
+          
+          $externalDataPath = "${{ github.workspace }}/ExternalData/"
+          if (-not (Test-Path -Path $externalDataPath)) { 
+              New-Item -ItemType Directory -Path $externalDataPath -ErrorAction SilentlyContinue 
+          }
+          
+          $selectedItems | Export-Csv -Path "$externalDataPath$csvFilePath" -Force
+          
+          $jsonContent = $selectedItems | ConvertTo-Json -Depth 99
+          $jsonContent | Out-File -FilePath "$externalDataPath$jsonFilePath" -Force 
+          
+      - name: Commit updated CSV to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Update Microsoft Sentinel Prices CSV
