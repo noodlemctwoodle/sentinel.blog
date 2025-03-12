@@ -1,0 +1,45 @@
+id: 9070ab40-52fe-4d11-b038-4e247afd6fac
+name: New DCR Created
+version: 1.0.0
+kind: Scheduled
+severity: Informational
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Impact
+query: |
+  // New DCR
+  AzureActivity
+  | where OperationNameValue has "DATACOLLECTIONRULES/WRITE"
+      and ActivitySubstatusValue has "OK"
+  | extend DCR_Name = tostring(parse_json(Properties).resource)
+  | extend DCR_RG = tostring(parse_json(Properties).resourceGroup)
+  | extend DCR_Sub = tostring(parse_json(Properties).subscriptionId)
+  | extend RBAC_Role = tostring(parse_json(tostring(Authorization_d.evidence)).role)
+  | summarize by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , DCR_Name, DCR_RG, DCR_Sub, Caller, RBAC_Role, CallerIpAddress
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Caller
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: CallerIpAddress
+suppressionEnabled: true
+suppressionDuration: 1d
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+
