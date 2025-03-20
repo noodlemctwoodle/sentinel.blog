@@ -86,7 +86,7 @@
                                 <td align="center">
                                     <img class="logo"
                                         style="margin: 20px auto; display: block; width: 250px;"
-                                        src="@{parameters('emailHeader')}"
+                                        src="@{parameters('emailLogoHeader')}"
                                         alt="Company Logo" width="150" />
                                 </td>
                             </tr>
@@ -94,7 +94,7 @@
                             <!-- Microsoft Outlook Email Body -->
                             <tr class="email-body">
                                 <td>
-                                    <h2 style="font-size: 26px; color: #2f06e6; text-align: center;">@{parameters('Report name')} Microsoft Sentinel</h2>
+                                    <h2 style="font-size: 26px; color: #2f06e6; text-align: center;"> @{parameters('reportName')}</h2>
                                     <p>Date: @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}</p>
                                     <p><a class="incident-link" href="@{triggerBody()?['object']?['properties']?['incidentUrl']}">Microsoft Sentinel Incident</a></p>
                                     <p>Incident Description: @{triggerBody()?['object']?['properties']?['description']}</p>
