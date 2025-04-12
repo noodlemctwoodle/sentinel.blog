@@ -1,139 +1,509 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+    <title>Security Alert</title>
     <style>
-        /* Sentinel Global Font */
-        body,
-        table {
-            font-family: 'Roboto', sans-serif;
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f5f5f5; 
+            color: #333; 
+            line-height: 1.5;
         }
-
-        /* Add styling for the nested table */
-        table table {
+        
+        .container { 
+            max-width: 650px; 
+            margin: 0 auto; 
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .header { 
+            background-color: #0078D4; 
+            padding: 20px; 
+            text-align: center; 
+            color: white; 
+        }
+        
+        .header img { 
+            max-width: 60px; 
+            display: block; 
+            margin: 0 auto 10px; 
+        }
+        
+        .header h1 { 
+            margin: 0; 
+            font-size: 24px; 
+        }
+        
+        .content { 
+            padding: 20px; 
+            background-color: #ffffff; 
+        }
+        
+        /* Executive summary */
+        .summary {
+            background-color: #f9f9f9;
+            border-left: 4px solid #0078D4;
+            padding: 15px;
+            margin: 0 0 20px 0;
+        }
+        
+        .title { 
+            color: #D83B01; 
+            text-align: center; 
+            border-bottom: 1px solid #eee; 
+            padding-bottom: 10px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        /* Date & Time at top */
+        .incident-date {
+            text-align: right;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        /* Severity indicator */
+        .severity {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+            margin-left: 10px;
+        }
+        
+        .severity-high {
+            background-color: #D13438;
+        }
+        
+        .severity-medium {
+            background-color: #FF8C00;
+        }
+        
+        .severity-low {
+            background-color: #3B79B7;
+        }
+        
+        .severity-informational {
+            background-color: #767676;
+        }
+        
+        .info-row { 
+            margin-bottom: 15px; 
+        }
+        
+        .info-label { 
+            font-weight: bold;
+            width: 120px;
+            display: inline-block;
+            vertical-align: top;
+        }
+        
+        .link { 
+            color: #0078D4; 
+            text-decoration: none; 
+        }
+        
+        /* Timeline styling */
+        .timeline {
+            margin: 20px 0;
+            position: relative;
+            border-left: 3px solid #0078D4;
+            padding-left: 20px;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 15px;
+        }
+        
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: -29px;
+            top: 0;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background-color: #0078D4;
+            border: 3px solid white;
+        }
+        
+        .timeline-date {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        
+        .timeline-title {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        /* Tactics styling */
+        .tactics { 
+            background-color: #f9f9f9; 
+            border-left: 4px solid #0078D4; 
+            padding: 15px; 
+            margin: 15px 0; 
+        }
+        
+        /* Recommended actions */
+        .recommendations {
+            background-color: #f0f7ff;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #0078D4;
+        }
+        
+        .recommendations ul {
+            margin: 10px 0 0 0;
+            padding-left: 20px;
+        }
+        
+        .recommendations li {
+            margin-bottom: 8px;
+        }
+        
+        /* Action buttons */
+        .action-buttons {
+            text-align: center;
+            margin: 25px 0;
+        }
+        
+        .button {
+            padding: 12px 20px;
+            background-color: #0078D4;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+        }
+        
+        /* Section styling */
+        .section {
+            margin: 25px 0;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #0078D4;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        /* Incident tag styling */
+        .incident-tag {
+            display: inline-block;
+            background-color: #f0f0f0;
+            color: #333;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+        
+        /* Metrics */
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0 25px 0;
+        }
+        
+        .metric-card {
+            flex: 1;
+            min-width: 120px;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            border: 1px solid #eee;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #0078D4;
+            margin-bottom: 5px;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        /* IP location */
+        .ip-location {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+        
+        .footer { 
+            padding: 20px; 
+            background-color: #f0f0f0; 
+            text-align: center; 
+            border-top: 1px solid #ddd;
+        }
+        
+        /* For better readability on print */
+        @media print {
+            body {
+                background-color: white;
+                color: black;
+            }
+            
+            .container {
+                max-width: 100%;
+                box-shadow: none;
+            }
+            
+            .button {
+                border: 1px solid #333;
+                color: black;
+                background: none;
+            }
+            
+            a {
+                color: black;
+                text-decoration: underline;
+            }
+            
+            .header {
+                background-color: #f0f0f0;
+                color: black;
+            }
+        }
+        
+        /* Mobile optimizations */
+        @media (max-width: 600px) {
+            .info-label {
+                display: block;
+                width: 100%;
+                margin-bottom: 3px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .metric-card {
+                min-width: 100%;
+            }
+        }
+        
+        /* IMPORTANT: Basic table styles that won't conflict with Sentinel's tables */
+        /* These styles are intentionally minimal to avoid conflicts */
+        .sentinel-tables table {
             width: 100%;
+            margin-bottom: 20px;
             border-collapse: collapse;
         }
-
-        table table th,
-        table table td {
-            padding: 10px;
-            border: 1px solid #ccc;
-        }
-
-        table table th:nth-child(n+2),
-        table table td:nth-child(n+2) {
-            text-align: center;
-        }
-
-        table table thead tr {
-            background-color: #ddd;
-        }
-
-        /* Custom styling for top section */
-        .email-header {
-            background-color: #C9C9C9;
+        
+        .sentinel-tables th {
+            background-color: #0078D4;
             color: white;
-            padding: 20px;
-            text-align: center;
+            text-align: left;
+            padding: 10px;
+            font-weight: normal;
         }
-
-        .email-header h1 {
-            font-size: 28px;
-            margin: 0;
+        
+        .sentinel-tables tr:nth-child(even) {
+            background-color: #f5f5f5;
         }
-
-        .email-body {
-            background-color: #f2f2f2;
-            padding: 20px;
-        }
-
-        .email-body p {
-            font-size: 16px;
-            margin: 10px 0;
-        }
-
-        .incident-link {
-            font-size: 18px;
-            color: #2f06e6;
-        }
-
-        .tactics-section {
-            font-size: 16px;
-            color: #333;
-        }
-
-        .tactics-section p {
-            margin: 5px 0;
+        
+        .sentinel-tables td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
         }
     </style>
-
 </head>
-
 <body>
-    <!-- Microsoft Sentinel Monthly Cost Template -->
-    <table width="100%" cellspacing="0" cellpadding="0">
-        <tbody>
-            <tr>
-                <td style="padding: 20px 0;" align="center">
-                    <table style="max-width: 650px; width: 100%; border-collapse: collapse;">
-                        <tbody>
-                            <!-- Top Section (Logo + Title) -->
-                            <tr class="email-header">
-                                <td align="center">
-                                    <img class="logo"
-                                        style="margin: 20px auto; display: block; width: 250px;"
-                                        src="@{parameters('emailLogoHeader')}"
-                                        alt="Company Logo" width="150" />
-                                </td>
-                            </tr>
-
-                            <!-- Microsoft Outlook Email Body -->
-                            <tr class="email-body">
-                                <td>
-                                    <h2 style="font-size: 26px; color: #2f06e6; text-align: center;"> @{parameters('reportName')}</h2>
-                                    <p>Date: @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}</p>
-                                    <p><a class="incident-link" href="@{triggerBody()?['object']?['properties']?['incidentUrl']}">Microsoft Sentinel Incident</a></p>
-                                    <p>Incident Description: @{triggerBody()?['object']?['properties']?['description']}</p>
-                                    
-                                    <!-- Tactics Section with Line Breaks -->
-                                    <div class="tactics-section">
-                                        <strong>Tactics:</strong>
-                                        <p>@{join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'],'<br>')}</p>
-                                    </div>
-                                </td>
-                            </tr>
-
-                            <!-- Microsoft Sentinel Playbook Nested HTML Table -->
-                            <tr style="text-align: left; background-color: #f2f2f2;">
-                                <td>
-                                    @{body('Create_HTML_table_with_Entities')}
-                                </td>
-                            </tr>
-                            <tr style="text-align: left; background-color: #f2f2f2;">
-                                <td>
-                                    @{body('Create_HTML_table_with_Alerts')}
-                                </td>
-                            </tr>
-
-                            <!-- Microsoft Outlook Email Footer -->
-                            <tr>
-                                <td style="padding: 20px; background-color: #ebe9e2;" align="center">
-                                    <p style="font-size: 16.0pt;"><strong>Sentinel Security</strong></p>
-                                    <p>If you have any questions, please reach out to the security team:
-                                        <a style="color: #2f06e6;" href="mailto:@{parameters('SecOpsEmail')}">Sentinel Security Team</a>
-                                    </p>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="container">
+        <div class="header">
+            <img src="@{parameters('emailLogoHeader')}" alt="Company Logo">
+            <h1>SECURITY ALERT</h1>
+        </div>
+        
+        <div class="content">
+            <!-- Date time at top right -->
+            <div class="incident-date">
+                <strong>Date & Time:</strong> @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}
+            </div>
+            
+            <!-- Title with severity indicator -->
+            <h2 class="title">
+                @{parameters('reportName')}
+                <!-- Dynamic severity indicator -->
+                @{if(not(equals(coalesce(triggerBody()?['object']?['properties']?['severity'],''), '')), 
+                concat('<span class="severity severity-', toLower(triggerBody()?['object']?['properties']?['severity']), '">', 
+                triggerBody()?['object']?['properties']?['severity'], '</span>'), '')}
+            </h2>
+            
+            <!-- Executive Summary -->
+            <div class="summary">
+                <strong>Executive Summary:</strong> Security alert triggered for 
+                @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''), 
+                'suspicious activity', 
+                concat(first(triggerBody()?['object']?['properties']?['additionalData']?['tactics']), ' activity'))} involving multiple entities. 
+                Immediate investigation recommended.
+            </div>
+            
+            <!-- Metrics - with alert count, entity count, severity -->
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-value">
+                        @{coalesce(triggerBody()?['object']?['properties']?['additionalData']?['alertsCount'], '1')}
+                    </div>
+                    <div class="metric-label">Alerts</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">
+                        @{outputs('Compose_Entity_Count')}
+                    </div>
+                    <div class="metric-label">Entities</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">
+                        @{coalesce(triggerBody()?['object']?['properties']?['severity'], 'Med')}
+                    </div>
+                    <div class="metric-label">Severity</div>
+                </div>
+            </div>
+            
+            <!-- Basic info -->
+            <div class="info-row">
+                <span class="info-label">Incident ID:</span>
+                <span>@{coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 'N/A')}</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Description:</span>
+                <span>@{triggerBody()?['object']?['properties']?['description']}</span>
+            </div>
+            
+            <!-- Visual Timeline -->
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-date">
+                        @{if(equals(coalesce(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'], ''), ''), 
+                        formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat')), 
+                        formatDateTime(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'], parameters('dateTimeFormat')))}
+                    </div>
+                    <div class="timeline-title">First Activity Detected</div>
+                    <div>Initial suspicious activity observed</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-date">
+                        @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}
+                    </div>
+                    <div class="timeline-title">Incident Created</div>
+                    <div>Alert generated by Microsoft Sentinel</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-date">Now</div>
+                    <div class="timeline-title">Notification Sent</div>
+                    <div>Security team notified</div>
+                </div>
+            </div>
+            
+            <!-- Tactics Section -->
+            <div class="tactics">
+                <div class="section-title">
+                    <span class="section-title-indicator"></span>
+                    MITRE ATT&CK Tactics
+                </div>
+                <ul>
+                    @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''), 
+                    '<li>No tactics identified</li>', 
+                    join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '<br>'))}
+                </ul>
+            </div>
+            
+            <!-- Recommended actions section - Made more specific -->
+            <div class="recommendations">
+                <div class="section-title">
+                    <span class="section-title-indicator"></span>
+                    Recommended Actions
+                </div>
+                <ul>
+                    <li>Investigate the affected resources and validate the alert</li>
+                    <li>Check for unusual authentication patterns or access attempts</li>
+                    <li>Review related logs in Microsoft Sentinel for additional context</li>
+                </ul>
+            </div>
+            
+            <!-- Single action button -->
+            <div class="action-buttons">
+                <a class="button" href="@{triggerBody()?['object']?['properties']?['incidentUrl']}">
+                    Investigate Incident
+                </a>
+            </div>
+            
+            <!-- Entities Section - With tag directly -->
+            <div class="section">
+                <div class="section-title">
+                    <span class="section-title-indicator"></span>
+                    Affected Entities
+                    <span class="incident-tag">Persistence</span>
+                </div>
+                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <div class="sentinel-tables">
+                    @{body('Create_HTML_table_with_Entities')}
+                </div>
+            </div>
+            
+            <!-- Alerts Section - Modified to avoid styling conflicts -->
+            <div class="section">
+                <div class="section-title">
+                    <span class="section-title-indicator"></span>
+                    Related Alerts
+                </div>
+                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <div class="sentinel-tables">
+                    @{body('Create_HTML_table_with_Alerts')}
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <h3>Sentinel Security Team</h3>
+            <p>If you have any questions, please contact us:</p>
+            <p><a class="link" href="mailto:@{parameters('SecOpsEmail')}">@{parameters('SecOpsEmail')}</a></p>
+            <p style="margin-top: 15px; font-size: 12px; color: #999;">This is an automated security alert.</p>
+        </div>
+    </div>
 </body>
-
 </html>
