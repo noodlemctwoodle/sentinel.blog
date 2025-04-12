@@ -8,71 +8,71 @@
     <style>
         /* Basic page styling */
         body {
-            font-family: 'Segoe UI', Arial, sans-serif; /* Microsoft's Segoe UI for better visual alignment */
+            font-family: 'Segoe UI', Arial, sans-serif; /* Microsoft's Segoe UI font */
             margin: 0; 
             padding: 0; 
-            background-color: #f5f5f5; /* Light gray background for better contrast */
-            color: #252525; /* Darker text for better readability */
-            line-height: 1.5; /* Better line spacing for readability */
+            background-color: #f5f5f5; /* Light gray background */
+            color: #252525; /* Dark text for readability */
+            line-height: 1.5; /* Line spacing */
         }
 
         /* Main container with max width and centered */
         .container { 
-            max-width: 700px; /* Slightly wider container */
-            margin: 20px auto; /* Add top/bottom margin */
-            background-color: #ffffff; /* White background for content */
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1); /* Enhanced shadow for depth */
-            border-radius: 4px; /* Subtle rounded corners for modern look */
-            overflow: hidden; /* Ensure no content spills out */
+            max-width: 700px; /* Container width */
+            margin: 20px auto; /* Top/bottom margin */
+            background-color: #ffffff; /* White background */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); /* Shadow for depth */
+            border-radius: 4px; /* Rounded corners */
+            overflow: hidden; /* Prevents content overflow */
         }
 
         /* Header styling with logo on right, title on left */
         .header {
-            background-color: #0078D4; /* Microsoft blue background */
-            padding: 24px 20px; /* Increased vertical padding */
-            color: white; /* White text for contrast on blue */
-            display: flex; /* Use flexbox for layout */
-            justify-content: space-between; /* Push elements to opposite ends */
-            align-items: center; /* Vertically center elements */
-            min-height: 80px; /* Ensure header has enough height */
+            background-color: #0078D4; /* Microsoft blue */
+            padding: 24px 20px; /* Vertical padding */
+            color: white; /* Text color */
+            display: flex; /* Flexbox layout */
+            justify-content: space-between; /* Layout alignment */
+            align-items: center; /* Vertical centering */
+            min-height: 80px; /* Minimum height */
         }
 
         /* Logo styling - positioned on the right */
         .header img { 
-            width: 120px !important; /* Force the width with !important to override email client defaults */
-            height: auto !important; /* Maintain aspect ratio */
-            max-width: none !important; /* Override any max-width constraints */
-            object-fit: contain; /* Ensure image isn't distorted */
+            width: 120px !important; /* Force width */
+            height: auto !important; /* Auto height */
+            max-width: none !important; /* Override constraints */
+            object-fit: contain; /* Image fitting */
             margin: 0;
-            order: 2; /* Places the image second in the flex order (right side) */
+            order: 2; /* Position in flex order */
         }
 
         /* Title styling - positioned on the left */
         .header h1 {
             margin: 0;
-            font-size: 28px; /* Larger font size */
+            font-size: 28px; /* Large font size */
             text-align: left;
-            order: 1; /* Places the title first in the flex order (left side) */
-            font-weight: 600; /* Slightly bolder */
-            letter-spacing: 0.5px; /* Subtle letter spacing for better legibility */
+            order: 1; /* Position in flex order */
+            font-weight: 600; /* Font weight */
+            letter-spacing: 0.5px; /* Letter spacing */
         }
 
         /* Main content area */
         .content {
-            padding: 24px; /* Consistent padding */
-            background-color: #ffffff;
+            padding: 24px; /* Padding */
+            background-color: #ffffff; /* White background */
         }
 
         /* Report name banner styling - displayed below header */
         .report-name-banner {
-            background-color: #f0f7ff;
+            background-color: #f0f7ff; /* Light blue */
             padding: 12px 16px;
             margin-bottom: 20px;
             font-weight: 600;
             font-size: 16px;
-            color: #0078D4;
-            border-left: 4px solid #0078D4;
-            border-radius: 0 4px 4px 0; /* Rounded on right side only */
+            color: #0078D4; /* Blue text */
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
         }
 
         /* Title section containing alert title and severity */
@@ -99,80 +99,84 @@
             margin-bottom: 8px;
         }
 
+        /* Alert container styling */
         .alert-container {
-            background-color: #f0f7ff;
-            border-left: 4px solid #0078D4;
-            border-radius: 0 4px 4px 0;
+            background-color: #f0f7ff; /* Light blue */
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
             padding: 16px 20px;
             margin: 20px 0;
             display: flex;
             flex-direction: column;
             width: 100%;
             box-sizing: border-box;
-            position: relative; /* For absolute positioning of severity */
+            position: relative; /* For severity positioning */
         }
 
+        /* Alert row layout */
         .alert-row {
             display: flex;
             align-items: center;
-            justify-content: space-between; /* Push title and severity to opposite ends */
+            justify-content: space-between; /* Layout alignment */
             width: 100%;
         }
 
+        /* Alert title styling */
         .alert-title {
-            color: #333 !important; /* Force color override */
+            color: #333 !important; /* Title color */
             font-size: 18px !important;
             font-weight: 600 !important;
             margin: 0 !important;
-            padding-right: 100px; /* Make room for severity indicator */
+            padding-right: 100px; /* Space for severity */
             flex-grow: 1;
         }
 
+        /* Severity indicator badge */
         .severity-indicator {
-            background-color: #dbc522; /* Yellow for low severity */
+            background-color: #dbc522; /* Default yellow */
             color: white !important;
             padding: 5px 12px;
-            border-radius: 30px;
+            border-radius: 30px; /* Rounded badge */
             font-weight: 600;
             font-size: 13px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
             display: inline-block;
-            position: absolute; /* Position absolutely */
-            right: 20px; /* Position on the right */
-            top: 50%; /* Center vertically */
-            transform: translateY(-50%); /* Perfect vertical centering */
+            position: absolute; /* Absolute positioning */
+            right: 20px; /* Right position */
+            top: 50%; /* Vertical center */
+            transform: translateY(-50%); /* Perfect centering */
         }
 
-        /* Override for other severity colors */
+        /* Severity color variations */
         .severity-high {
-            background-color: #D13438 !important;
+            background-color: #D13438 !important; /* Red */
         }
 
         .severity-medium {
-            background-color: #FF8C00 !important;
+            background-color: #FF8C00 !important; /* Orange */
         }
 
         .severity-low {
-            background-color: #dbc522 !important;
+            background-color: #dbc522 !important; /* Yellow */
         }
 
         .severity-informational {
-            background-color: #767676 !important;
+            background-color: #767676 !important; /* Gray */
         }
 
-        /* Executive summary section styling */
+        /* Executive summary section */
         .summary {
-            background-color: #f9f9f9; /* Light gray background */
-            border-left: 4px solid #0078D4; /* Blue left border for visual interest */
+            background-color: #f9f9f9; /* Light gray */
+            border-left: 4px solid #0078D4; /* Left border */
             padding: 16px;
             margin: 0 0 24px 0;
-            border-radius: 0 4px 4px 0; /* Rounded on right side only */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very subtle shadow */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
         }
 
-        /* Basic information row styling */
+        /* Information row layout */
         .info-row {
             margin-bottom: 16px;
             display: flex;
@@ -188,7 +192,7 @@
             color: #444;
         }
 
-        /* Metrics section with improved mobile responsiveness */
+        /* Metrics section layout */
         .metrics {
             display: flex;
             flex-wrap: wrap;
@@ -196,11 +200,11 @@
             margin: 15px 0 25px 0;
         }
 
-        /* Individual metric card styling */
+        /* Individual metric card */
         .metric-card {
             flex: 1;
             min-width: 120px;
-            background-color: #f9f9f9; /* Light gray background */
+            background-color: #f9f9f9; /* Light gray */
             padding: 15px;
             border-radius: 4px;
             text-align: center;
@@ -223,9 +227,9 @@
 
         /* Link styling */
         .link {
-            color: #0078D4; /* Microsoft blue for links */
+            color: #0078D4; /* Microsoft blue */
             text-decoration: none;
-            transition: color 0.2s ease; /* Smooth color transition */
+            transition: color 0.2s ease; /* Hover transition */
         }
 
         .link:hover {
@@ -233,30 +237,31 @@
             text-decoration: underline;
         }
 
-        /* Timeline visualization styling */
+        /* Timeline visualization */
         .timeline {
             margin: 28px 0;
             position: relative;
-            border-left: 4px solid #0078D4; /* Increased from 3px to 4px to match other sections */
+            border-left: 4px solid #0078D4; /* Left timeline bar */
             padding-left: 24px;
         }
 
+        /* Timeline event item */
         .timeline-item {
             position: relative;
             margin-bottom: 20px;
         }
 
-        /* Timeline dots for each event - adjusted positioning for the thicker line */
+        /* Timeline event dots */
         .timeline-item:before {
             content: '';
             position: absolute;
-            left: -34px; /* Adjusted for the thicker line */
+            left: -34px; /* Positioning */
             top: 0;
             width: 18px;
             height: 18px;
-            border-radius: 50%; /* Create circular dots */
+            border-radius: 50%; /* Circular dots */
             background-color: #0078D4;
-            border: 4px solid white; /* White border around dots */
+            border: 4px solid white; /* White border */
             box-shadow: 0 0 0 1px rgba(0,120,212,0.2); /* Subtle outline */
         }
 
@@ -279,13 +284,14 @@
         /* MITRE ATT&CK Tactics section */
         .tactics {
             background-color: #f9f9f9;
-            border-left: 4px solid #0078D4; /* Blue left border */
+            border-left: 4px solid #0078D4; /* Left border */
             padding: 16px;
             margin: 24px 0;
-            border-radius: 0 4px 4px 0; /* Rounded on right side only */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very subtle shadow */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
         }
 
+        /* Tactics list styling */
         .tactics ul {
             margin: 12px 0 0 0;
             padding-left: 20px;
@@ -297,14 +303,15 @@
 
         /* Recommended actions section */
         .recommendations {
-            background-color: #f0f7ff; /* Light blue background */
+            background-color: #f0f7ff; /* Light blue */
             padding: 18px;
             margin: 24px 0;
-            border-left: 4px solid #0078D4; /* Blue left border */
-            border-radius: 0 4px 4px 0; /* Rounded on right side only */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Very subtle shadow */
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
         }
 
+        /* Recommendations list styling */
         .recommendations ul {
             margin: 12px 0 0 0;
             padding-left: 20px;
@@ -325,7 +332,7 @@
         .button {
             padding: 14px 24px;
             background-color: #0078D4; /* Microsoft blue */
-            color: white !important; /* Force white color with !important */
+            color: white !important; /* Text color */
             text-decoration: none;
             border-radius: 4px;
             font-weight: 600;
@@ -334,21 +341,23 @@
             border: none;
             cursor: pointer;
             display: inline-block;
-            min-width: 180px; /* Ensure minimum width */
-            height: auto !important; /* Prevent height overrides */
-            line-height: 1.5 !important; /* Ensure proper line height */
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Add shadow for depth */
-            transition: all 0.2s ease; /* Smooth transition for hover effect */
-            -webkit-text-size-adjust: none; /* Prevent iOS text size adjustment */
-            -ms-text-size-adjust: none; /* Prevent Windows text size adjustment */
+            min-width: 180px; /* Minimum width */
+            height: auto !important; /* Height override */
+            line-height: 1.5 !important; /* Line height */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Shadow */
+            transition: all 0.2s ease; /* Hover transition */
+            -webkit-text-size-adjust: none; /* iOS text adjustment */
+            -ms-text-size-adjust: none; /* Windows text adjustment */
         }
 
+        /* Button hover state */
         .button:hover {
-            background-color: #005a9e; /* Darker blue on hover */
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15); /* Enhanced shadow on hover */
-            transform: translateY(-2px); /* Slight rise effect */
+            background-color: #005a9e; /* Darker blue */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15); /* Enhanced shadow */
+            transform: translateY(-2px); /* Slight rise */
         }
 
+        /* Button text span */
         .button span {
             color: white !important;
             display: inline-block !important;
@@ -356,14 +365,14 @@
             visibility: visible !important;
         }
 
-        /* Section styling for main content divisions */
+        /* Section dividers */
         .section {
             margin: 30px 0;
-            border-top: 1px solid #eee; /* Light top border */
+            border-top: 1px solid #eee; /* Top border */
             padding-top: 20px;
         }
 
-        /* Section title styling with indicator */
+        /* Section title styling */
         .section-title {
             font-size: 18px;
             margin-bottom: 15px;
@@ -373,17 +382,17 @@
             align-items: center;
         }
 
-        /* Colored dot before section titles */
+        /* Section title indicator dot */
         .section-title-indicator {
             width: 12px;
             height: 12px;
-            border-radius: 50%; /* Create circular indicator */
+            border-radius: 50%; /* Circular indicator */
             background-color: #0078D4;
             display: inline-block;
             margin-right: 10px;
         }
 
-        /* IP location text styling */
+        /* IP location text */
         .ip-location {
             font-size: 12px;
             color: #666;
@@ -393,9 +402,9 @@
         /* Footer styling */
         .footer {
             padding: 24px;
-            background-color: #f0f0f0; /* Light gray background */
+            background-color: #f0f0f0; /* Light gray */
             text-align: center;
-            border-top: 1px solid #ddd; /* Light top border */
+            border-top: 1px solid #ddd; /* Top border */
         }
 
         .footer h3 {
@@ -403,18 +412,19 @@
             color: #333;
         }
 
-        /* Table styling for Sentinel tables - minimal to avoid conflicts but improved */
+        /* Sentinel table styling */
         .sentinel-tables table {
             width: 100%;
             margin-bottom: 24px;
             border-collapse: collapse;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Shadow */
             border-radius: 4px; /* Rounded corners */
-            overflow: hidden; /* Ensure rounded corners work with table */
+            overflow: hidden; /* Maintains rounded corners */
         }
 
+        /* Table header cells */
         .sentinel-tables th {
-            background-color: #0078D4; /* Microsoft blue headers */
+            background-color: #0078D4; /* Microsoft blue */
             color: white;
             text-align: left;
             padding: 12px 15px;
@@ -422,21 +432,24 @@
             font-size: 14px;
         }
 
+        /* Alternating row colors */
         .sentinel-tables tr:nth-child(even) {
-            background-color: #f5f5f5; /* Striped rows for readability */
+            background-color: #f5f5f5; /* Striped rows */
         }
 
+        /* Row hover effect */
         .sentinel-tables tr:hover {
-            background-color: #f0f7ff; /* Highlight row on hover */
+            background-color: #f0f7ff; /* Highlight color */
         }
 
+        /* Table data cells */
         .sentinel-tables td {
             padding: 12px 15px;
-            border-bottom: 1px solid #eee; /* Light borders between rows */
+            border-bottom: 1px solid #eee; /* Cell borders */
             font-size: 14px;
         }
 
-        /* Print-specific styling for better readability when printed */
+        /* Print-specific styling */
         @media print {
             body {
                 background-color: white;
@@ -467,6 +480,7 @@
 
         /* Mobile responsive adjustments */
         @media (max-width: 600px) {
+            /* Header vertical stack on mobile */
             .header {
                 flex-direction: column;
                 text-align: center;
@@ -482,62 +496,69 @@
                 order: 2;
             }
             
+            /* Full width labels on mobile */
             .info-label {
                 display: block;
                 width: 100%;
                 margin-bottom: 4px;
             }
             
+            /* Vertical buttons on mobile */
             .action-buttons {
                 flex-direction: column;
             }
             
-            /* Improved metrics styling for mobile */
+            /* Horizontal metrics layout on mobile */
             .metrics {
                 display: flex;
-                flex-direction: row; /* Force horizontal layout even on mobile */
+                flex-direction: row;
                 justify-content: space-between;
-                flex-wrap: nowrap; /* Prevent wrapping to maintain horizontal alignment */
+                flex-wrap: nowrap;
             }
             
+            /* Mobile metric card sizing */
             .metric-card {
-                min-width: 0; /* Allow cards to shrink */
-                flex-basis: 32%; /* Set approximate width for 3 cards */
-                margin: 0; /* Remove any margin that might cause wrapping */
+                min-width: 0;
+                flex-basis: 32%;
+                margin: 0;
             }
             
+            /* Smaller text on mobile metrics */
             .metric-value {
-                font-size: 18px; /* Slightly smaller font for mobile */
+                font-size: 18px;
             }
             
             .metric-label {
-                font-size: 10px; /* Smaller label text for mobile */
+                font-size: 10px;
             }
             
-            /* Fix alert container on mobile */
+            /* Mobile alert container */
             .alert-container {
-                padding: 12px 15px; /* Reduce padding slightly */
+                padding: 12px 15px;
             }
             
+            /* Vertical alert layout on mobile */
             .alert-row {
                 flex-direction: column;
                 align-items: flex-start;
             }
             
+            /* Mobile alert title */
             .alert-title {
                 padding-right: 0;
                 margin-bottom: 10px !important;
-                font-size: 16px !important; /* Smaller font size on mobile */
+                font-size: 16px !important;
             }
             
+            /* Repositioned severity on mobile */
             .severity-indicator {
                 position: static;
                 transform: none;
                 margin-top: 8px;
-                align-self: flex-start; /* Align to the left */
+                align-self: flex-start;
             }
             
-            /* Timeline adjustments for mobile */
+            /* Mobile timeline adjustments */
             .timeline {
                 padding-left: 18px;
             }
@@ -553,41 +574,41 @@
 
 <body>
     <div class="container">
-        <!-- Header with SECURITY ALERT title on left and logo on right -->
+        <!-- Main header with alert title and company logo -->
         <div class="header">
             <h1>SECURITY ALERT</h1>
             <img src="@{parameters('emailLogoHeader')}" alt="Company Logo">
         </div>
         
         <div class="content">
-            <!-- Report name banner below header -->
+            <!-- Report identification banner -->
             <div class="report-name-banner">
                 @{parameters('reportName')}
             </div>
             
-            <!-- Date time at top right -->
+            <!-- Incident timestamp display -->
             <div class="incident-date">
                 <strong>Date & Time:</strong>
                 @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],
                 parameters('dateTimeFormat'))}
             </div>
 
-            <!-- New alert header container with fixed positioning -->
+            <!-- Alert container with title and severity indicator -->
             <div class="alert-container">
                 <div class="alert-row">
-                    <!-- Title with forced styling -->
+                    <!-- Alert title -->
                     <h2 class="alert-title">
                         @{triggerBody()?['object']?['properties']?['title']}
                     </h2>
                     
-                    <!-- Severity with absolute positioning -->
+                    <!-- Severity level badge -->
                     <span class="severity-indicator severity-@{toLower(triggerBody()?['object']?['properties']?['severity'])}">
                         @{triggerBody()?['object']?['properties']?['severity']}
                     </span>
                 </div>
             </div>
         
-            <!-- Executive Summary -->
+            <!-- Executive Summary section -->
             <div class="summary">
                 <strong>Executive Summary:</strong> Security alert triggered for
                 @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''),
@@ -597,8 +618,7 @@
                 Immediate investigation recommended.
             </div>
 
-
-            <!-- Metrics section with improved mobile responsiveness -->
+            <!-- Key metrics display cards -->
             <div class="metrics">
                 <div class="metric-card">
                     <div class="metric-value">
@@ -620,18 +640,19 @@
                 </div>
             </div>
 
-            <!-- Basic info -->
+            <!-- Incident identification information -->
             <div class="info-row">
                 <span class="info-label">Incident ID:</span>
                 <span>@{coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 'N/A')}</span>
             </div>
 
+            <!-- Incident description information -->
             <div class="info-row">
                 <span class="info-label">Description:</span>
                 <span>@{triggerBody()?['object']?['properties']?['description']}</span>
             </div>
 
-            <!-- Visual Timeline -->
+            <!-- Chronological event timeline -->
             <div class="timeline">
                 <div class="timeline-item">
                     <div class="timeline-date">
@@ -659,7 +680,7 @@
                 </div>
             </div>
 
-            <!-- Tactics Section -->
+            <!-- MITRE ATT&CK framework tactics identified -->
             <div class="tactics">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
@@ -673,7 +694,7 @@
                 </ul>
             </div>
 
-            <!-- Recommended actions section - Made more specific -->
+            <!-- Security response recommendations -->
             <div class="recommendations">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
@@ -686,38 +707,39 @@
                 </ul>
             </div>
 
-            <!-- Single action button with improved mobile compatibility -->
+            <!-- Primary action button -->
             <div class="action-buttons">
                 <a class="button" href="@{triggerBody()?['object']?['properties']?['incidentUrl']}">
                     <span>Investigate Incident</span>
                 </a>
             </div>
 
-            <!-- Entities Section - With tag directly -->
+            <!-- Affected entities details section -->
             <div class="section">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
                     Affected Entities
                 </div>
-                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <!-- Entities table from Sentinel -->
                 <div class="sentinel-tables">
                     @{body('Create_HTML_table_with_Entities')}
                 </div>
             </div>
 
-            <!-- Alerts Section - Modified to avoid styling conflicts -->
+            <!-- Related alerts details section -->
             <div class="section">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
                     Related Alerts
                 </div>
-                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <!-- Alerts table from Sentinel -->
                 <div class="sentinel-tables">
                     @{body('Create_HTML_table_with_Alerts')}
                 </div>
             </div>
         </div>
 
+        <!-- Contact information footer -->
         <div class="footer">
             <h3>Sentinel Security Team</h3>
             <p>If you have any questions, please contact us:</p>
@@ -726,5 +748,3 @@
         </div>
     </div>
 </body>
-
-</html>
