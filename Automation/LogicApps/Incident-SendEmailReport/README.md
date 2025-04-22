@@ -57,7 +57,7 @@ The email is structured with the following sections:
 
 For a complete guide on implementing this template as part of a Microsoft Sentinel incident reporting system, please visit our detailed blog post:
 
-[Sentinel Alerts to Actionable Insights: Streamlining Security Incident Communication with Power-Packed Logic Apps](https://sentinel.blog/incident-reporting-logic-app)
+[Sentinel Alerts to Actionable Insights: Streamlining Security Incident Communication with Power-Packed Logic Apps](https://sentinel.blog/building-an-automated-sentinel-incident-reporting-system-with-azure-logic-apps/)
 
 ## Licence
 
