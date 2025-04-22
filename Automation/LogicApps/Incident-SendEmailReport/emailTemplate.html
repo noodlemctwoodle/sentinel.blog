@@ -1,284 +1,455 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Security Alert</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
+        /* Basic page styling */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif; /* Microsoft's Segoe UI font */
             margin: 0; 
             padding: 0; 
-            background-color: #f5f5f5; 
-            color: #333; 
-            line-height: 1.5;
+            background-color: #f5f5f5; /* Light gray background */
+            color: #252525; /* Dark text for readability */
+            line-height: 1.5; /* Line spacing */
         }
-        
+
+        /* Main container with max width and centered */
         .container { 
-            max-width: 650px; 
-            margin: 0 auto; 
-            background-color: #ffffff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            max-width: 700px; /* Container width */
+            margin: 20px auto; /* Top/bottom margin */
+            background-color: #ffffff; /* White background */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); /* Shadow for depth */
+            border-radius: 4px; /* Rounded corners */
+            overflow: hidden; /* Prevents content overflow */
         }
-        
-        .header { 
-            background-color: #0078D4; 
-            padding: 20px; 
-            text-align: center; 
-            color: white; 
+
+        /* Header styling with logo on right, title on left */
+        .header {
+            background-color: #0078D4; /* Microsoft blue */
+            padding: 24px 20px; /* Vertical padding */
+            color: white; /* Text color */
+            display: flex; /* Flexbox layout */
+            justify-content: space-between; /* Layout alignment */
+            align-items: center; /* Vertical centering */
+            min-height: 80px; /* Minimum height */
         }
-        
+
+        /* Logo styling - positioned on the right */
         .header img { 
-            max-width: 60px; 
-            display: block; 
-            margin: 0 auto 10px; 
+            width: 120px !important; /* Force width */
+            height: auto !important; /* Auto height */
+            max-width: none !important; /* Override constraints */
+            object-fit: contain; /* Image fitting */
+            margin: 0;
+            order: 2; /* Position in flex order */
         }
-        
-        .header h1 { 
-            margin: 0; 
-            font-size: 24px; 
+
+        /* Title styling - positioned on the left */
+        .header h1 {
+            margin: 0;
+            font-size: 28px; /* Large font size */
+            text-align: left;
+            order: 1; /* Position in flex order */
+            font-weight: 600; /* Font weight */
+            letter-spacing: 0.5px; /* Letter spacing */
         }
-        
-        .content { 
-            padding: 20px; 
-            background-color: #ffffff; 
+
+        /* Main content area */
+        .content {
+            padding: 24px; /* Padding */
+            background-color: #ffffff; /* White background */
         }
-        
-        /* Executive summary */
-        .summary {
-            background-color: #f9f9f9;
-            border-left: 4px solid #0078D4;
-            padding: 15px;
-            margin: 0 0 20px 0;
+
+        /* Report name banner styling - displayed below header */
+        .report-name-banner {
+            background-color: #f0f7ff; /* Light blue */
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 16px;
+            color: #0078D4; /* Blue text */
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
         }
-        
-        .title { 
-            color: #D83B01; 
-            text-align: center; 
-            border-bottom: 1px solid #eee; 
-            padding-bottom: 10px;
-            position: relative;
+
+        /* Title section containing alert title and severity */
+        .title-section {
+            margin: 0 0 24px 0;
+        }
+
+        /* Alert header containing title and severity */
+        .alert-header {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        /* Title wrapper to contain both title and badge */
+        .alert-title-wrapper {
             display: flex;
             align-items: center;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 15px;
-        }
-        
-        /* Date & Time at top */
-        .incident-date {
-            text-align: right;
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 15px;
-        }
-        
-        /* Severity indicator */
-        .severity {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-weight: bold;
-            font-size: 14px;
-            color: white;
-            margin-left: 10px;
-        }
-        
-        .severity-high {
-            background-color: #D13438;
-        }
-        
-        .severity-medium {
-            background-color: #FF8C00;
-        }
-        
-        .severity-low {
-            background-color: #3B79B7;
-        }
-        
-        .severity-informational {
-            background-color: #767676;
-        }
-        
-        .info-row { 
-            margin-bottom: 15px; 
-        }
-        
-        .info-label { 
-            font-weight: bold;
-            width: 120px;
-            display: inline-block;
-            vertical-align: top;
-        }
-        
-        .link { 
-            color: #0078D4; 
-            text-decoration: none; 
-        }
-        
-        /* Timeline styling */
-        .timeline {
-            margin: 20px 0;
-            position: relative;
-            border-left: 3px solid #0078D4;
-            padding-left: 20px;
-        }
-        
-        .timeline-item {
-            position: relative;
-            margin-bottom: 15px;
-        }
-        
-        .timeline-item:before {
-            content: '';
-            position: absolute;
-            left: -29px;
-            top: 0;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background-color: #0078D4;
-            border: 3px solid white;
-        }
-        
-        .timeline-date {
-            color: #666;
-            font-size: 13px;
-            margin-bottom: 3px;
-        }
-        
-        .timeline-title {
-            font-weight: bold;
-            margin-bottom: 3px;
-        }
-        
-        /* Tactics styling */
-        .tactics { 
-            background-color: #f9f9f9; 
-            border-left: 4px solid #0078D4; 
-            padding: 15px; 
-            margin: 15px 0; 
-        }
-        
-        /* Recommended actions */
-        .recommendations {
-            background-color: #f0f7ff;
-            padding: 15px;
-            margin: 15px 0;
-            border-left: 4px solid #0078D4;
-        }
-        
-        .recommendations ul {
-            margin: 10px 0 0 0;
-            padding-left: 20px;
-        }
-        
-        .recommendations li {
+            gap: 12px;
             margin-bottom: 8px;
         }
-        
-        /* Action buttons */
-        .action-buttons {
-            text-align: center;
-            margin: 25px 0;
+
+        /* Alert container styling */
+        .alert-container {
+            background-color: #f0f7ff; /* Light blue */
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            padding: 16px 20px;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            box-sizing: border-box;
+            position: relative; /* For severity positioning */
         }
-        
-        .button {
-            padding: 12px 20px;
-            background-color: #0078D4;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-weight: bold;
-            font-size: 14px;
-            text-align: center;
-            border: none;
-            cursor: pointer;
-            display: inline-block;
-        }
-        
-        /* Section styling */
-        .section {
-            margin: 25px 0;
-            border-top: 1px solid #eee;
-            padding-top: 15px;
-        }
-        
-        .section-title {
-            font-size: 18px;
-            margin-bottom: 10px;
-            color: #333;
-            font-weight: bold;
+
+        /* Alert row layout */
+        .alert-row {
             display: flex;
             align-items: center;
+            justify-content: space-between; /* Layout alignment */
+            width: 100%;
         }
-        
-        .section-title-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background-color: #0078D4;
+
+        /* Alert title styling */
+        .alert-title {
+            color: #333 !important; /* Title color */
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            margin: 0 !important;
+            padding-right: 100px; /* Space for severity */
+            flex-grow: 1;
+        }
+
+        /* Severity indicator badge */
+        .severity-indicator {
+            background-color: #dbc522; /* Default yellow */
+            color: white !important;
+            padding: 5px 12px;
+            border-radius: 30px; /* Rounded badge */
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow */
             display: inline-block;
-            margin-right: 8px;
+            position: absolute; /* Absolute positioning */
+            right: 20px; /* Right position */
+            top: 50%; /* Vertical center */
+            transform: translateY(-50%); /* Perfect centering */
         }
-        
-        /* Incident tag styling */
-        .incident-tag {
+
+        /* Severity color variations */
+        .severity-high {
+            background-color: #D13438 !important; /* Red */
+        }
+
+        .severity-medium {
+            background-color: #FF8C00 !important; /* Orange */
+        }
+
+        .severity-low {
+            background-color: #dbc522 !important; /* Yellow */
+        }
+
+        .severity-informational {
+            background-color: #767676 !important; /* Gray */
+        }
+
+        /* Executive summary section */
+        .summary {
+            background-color: #f9f9f9; /* Light gray */
+            border-left: 4px solid #0078D4; /* Left border */
+            padding: 16px;
+            margin: 0 0 24px 0;
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
+        }
+
+        /* Information row layout */
+        .info-row {
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        /* Label styling for info pairs */
+        .info-label {
+            font-weight: 600;
+            width: 130px;
             display: inline-block;
-            background-color: #f0f0f0;
-            color: #333;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            margin-left: 10px;
-            white-space: nowrap;
+            vertical-align: top;
+            color: #444;
         }
-        
-        /* Metrics */
+
+        /* Metrics section layout */
         .metrics {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             margin: 15px 0 25px 0;
         }
-        
+
+        /* Individual metric card */
         .metric-card {
             flex: 1;
             min-width: 120px;
-            background-color: #f9f9f9;
+            background-color: #f9f9f9; /* Light gray */
             padding: 15px;
             border-radius: 4px;
             text-align: center;
-            border: 1px solid #eee;
+            border: 1px solid #eee; /* Light border */
         }
-        
+
+        /* Metric value (number) styling */
         .metric-value {
             font-size: 20px;
             font-weight: bold;
-            color: #0078D4;
+            color: #0078D4; /* Microsoft blue */
             margin-bottom: 5px;
         }
-        
+
+        /* Metric label styling */
         .metric-label {
             font-size: 12px;
-            color: #666;
+            color: #666; /* Medium gray */
         }
-        
-        /* IP location */
+
+        /* Link styling */
+        .link {
+            color: #0078D4; /* Microsoft blue */
+            text-decoration: none;
+            transition: color 0.2s ease; /* Hover transition */
+        }
+
+        .link:hover {
+            color: #005a9e; /* Darker blue on hover */
+            text-decoration: underline;
+        }
+
+        /* Timeline visualization */
+        .timeline {
+            margin: 28px 0;
+            position: relative;
+            border-left: 4px solid #0078D4; /* Left timeline bar */
+            padding-left: 24px;
+        }
+
+        /* Timeline event item */
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        /* Timeline event dots */
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: -34px; /* Positioning */
+            top: 0;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%; /* Circular dots */
+            background-color: #0078D4;
+            border: 4px solid white; /* White border */
+            box-shadow: 0 0 0 1px rgba(0,120,212,0.2); /* Subtle outline */
+        }
+
+        /* Timeline date styling */
+        .timeline-date {
+            color: #555;
+            font-size: 14px;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+
+        /* Timeline event title */
+        .timeline-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        /* MITRE ATT&CK Tactics section */
+        .tactics {
+            background-color: #f9f9f9;
+            border-left: 4px solid #0078D4; /* Left border */
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
+        }
+
+        /* Tactics list styling */
+        .tactics ul {
+            margin: 12px 0 0 0;
+            padding-left: 20px;
+        }
+
+        .tactics li {
+            margin-bottom: 8px;
+        }
+
+        /* Recommended actions section */
+        .recommendations {
+            background-color: #f0f7ff; /* Light blue */
+            padding: 18px;
+            margin: 24px 0;
+            border-left: 4px solid #0078D4; /* Left border */
+            border-radius: 0 4px 4px 0; /* Right side rounding */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow */
+        }
+
+        /* Recommendations list styling */
+        .recommendations ul {
+            margin: 12px 0 0 0;
+            padding-left: 20px;
+        }
+
+        .recommendations li {
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        /* Action buttons container */
+        .action-buttons {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        /* Button styling */
+        .button {
+            padding: 14px 24px;
+            background-color: #0078D4; /* Microsoft blue */
+            color: white !important; /* Text color */
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 15px;
+            text-align: center;
+            border: none;
+            cursor: pointer;
+            display: inline-block;
+            min-width: 180px; /* Minimum width */
+            height: auto !important; /* Height override */
+            line-height: 1.5 !important; /* Line height */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Shadow */
+            transition: all 0.2s ease; /* Hover transition */
+            -webkit-text-size-adjust: none; /* iOS text adjustment */
+            -ms-text-size-adjust: none; /* Windows text adjustment */
+        }
+
+        /* Button hover state */
+        .button:hover {
+            background-color: #005a9e; /* Darker blue */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15); /* Enhanced shadow */
+            transform: translateY(-2px); /* Slight rise */
+        }
+
+        /* Button text span */
+        .button span {
+            color: white !important;
+            display: inline-block !important;
+            width: auto !important;
+            visibility: visible !important;
+        }
+
+        /* Section dividers */
+        .section {
+            margin: 30px 0;
+            border-top: 1px solid #eee; /* Top border */
+            padding-top: 20px;
+        }
+
+        /* Section title styling */
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+
+        /* Section title indicator dot */
+        .section-title-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%; /* Circular indicator */
+            background-color: #0078D4;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        /* IP location text */
         .ip-location {
             font-size: 12px;
             color: #666;
-            margin-top: 3px;
+            margin-top: 4px;
         }
-        
-        .footer { 
-            padding: 20px; 
-            background-color: #f0f0f0; 
-            text-align: center; 
-            border-top: 1px solid #ddd;
+
+        /* Footer styling */
+        .footer {
+            padding: 24px;
+            background-color: #f0f0f0; /* Light gray */
+            text-align: center;
+            border-top: 1px solid #ddd; /* Top border */
         }
-        
-        /* For better readability on print */
+
+        .footer h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        /* Sentinel table styling */
+        .sentinel-tables table {
+            width: 100%;
+            margin-bottom: 24px;
+            border-collapse: collapse;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Shadow */
+            border-radius: 4px; /* Rounded corners */
+            overflow: hidden; /* Maintains rounded corners */
+        }
+
+        /* Table header cells */
+        .sentinel-tables th {
+            background-color: #0078D4; /* Microsoft blue */
+            color: white;
+            text-align: left;
+            padding: 12px 15px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        /* Alternating row colors */
+        .sentinel-tables tr:nth-child(even) {
+            background-color: #f5f5f5; /* Striped rows */
+        }
+
+        /* Row hover effect */
+        .sentinel-tables tr:hover {
+            background-color: #f0f7ff; /* Highlight color */
+        }
+
+        /* Table data cells */
+        .sentinel-tables td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee; /* Cell borders */
+            font-size: 14px;
+        }
+
+        /* Print-specific styling */
         @media print {
             body {
                 background-color: white;
@@ -306,82 +477,148 @@
                 color: black;
             }
         }
-        
-        /* Mobile optimizations */
+
+        /* Mobile responsive adjustments */
         @media (max-width: 600px) {
+            /* Header vertical stack on mobile */
+            .header {
+                flex-direction: column;
+                text-align: center;
+                padding: 16px;
+            }
+            
+            .header h1 {
+                order: 1;
+                margin-bottom: 12px;
+            }
+            
+            .header img {
+                order: 2;
+            }
+            
+            /* Full width labels on mobile */
             .info-label {
                 display: block;
                 width: 100%;
-                margin-bottom: 3px;
+                margin-bottom: 4px;
             }
             
+            /* Vertical buttons on mobile */
             .action-buttons {
                 flex-direction: column;
             }
             
-            .metric-card {
-                min-width: 100%;
+            /* Horizontal metrics layout on mobile */
+            .metrics {
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+                flex-wrap: nowrap;
             }
-        }
-        
-        /* IMPORTANT: Basic table styles that won't conflict with Sentinel's tables */
-        /* These styles are intentionally minimal to avoid conflicts */
-        .sentinel-tables table {
-            width: 100%;
-            margin-bottom: 20px;
-            border-collapse: collapse;
-        }
-        
-        .sentinel-tables th {
-            background-color: #0078D4;
-            color: white;
-            text-align: left;
-            padding: 10px;
-            font-weight: normal;
-        }
-        
-        .sentinel-tables tr:nth-child(even) {
-            background-color: #f5f5f5;
-        }
-        
-        .sentinel-tables td {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
+            
+            /* Mobile metric card sizing */
+            .metric-card {
+                min-width: 0;
+                flex-basis: 32%;
+                margin: 0;
+            }
+            
+            /* Smaller text on mobile metrics */
+            .metric-value {
+                font-size: 18px;
+            }
+            
+            .metric-label {
+                font-size: 10px;
+            }
+            
+            /* Mobile alert container */
+            .alert-container {
+                padding: 12px 15px;
+            }
+            
+            /* Vertical alert layout on mobile */
+            .alert-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            /* Mobile alert title */
+            .alert-title {
+                padding-right: 0;
+                margin-bottom: 10px !important;
+                font-size: 16px !important;
+            }
+            
+            /* Repositioned severity on mobile */
+            .severity-indicator {
+                position: static;
+                transform: none;
+                margin-top: 8px;
+                align-self: flex-start;
+            }
+            
+            /* Mobile timeline adjustments */
+            .timeline {
+                padding-left: 18px;
+            }
+            
+            .timeline-item:before {
+                left: -27px;
+                width: 14px;
+                height: 14px;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
+        <!-- Main header with alert title and company logo -->
         <div class="header">
-            <img src="@{parameters('emailLogoHeader')}" alt="Company Logo">
             <h1>SECURITY ALERT</h1>
+            <img src="@{parameters('emailLogoHeader')}" alt="Company Logo">
         </div>
         
         <div class="content">
-            <!-- Date time at top right -->
-            <div class="incident-date">
-                <strong>Date & Time:</strong> @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}
+            <!-- Report identification banner -->
+            <div class="report-name-banner">
+                @{parameters('reportName')}
             </div>
             
-            <!-- Title with severity indicator -->
-            <h2 class="title">
-                @{parameters('reportName')}
-                <!-- Dynamic severity indicator -->
-                @{if(not(equals(coalesce(triggerBody()?['object']?['properties']?['severity'],''), '')), 
-                concat('<span class="severity severity-', toLower(triggerBody()?['object']?['properties']?['severity']), '">', 
-                triggerBody()?['object']?['properties']?['severity'], '</span>'), '')}
-            </h2>
-            
-            <!-- Executive Summary -->
+            <!-- Incident timestamp display -->
+            <div class="incident-date">
+                <strong>Date & Time:</strong>
+                @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],
+                parameters('dateTimeFormat'))}
+            </div>
+
+            <!-- Alert container with title and severity indicator -->
+            <div class="alert-container">
+                <div class="alert-row">
+                    <!-- Alert title -->
+                    <h2 class="alert-title">
+                        @{triggerBody()?['object']?['properties']?['title']}
+                    </h2>
+                    
+                    <!-- Severity level badge -->
+                    <span class="severity-indicator severity-@{toLower(triggerBody()?['object']?['properties']?['severity'])}">
+                        @{triggerBody()?['object']?['properties']?['severity']}
+                    </span>
+                </div>
+            </div>
+        
+            <!-- Executive Summary section -->
             <div class="summary">
-                <strong>Executive Summary:</strong> Security alert triggered for 
-                @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''), 
-                'suspicious activity', 
-                concat(first(triggerBody()?['object']?['properties']?['additionalData']?['tactics']), ' activity'))} involving multiple entities. 
+                <strong>Executive Summary:</strong> Security alert triggered for
+                @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''),
+                'suspicious activity',
+                concat(first(triggerBody()?['object']?['properties']?['additionalData']?['tactics']), ' activity'))}
+                involving multiple entities.
                 Immediate investigation recommended.
             </div>
-            
-            <!-- Metrics - with alert count, entity count, severity -->
+
+            <!-- Key metrics display cards -->
             <div class="metrics">
                 <div class="metric-card">
                     <div class="metric-value">
@@ -402,32 +639,36 @@
                     <div class="metric-label">Severity</div>
                 </div>
             </div>
-            
-            <!-- Basic info -->
+
+            <!-- Incident identification information -->
             <div class="info-row">
                 <span class="info-label">Incident ID:</span>
                 <span>@{coalesce(triggerBody()?['object']?['properties']?['incidentNumber'], 'N/A')}</span>
             </div>
-            
+
+            <!-- Incident description information -->
             <div class="info-row">
                 <span class="info-label">Description:</span>
                 <span>@{triggerBody()?['object']?['properties']?['description']}</span>
             </div>
-            
-            <!-- Visual Timeline -->
+
+            <!-- Chronological event timeline -->
             <div class="timeline">
                 <div class="timeline-item">
                     <div class="timeline-date">
-                        @{if(equals(coalesce(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'], ''), ''), 
-                        formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat')), 
-                        formatDateTime(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'], parameters('dateTimeFormat')))}
+                        @{if(equals(coalesce(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'], ''), ''),
+                        formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],
+                        parameters('dateTimeFormat')),
+                        formatDateTime(triggerBody()?['object']?['properties']?['firstActivityTimeUtc'],
+                        parameters('dateTimeFormat')))}
                     </div>
                     <div class="timeline-title">First Activity Detected</div>
                     <div>Initial suspicious activity observed</div>
                 </div>
                 <div class="timeline-item">
                     <div class="timeline-date">
-                        @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'], parameters('dateTimeFormat'))}
+                        @{formatDateTime(triggerBody()?['object']?['properties']?['createdTimeUtc'],
+                        parameters('dateTimeFormat'))}
                     </div>
                     <div class="timeline-title">Incident Created</div>
                     <div>Alert generated by Microsoft Sentinel</div>
@@ -438,21 +679,22 @@
                     <div>Security team notified</div>
                 </div>
             </div>
-            
-            <!-- Tactics Section -->
+
+            <!-- MITRE ATT&CK framework tactics identified -->
             <div class="tactics">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
                     MITRE ATT&CK Tactics
                 </div>
                 <ul>
-                    @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''), ''), 
-                    '<li>No tactics identified</li>', 
+                    @{if(equals(coalesce(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], ''),
+                    ''),
+                    '<li>No tactics identified</li>',
                     join(triggerBody()?['object']?['properties']?['additionalData']?['tactics'], '<br>'))}
                 </ul>
             </div>
-            
-            <!-- Recommended actions section - Made more specific -->
+
+            <!-- Security response recommendations -->
             <div class="recommendations">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
@@ -464,40 +706,40 @@
                     <li>Review related logs in Microsoft Sentinel for additional context</li>
                 </ul>
             </div>
-            
-            <!-- Single action button -->
+
+            <!-- Primary action button -->
             <div class="action-buttons">
                 <a class="button" href="@{triggerBody()?['object']?['properties']?['incidentUrl']}">
-                    Investigate Incident
+                    <span>Investigate Incident</span>
                 </a>
             </div>
-            
-            <!-- Entities Section - With tag directly -->
+
+            <!-- Affected entities details section -->
             <div class="section">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
                     Affected Entities
-                    <span class="incident-tag">Persistence</span>
                 </div>
-                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <!-- Entities table from Sentinel -->
                 <div class="sentinel-tables">
                     @{body('Create_HTML_table_with_Entities')}
                 </div>
             </div>
-            
-            <!-- Alerts Section - Modified to avoid styling conflicts -->
+
+            <!-- Related alerts details section -->
             <div class="section">
                 <div class="section-title">
                     <span class="section-title-indicator"></span>
                     Related Alerts
                 </div>
-                <!-- Remove custom table styling and let Sentinel's table render as is -->
+                <!-- Alerts table from Sentinel -->
                 <div class="sentinel-tables">
                     @{body('Create_HTML_table_with_Alerts')}
                 </div>
             </div>
         </div>
-        
+
+        <!-- Contact information footer -->
         <div class="footer">
             <h3>Sentinel Security Team</h3>
             <p>If you have any questions, please contact us:</p>
@@ -506,4 +748,3 @@
         </div>
     </div>
 </body>
-</html>

@@ -106,7 +106,7 @@ Contribute your own scripts, improvements, or documentation enhancements through
 
 If you'd like to buy me a coffee to support ongoing development:
 
-<a href="https://www.buymeacoffee.com/noodlemctwoodle" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+<a href="https://sentinel.blog/#/portal/support" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
 ## 📄 License
 
