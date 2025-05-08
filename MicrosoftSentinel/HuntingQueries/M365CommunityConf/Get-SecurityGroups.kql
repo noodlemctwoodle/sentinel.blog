@@ -1,0 +1,11 @@
+// The Get-SecurityGroups module retrieves all security groups and their respective members. 
+// Executing this module will trigger the events shown below in the MicrosoftGraphActivityLogs.
+// The number of events generated corresponds to the quantity of security groups present in the environment.
+
+MicrosoftGraphActivityLogs
+| where UserAgent contains "PowerShell"
+| where (RequestUri == "https://graph.microsoft.com/v1.0/groups?=securityEnabled%20eq%20true" 
+    or RequestUri has_all("https://graph.microsoft.com/v1.0/groups/","members"))
+| extend GroupObjectId = tostring(extract(@"groups/(.*?)/members", 1, RequestUri))
+| join kind = leftouter AADNonInteractiveUserSignInLogs 
+    on $left.SignInActivityId == $right.UniqueTokenIdentifier
