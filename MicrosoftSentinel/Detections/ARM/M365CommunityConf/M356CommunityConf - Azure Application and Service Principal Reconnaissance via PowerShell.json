@@ -1,0 +1,96 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4cd0c0df-234b-435c-9451-dd976096001f')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4cd0c0df-234b-435c-9451-dd976096001f')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "M356CommunityConf - Azure Application and Service Principal Reconnaissance via PowerShell",
+                "description": "This detection identifies potential reconnaissance activities where users leverage PowerShell to systematically enumerate Azure AD applications, service principals, and their associated permissions through Microsoft Graph API. The rule specifically monitors queries to user directories, organization information, application registrations, and service principal endpoints, which could indicate an attacker mapping the tenant's application ecosystem.\n\nThe detection is particularly focused on identifying attempts to discover third-party external applications that users have consented to, which could represent security risks or potential attack vectors. It analyzes the scope and permission patterns of these queries to help identify unusual access attempts. The rule incorporates blast radius assessment by prioritizing activities performed by users with privileged roles or administrative access, who could cause greater harm if their account is compromised or if they are acting maliciously.\n\nEach alert includes detailed context about the specific Graph endpoints accessed, the user's privileges, and the duration and pattern of the activity to help security teams quickly assess whether the behavior represents legitimate administration or potential threat activity. The detection only flags users who have made multiple requests (more than 2), focusing on systematic enumeration rather than one-off legitimate queries.",
+                "severity": "High",
+                "enabled": true,
+                "query": "let InvokeDumpAppsCalls = dynamic([\n    \"https://graph.microsoft.com/v1.0/users/\",\n    \"https://graph.microsoft.com/v1.0/organization\",\n    \"https://graph.microsoft.com/v1.0/applications\",\n    \"https://graph.microsoft.com/v1.0/servicePrincipals/\",\n    'https://graph.microsoft.com/v1.0/servicePrincipals?$skiptoken=\"'\n]);\n// Get most recent identity info to join later\nlet RecentIdentityInfo = \n    IdentityInfo\n    | where TimeGenerated > ago(10d)\n    | extend \n        ParsedRoles = iff(isnotempty(AssignedRoles) and AssignedRoles != \"[]\", parse_json(AssignedRoles), dynamic([])),\n        ParsedGroups = iff(isnotempty(GroupMembership) and GroupMembership != \"[]\", parse_json(GroupMembership), dynamic([])),\n        IsAdmin = iff(isnotempty(AssignedRoles) and AssignedRoles != \"[]\" and AssignedRoles != \"[\\\"\\\"]\", true, false),\n        IsPrivilegedRole = iff(\n            AssignedRoles has_any(\"Global Administrator\", \"Privileged Role Administrator\", \"User Administrator\", \"SharePoint Administrator\", \"Exchange Administrator\", \"Hybrid Identity Administrator\", \"Application Administrator\", \"Cloud Application Administrator\"),\n            true, false\n        ),\n        IsInPrivilegedGroup = iff(\n            GroupMembership has_any(\"AdminAgents\", \"Azure AD Joined Device Local Administrators\", \"Directory Synchronization Accounts\", \"Domain Admins\", \"Enterprise Admins\", \"Schema Admins\", \"Key Admins\"),\n            true, false\n        )\n    | summarize arg_max(TimeGenerated, *) by AccountObjectId;\n// Find Graph API calls that could be suspicious reconnaissance\nMicrosoftGraphActivityLogs\n| where UserAgent contains \"PowerShell\"\n| where RequestUri in~ (InvokeDumpAppsCalls) \n    or RequestUri has_all(\"https://graph.microsoft.com/v1.0/servicePrincipals(appId=\", \"appRoleAssignedTo\")\n| join kind=leftouter AADNonInteractiveUserSignInLogs \n    on $left.SignInActivityId == $right.UniqueTokenIdentifier\n| join kind=leftouter RecentIdentityInfo\n    on $left.UserId == $right.AccountObjectId\n| where isnotempty(UserId) // Only include records where we have a valid UserId\n| extend \n    RequestedAppId = extract(@\"appId='(.*?)'\", 1, RequestUri),\n    AdminRoleCount = array_length(ParsedRoles),\n    GroupCount = array_length(ParsedGroups),\n    UserDisplayName = AccountDisplayName\n// Add filters to reduce the number of results\n| where ResultType == 0 // Only successful sign-ins\n| summarize \n    RequestCount = count(),\n    FirstActivity = min(TimeGenerated),\n    LastActivity = max(TimeGenerated),\n    RequestURIs = make_set(RequestUri, 10), // Limit to 10 URIs per group\n    UserAgents = make_set(UserAgent, 5)\n    by \n    UserId, \n    UserDisplayName,\n    AccountUPN, \n    UserPrincipalName, \n    IPAddress,\n    Department,\n    JobTitle,\n    IsAdmin,\n    IsPrivilegedRole,\n    IsInPrivilegedGroup,\n    AdminRoleCount,\n    GroupCount,\n    tostring(ParsedRoles),\n    tostring(ParsedGroups),\n    Scopes\n| where RequestCount > 2 // Only include users who made multiple requests\n| extend \n    BlastRadiusSeverity = case(\n        IsPrivilegedRole == true, \"Critical\",\n        IsAdmin == true or IsInPrivilegedGroup == true, \"High\",\n        AdminRoleCount > 0, \"Medium\",\n        \"Low\"\n    ),\n    ActivityDurationMinutes = datetime_diff('minute', LastActivity, FirstActivity),\n    UniqueEndpointsAccessed = array_length(RequestURIs)\n| extend Scope = split(Scopes, \" \")\n| extend ScopeCount = array_length(Scope)\n| project-away Scopes\n| order by BlastRadiusSeverity asc, RequestCount desc, ActivityDurationMinutes desc",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "ResourceDevelopment",
+                    "InitialAccess",
+                    "LateralMovement"
+                ],
+                "techniques": [
+                    "T1584",
+                    "T0866"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserDisplayName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "SecurityGroup",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DistinguishedName",
+                                "columnName": "ParsedRoles"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/430316ad-af1c-4c2b-8500-e57c89b18213')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/430316ad-af1c-4c2b-8500-e57c89b18213')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "M356CommunityConf - Cross-Origin Device Code Flow Authentication Anomaly",
+                "description": "This detection identifies suspicious device code authentication flows that occur shortly after a browser sign-in, but from a different IP address, location, and user agent. This pattern may indicate credential theft, session hijacking, or other authentication-based attacks where an attacker is leveraging compromised credentials to establish persistent access. The detection specifically looks for device code authentication within 20 minutes of a browser sign-in, where all environmental indicators (IP, location, user agent) differ, suggesting the activity is coming from an unauthorized source. This technique is used by attackers to maintain access to compromised accounts while evading detection mechanisms that only monitor traditional sign-in methods.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "UnifiedSignInLogs\n| where ClientAppUsed == \"Browser\"\n| project BrowserSignInTime = TimeGenerated, UserId, UserPrincipalName, BrowserIPAddress = IPAddress, \n    BrowserCity = tostring(LocationDetails.city), \n    BrowserCountry = tostring(LocationDetails.countryOrRegion), \n    BrowserLocation = strcat(tostring(LocationDetails.countryOrRegion), \", \", tostring(LocationDetails.city)), BrowserUserAgent = UserAgent\n| join kind=inner (\n    UnifiedSignInLogs\n    | where AuthenticationProtocol == \"deviceCode\"\n    | project DeviceCodeSignInTime = TimeGenerated, UserId, UserPrincipalName, DeviceDetail, DeviceIPAddress = IPAddress, AppDisplayName, \n        DeviceCity = tostring(LocationDetails.city), \n        DeviceCountry = tostring(LocationDetails.countryOrRegion), \n        DeviceLocation = strcat(tostring(LocationDetails.countryOrRegion), \", \", tostring(LocationDetails.city)),\n        DeviceUserAgent = tostring(UserAgent),\n        ResultType\n) on UserId\n| extend TimeDiffMinutes = datetime_diff('minute', DeviceCodeSignInTime, BrowserSignInTime)\n| where TimeDiffMinutes between (0 .. 20) // Look for device code sign-ins within 60 minutes after a browser sign-in\n| project \n    UserId,\n    UserPrincipalName,\n    BrowserSignInTime,\n    BrowserIPAddress,\n    BrowserLocation,\n    BrowserUserAgent,\n    DeviceCodeSignInTime,\n    DeviceIPAddress,\n    DeviceLocation,\n    DeviceUserAgent,\n    TimeDiffMinutes,\n    DeviceDetail,\n    AppDisplayName,\n    ResultType\n| extend IPMatch = iff(BrowserIPAddress == DeviceIPAddress, \"Same\", \"Different\"),\n         LocationMatch = iff(tostring(BrowserLocation) == tostring(DeviceLocation), \"Same\", \"Different\"),\n         UserAgentMatch = iff(tostring(BrowserUserAgent) == tostring(DeviceUserAgent), \"Same\", \"Different\")\n| where IPMatch == \"Different\" and LocationMatch == \"Different\" and UserAgentMatch == \"Different\"\n| order by TimeDiffMinutes asc",
+                "queryFrequency": "PT5H",
+                "queryPeriod": "PT5H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": "2025-03-14T17:00:00.000Z",
+                "tactics": [
+                    "InitialAccess",
+                    "DefenseEvasion",
+                    "CredentialAccess",
+                    "LateralMovement"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1550",
+                    "T1539",
+                    "T1606"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "BrowserUserAgent": "BrowserUserAgent",
+                    "DeviceUserAgent": "DeviceUserAgent"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserPrincipalName"
+                            },
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "UserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "DeviceIPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
