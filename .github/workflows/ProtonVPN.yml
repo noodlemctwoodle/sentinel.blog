@@ -36,541 +36,356 @@ jobs:
           import requests
           import json
           import re
-          from bs4 import BeautifulSoup
           from datetime import datetime, timezone
           import time
           
-          def fetch_page_with_retry(url, max_retries=3):
-              """Fetch page with retry logic and proper headers"""
-              headers = {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                  'Accept-Language': 'en-US,en;q=0.5',
-                  'Accept-Encoding': 'gzip, deflate',
-                  'Connection': 'keep-alive',
-                  'Upgrade-Insecure-Requests': '1',
-              }
+          def fetch_proton_api():
+              """Fetch Proton VPN server data from API"""
+              print("=== Fetching Proton VPN API Data ===")
               
-              for attempt in range(max_retries):
-                  try:
-                      print(f"Fetching {url} (attempt {attempt + 1}/{max_retries})")
-                      response = requests.get(url, headers=headers, timeout=30)
-                      response.raise_for_status()
-                      return response.text
-                  except requests.RequestException as e:
-                      print(f"Attempt {attempt + 1} failed: {e}")
-                      if attempt < max_retries - 1:
-                          time.sleep(5)  # Wait before retry
-                      else:
-                          raise
-          
-          def is_valid_country_name(text):
-              """Check if text looks like a valid country name"""
-              if not text or len(text) < 3 or len(text) > 50:
-                  return False
-              
-              # Must start with uppercase letter
-              if not text[0].isupper():
-                  return False
-              
-              # Must contain only letters, spaces, hyphens, apostrophes, parentheses, ampersands
-              if not re.match(r'^[A-Za-z\s&\-\'()]+$', text):
-                  return False
-              
-              # Exclude common website elements
-              excluded_terms = [
-                  'Plus', 'Secure Core', 'Streaming support', 'P2P', 'TOR',
-                  'NetShield Ad-blocker', 'Adblocker', 'NetShield', 'Up to',
-                  'Learn More', 'Get Proton', 'Proton VPN', 'Only users',
-                  'Access your', 'Support for', 'Route your', 'Fastest speed'
-              ]
-              
-              for term in excluded_terms:
-                  if term.lower() in text.lower():
-                      return False
-              
-              # Exclude if contains description words
-              description_words = ['servers', 'support', 'access', 'protect', 'speed', 'route', 'connectivity']
-              for word in description_words:
-                  if word in text.lower():
-                      return False
-              
-              return True
-          
-          def extract_ip_addresses(text, html_content):
-              """Try to extract IP addresses from the content"""
-              print("=== Searching for IP Addresses ===")
-              
-              # Look for IPv4 addresses
-              ipv4_pattern = r'\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b'
-              ipv4_addresses = re.findall(ipv4_pattern, text)
-              
-              # Look for IPv6 addresses
-              ipv6_pattern = r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b|\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b|\b(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}\b'
-              ipv6_addresses = re.findall(ipv6_pattern, text)
-              
-              # Look for server hostnames/domains
-              hostname_pattern = r'\b[a-zA-Z0-9-]+\.protonvpn\.(?:com|net|ch)\b'
-              hostnames = re.findall(hostname_pattern, text)
-              
-              # Look for server identifiers (like us-1.protonvpn.com)
-              server_id_pattern = r'\b[a-z]{2,3}-\d+\.protonvpn\.(?:com|net|ch)\b'
-              server_ids = re.findall(server_id_pattern, text)
-              
-              print(f"Found {len(ipv4_addresses)} IPv4 addresses")
-              print(f"Found {len(ipv6_addresses)} IPv6 addresses") 
-              print(f"Found {len(hostnames)} ProtonVPN hostnames")
-              print(f"Found {len(server_ids)} server identifiers")
-              
-              if ipv4_addresses:
-                  print("Sample IPv4 addresses:", ipv4_addresses[:5])
-              if server_ids:
-                  print("Sample server IDs:", server_ids[:5])
-              if hostnames:
-                  print("Sample hostnames:", hostnames[:5])
-              
-              return {
-                  'ipv4_addresses': list(set(ipv4_addresses)),
-                  'ipv6_addresses': list(set(ipv6_addresses)),
-                  'hostnames': list(set(hostnames)),
-                  'server_ids': list(set(server_ids))
-              }
-          
-          def try_api_endpoints():
-              """Try to fetch server data from Proton VPN API endpoints"""
-              print("=== Trying API Endpoints ===")
-              
+              # Try multiple API endpoints with different approaches
               api_endpoints = [
-                  'https://api.protonmail.ch/vpn/logicals',
-                  'https://api.protonvpn.ch/vpn/logicals', 
-                  'https://api.protonmail.ch/vpn/servers',
-                  'https://api.protonvpn.ch/vpn/servers',
-                  'https://api.protonmail.ch/vpn/config',
-                  'https://api.protonvpn.ch/vpn/config'
+                  {
+                      'url': 'https://api.protonvpn.ch/vpn/logicals',
+                      'headers': {
+                          'User-Agent': 'ProtonVPN/4.0.0 (Linux)',
+                          'Accept': 'application/json',
+                          'x-pm-appversion': '4.0.0'
+                      }
+                  },
+                  {
+                      'url': 'https://api.protonmail.ch/vpn/logicals',
+                      'headers': {
+                          'User-Agent': 'ProtonVPN/4.0.0 (Linux)',
+                          'Accept': 'application/json',
+                          'x-pm-appversion': '4.0.0'
+                      }
+                  },
+                  {
+                      'url': 'https://api.protonvpn.ch/vpn/config',
+                      'headers': {
+                          'User-Agent': 'ProtonVPN/4.0.0 (Linux)',
+                          'Accept': 'application/json'
+                      }
+                  },
+                  # Try without authentication - public endpoints
+                  {
+                      'url': 'https://api.protonvpn.ch/vpn/logicals',
+                      'headers': {
+                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                          'Accept': 'application/json'
+                      }
+                  },
+                  # Alternative ProtonVPN API
+                  {
+                      'url': 'https://api.protonvpn.ch/api/vpn/logicals',
+                      'headers': {
+                          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                          'Accept': 'application/json'
+                      }
+                  }
               ]
               
-              headers = {
-                  'User-Agent': 'ProtonVPN/4.0.0',
-                  'x-pm-appversion': '4.0.0',
-                  'Accept': 'application/json'
-              }
-              
-              api_data = []
-              
-              for endpoint in api_endpoints:
+              for i, endpoint in enumerate(api_endpoints):
                   try:
-                      print(f"Trying API endpoint: {endpoint}")
-                      response = requests.get(endpoint, headers=headers, timeout=10)
+                      print(f"Trying endpoint {i+1}: {endpoint['url']}")
+                      response = requests.get(
+                          endpoint['url'], 
+                          headers=endpoint['headers'], 
+                          timeout=30
+                      )
+                      
+                      print(f"  Status: {response.status_code}")
+                      print(f"  Content-Type: {response.headers.get('Content-Type', 'Unknown')}")
+                      print(f"  Response size: {len(response.content)} bytes")
                       
                       if response.status_code == 200:
                           try:
                               data = response.json()
-                              if isinstance(data, dict) and ('LogicalServers' in data or 'Servers' in data):
-                                  print(f"✅ Success: {endpoint}")
-                                  print(f"   Response size: {len(response.text)} characters")
-                                  
-                                  # Extract server info
-                                  servers = data.get('LogicalServers', data.get('Servers', []))
-                                  if servers and isinstance(servers, list):
-                                      print(f"   Found {len(servers)} servers in API response")
-                                      
-                                      for server in servers[:3]:  # Show sample
-                                          if isinstance(server, dict):
-                                              name = server.get('Name', server.get('server_name', 'Unknown'))
-                                              domain = server.get('Domain', server.get('hostname', ''))
-                                              entry_ip = server.get('EntryIP', server.get('entry_ip', ''))
-                                              exit_ip = server.get('ExitIP', server.get('exit_ip', ''))
-                                              print(f"   Sample: {name} - Entry: {entry_ip}, Exit: {exit_ip}, Domain: {domain}")
-                                      
-                                      api_data.extend(servers)
-                                  else:
-                                      print(f"   No server array found in response")
+                              print(f"  ✅ Valid JSON response")
+                              
+                              # Check if response contains server data
+                              servers = None
+                              if isinstance(data, dict):
+                                  servers = data.get('LogicalServers', data.get('Servers', data.get('servers')))
+                                  if not servers and 'Code' in data:
+                                      print(f"  API Response Code: {data.get('Code')}")
+                                      continue
+                              elif isinstance(data, list):
+                                  servers = data
+                              
+                              if servers and len(servers) > 0:
+                                  print(f"  🎯 Found {len(servers)} servers!")
+                                  print(f"  Sample server keys: {list(servers[0].keys()) if isinstance(servers[0], dict) else 'Not a dict'}")
+                                  return data, servers
                               else:
-                                  print(f"   No server data in response structure")
+                                  print(f"  ❌ No server data found in response")
                                   
-                          except json.JSONDecodeError:
-                              print(f"   Invalid JSON response")
+                          except json.JSONDecodeError as e:
+                              print(f"  ❌ Invalid JSON: {e}")
+                              # Show first 200 chars of response for debugging
+                              preview = response.text[:200].replace('\n', '\\n')
+                              print(f"  Response preview: {preview}")
                       else:
-                          print(f"   HTTP {response.status_code}: {response.reason}")
+                          print(f"  ❌ HTTP Error: {response.status_code} - {response.reason}")
+                          if response.status_code == 401:
+                              print(f"  Authentication required")
+                          elif response.status_code == 403:
+                              print(f"  Access forbidden")
                           
                   except requests.RequestException as e:
-                      print(f"   Request failed: {e}")
+                      print(f"  ❌ Request failed: {e}")
                   except Exception as e:
-                      print(f"   Error: {e}")
+                      print(f"  ❌ Unexpected error: {e}")
               
-              return api_data
+              print("No working API endpoints found")
+              return None, None
           
-          def process_api_servers(api_servers):
-              """Process server data from API responses"""
-              if not api_servers:
-                  return []
-              
-              print(f"=== Processing {len(api_servers)} API Servers ===")
+          def process_api_servers(raw_data, servers):
+              """Process server data from API response"""
+              print(f"=== Processing {len(servers)} API Servers ===")
               
               processed_servers = []
+              country_counts = {}
               
-              for server in api_servers:
+              for i, server in enumerate(servers):
                   if not isinstance(server, dict):
                       continue
                   
-                  # Extract server information
-                  server_name = server.get('Name', server.get('server_name', ''))
-                  hostname = server.get('Domain', server.get('hostname', ''))
-                  entry_ip = server.get('EntryIP', server.get('entry_ip', ''))
-                  exit_ip = server.get('ExitIP', server.get('exit_ip', ''))
+                  # Extract server information with multiple possible field names
+                  server_name = server.get('Name', server.get('name', server.get('ServerName', '')))
+                  domain = server.get('Domain', server.get('domain', server.get('EntryDomain', '')))
+                  entry_ip = server.get('EntryIP', server.get('entry_ip', server.get('EntryIp', '')))
+                  exit_ip = server.get('ExitIP', server.get('exit_ip', server.get('ExitIp', '')))
                   
-                  # Try to determine country from server name or other fields
-                  country = ''
-                  if server_name:
-                      # Common patterns: US-CA#1, UK#1, JP-FREE#1, etc.
-                      country_match = re.match(r'^([A-Z]{2,3})', server_name)
-                      if country_match:
-                          country_code = country_match.group(1)
-                          # Convert country code to full name (basic mapping)
-                          country_mapping = {
-                              'US': 'United States', 'UK': 'United Kingdom', 'CA': 'Canada',
-                              'DE': 'Germany', 'FR': 'France', 'JP': 'Japan', 'AU': 'Australia',
-                              'NL': 'Netherlands', 'CH': 'Switzerland', 'SE': 'Sweden'
-                          }
-                          country = country_mapping.get(country_code, country_code)
+                  # Extract location information
+                  country = server.get('ExitCountry', server.get('Country', server.get('country', '')))
+                  city = server.get('City', server.get('city', ''))
                   
-                  # Extract features/tier information
+                  # Extract features and tier
                   features = []
-                  tier = server.get('Tier', 0)
-                  if tier == 0:
-                      features.append('Free')
-                  elif tier >= 2:
-                      features.append('Plus')
+                  tier = server.get('Tier', server.get('tier', 0))
+                  feature_flags = server.get('Features', server.get('features', 0))
                   
-                  if server.get('Features', 0) & 1:  # Secure Core
-                      features.append('Secure Core')
-                  if server.get('Features', 0) & 2:  # Tor
-                      features.append('TOR')
-                  if server.get('Features', 0) & 4:  # P2P
-                      features.append('P2P')
+                  # Decode feature flags (if numeric)
+                  if isinstance(feature_flags, int):
+                      if feature_flags & 1:  # Secure Core
+                          features.append('Secure Core')
+                      if feature_flags & 2:  # Tor
+                          features.append('TOR')
+                      if feature_flags & 4:  # P2P
+                          features.append('P2P')
+                      if feature_flags & 8:  # Streaming
+                          features.append('Streaming')
+                  elif isinstance(feature_flags, list):
+                      features.extend(feature_flags)
                   
-                  processed_servers.append({
+                  # Determine server type
+                  if 'Secure Core' in features or tier >= 2:
+                      server_type = 'Secure Core'
+                  elif tier == 0:
+                      server_type = 'Free'
+                  else:
+                      server_type = 'Plus'
+                  
+                  # Count servers per country
+                  if country:
+                      country_counts[country] = country_counts.get(country, 0) + 1
+                  
+                  processed_server = {
                       'server_name': server_name,
-                      'hostname': hostname,
+                      'domain': domain,
                       'entry_ip': entry_ip,
                       'exit_ip': exit_ip,
                       'country': country,
+                      'city': city,
                       'features': features,
+                      'server_type': server_type,
                       'tier': tier,
-                      'raw_data': server  # Keep original for reference
-                  })
-              
-              print(f"Processed {len(processed_servers)} servers with IP data")
-              return processed_servers
-              """Extract server data from text using multiple strategies"""
-              servers = []
-              lines = [line.strip() for line in text.split('\n') if line.strip()]
-              
-              print("=== Starting Server Extraction ===")
-              print(f"Processing {len(lines)} text lines...")
-              
-              # Strategy 1: Find all server count patterns and look for countries nearby
-              server_patterns = list(re.finditer(r'(\d+)\s+servers?\s*(?:\|\s*(\d+)\s+cit(?:y|ies))?', text, re.IGNORECASE))
-              print(f"Found {len(server_patterns)} server count patterns")
-              
-              for i, pattern_match in enumerate(server_patterns):
-                  server_count = int(pattern_match.group(1))
-                  city_count = int(pattern_match.group(2)) if pattern_match.group(2) else 1
+                      'load': server.get('Load', server.get('load', 0)),
+                      'score': server.get('Score', server.get('score', 0))
+                  }
                   
-                  if server_count == 0:
+                  processed_servers.append(processed_server)
+                  
+                  # Show progress for large datasets
+                  if i % 100 == 0 and i > 0:
+                      print(f"  Processed {i}/{len(servers)} servers...")
+              
+              print(f"✅ Processed {len(processed_servers)} servers")
+              print(f"Countries found: {len(country_counts)}")
+              print("Top 10 countries by server count:")
+              for country, count in sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
+                  print(f"  {country}: {count} servers")
+              
+              return processed_servers
+          
+          def aggregate_by_country(servers):
+              """Aggregate individual servers by country for summary stats"""
+              country_data = {}
+              
+              for server in servers:
+                  country = server['country']
+                  if not country:
                       continue
                   
-                  # Get text around this match to find country name
-                  start_pos = max(0, pattern_match.start() - 300)
-                  end_pos = min(len(text), pattern_match.end() + 100)
-                  context = text[start_pos:end_pos]
-                  
-                  # Look for country name in the context
-                  context_lines = [line.strip() for line in context.split('\n') if line.strip()]
-                  country = None
-                  
-                  # Check lines before the server count
-                  for line in reversed(context_lines):
-                      if 'servers' in line.lower():
-                          break
-                      if is_valid_country_name(line):
-                          country = line
-                          break
-                  
-                  if country:
-                      # Determine server type from context
-                      server_type = 'Secure Core' if 'secure core' in context.lower() else 'Plus'
-                      
-                      # Look for features in nearby lines
-                      features = []
-                      for line in context_lines:
-                          if line.startswith('- ') or line.startswith('•'):
-                              feature = line.lstrip('- •').strip()
-                              if feature and len(feature) < 50:
-                                  if feature not in ['Adblocker (NetShield)', 'Up to 10Gbps connectivity']:
-                                      features.append(feature)
-                      
-                      servers.append({
+                  if country not in country_data:
+                      country_data[country] = {
                           'country': country,
-                          'server_count': server_count,
-                          'city_count': city_count,
-                          'features': features,
-                          'server_type': server_type
-                      })
-              
-              print(f"Strategy 1 extracted: {len(servers)} servers")
-              
-              # Strategy 2: Use known country names to find additional servers
-              if len(servers) < 50:  # If we didn't find enough, try country name matching
-                  print("Using country name matching strategy...")
+                          'server_count': 0,
+                          'plus_count': 0,
+                          'secure_core_count': 0,
+                          'free_count': 0,
+                          'cities': set(),
+                          'features': set(),
+                          'servers': []
+                      }
                   
-                  known_countries = [
-                      'Afghanistan', 'Albania', 'Algeria', 'Angola', 'Argentina', 'Australia', 'Austria', 'Azerbaijan',
-                      'Bahrain', 'Bangladesh', 'Belarus', 'Belgium', 'Bhutan', 'Bosnia', 'Brazil', 'Bulgaria',
-                      'Cambodia', 'Canada', 'Chad', 'Chile', 'Colombia', 'Comoros', 'Costa Rica', 'Croatia', 'Cyprus', 'Czechia',
-                      'Denmark', 'Ecuador', 'Egypt', 'El Salvador', 'Eritrea', 'Estonia', 'Ethiopia',
-                      'Finland', 'France', 'Georgia', 'Germany', 'Ghana', 'Greece',
-                      'Hong Kong', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iraq', 'Ireland', 'Israel', 'Italy',
-                      'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kuwait', 'Latvia', 'Libya', 'Lithuania', 'Luxembourg',
-                      'Malaysia', 'Malta', 'Mauritania', 'Mauritius', 'Mexico', 'Moldova', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar',
-                      'Nepal', 'Netherlands', 'New Zealand', 'Nigeria', 'North Macedonia', 'Norway',
-                      'Oman', 'Pakistan', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Puerto Rico', 'Qatar',
-                      'Romania', 'Russia', 'Rwanda', 'Saudi Arabia', 'Senegal', 'Serbia', 'Singapore', 'Slovakia', 'Slovenia', 'Somalia',
-                      'South Africa', 'South Korea', 'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Sweden', 'Switzerland', 'Syria',
-                      'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tunisia', 'Turkmenistan', 'Ukraine',
-                      'United Arab Emirates', 'United Kingdom', 'United States', 'Uzbekistan', 'Venezuela', 'Vietnam', 'Yemen'
-                  ]
+                  data = country_data[country]
+                  data['server_count'] += 1
+                  data['servers'].append(server)
                   
-                  # Add common variations
-                  country_variations = known_countries + [
-                      'UAE', 'UK', 'USA', 'US', 'Türkiye', 'Turkey', 'Bosnia & Herzegovina', 
-                      'Hong Kong SAR China', 'Myanmar (Burma)', 'Côte d\'Ivoire'
-                  ]
+                  if server['server_type'] == 'Plus':
+                      data['plus_count'] += 1
+                  elif server['server_type'] == 'Secure Core':
+                      data['secure_core_count'] += 1
+                  elif server['server_type'] == 'Free':
+                      data['free_count'] += 1
                   
-                  for country in country_variations:
-                      # Find this country in the text
-                      country_pattern = rf'\b{re.escape(country)}\b.*?(\d+)\s+servers?\s*(?:\|\s*(\d+)\s+cit(?:y|ies))?'
-                      matches = re.findall(country_pattern, text, re.IGNORECASE | re.DOTALL)
-                      
-                      for match in matches:
-                          server_count = int(match[0])
-                          city_count = int(match[1]) if match[1] else 1
-                          
-                          if server_count > 0:
-                              # Check context for server type
-                              country_pos = text.lower().find(country.lower())
-                              if country_pos >= 0:
-                                  context_area = text[max(0, country_pos - 500):country_pos + 1000]
-                                  server_type = 'Secure Core' if 'secure core' in context_area.lower() else 'Plus'
-                              else:
-                                  server_type = 'Plus'
-                              
-                              servers.append({
-                                  'country': country,
-                                  'server_count': server_count,
-                                  'city_count': city_count,
-                                  'features': [],
-                                  'server_type': server_type
-                              })
+                  if server['city']:
+                      data['cities'].add(server['city'])
                   
-                  print(f"Strategy 2 added: {len(servers) - len([s for s in servers if 'Strategy 1' in str(s)])} more servers")
+                  data['features'].update(server['features'])
               
-              # Remove duplicates - keep the one with higher server count
-              unique_servers = {}
-              for server in servers:
-                  key = (server['country'].lower().strip(), server['server_type'])
-                  if key not in unique_servers or server['server_count'] > unique_servers[key]['server_count']:
-                      unique_servers[key] = server
+              # Convert to final format
+              aggregated = []
+              for country, data in country_data.items():
+                  aggregated.append({
+                      'country': country,
+                      'server_count': data['server_count'],
+                      'city_count': len(data['cities']),
+                      'plus_servers': data['plus_count'],
+                      'secure_core_servers': data['secure_core_count'],
+                      'free_servers': data['free_count'],
+                      'features': list(data['features']),
+                      'cities': list(data['cities'])
+                  })
               
-              final_servers = list(unique_servers.values())
-              
-              # Calculate totals and validate
-              total_servers = sum(s['server_count'] for s in final_servers)
-              plus_servers = sum(s['server_count'] for s in final_servers if s['server_type'] == 'Plus')
-              secure_core_servers = sum(s['server_count'] for s in final_servers if s['server_type'] == 'Secure Core')
-              
-              print(f"\n=== Extraction Results ===")
-              print(f"Unique countries found: {len(final_servers)}")
-              print(f"Total servers: {total_servers}")
-              print(f"Plus servers: {plus_servers}")
-              print(f"Secure Core servers: {secure_core_servers}")
-              print(f"Expected total: ~13,656")
-              print(f"Coverage: {(total_servers/13656)*100:.1f}%")
-              
-              # Show top countries
-              if final_servers:
-                  print("\nTop countries by server count:")
-                  sorted_servers = sorted(final_servers, key=lambda x: x['server_count'], reverse=True)
-                  for i, server in enumerate(sorted_servers[:10]):
-                      print(f"  {i+1}. {server['country']}: {server['server_count']} servers ({server['server_type']})")
-              
-              return final_servers
+              return sorted(aggregated, key=lambda x: x['server_count'], reverse=True)
           
           def main():
-              print("Starting Proton VPN server data scraping...")
+              print("Starting Proton VPN server data collection...")
               
-              all_servers = []
-              ip_data = {}
-              api_servers = []
+              # Try to fetch from API
+              raw_data, api_servers = fetch_proton_api()
               
-              try:
-                  # First, try API endpoints for detailed server info with IPs
-                  print("Step 1: Trying API endpoints for server IP data...")
-                  api_servers = try_api_endpoints()
+              if api_servers:
+                  # Process the API data
+                  processed_servers = process_api_servers(raw_data, api_servers)
+                  country_summary = aggregate_by_country(processed_servers)
                   
-                  if api_servers:
-                      processed_api_servers = process_api_servers(api_servers)
-                      print(f"Successfully extracted {len(processed_api_servers)} servers with IP data from API")
-                      
-                      # Convert API server data to our standard format
-                      for server in processed_api_servers:
-                          if server['country']:
-                              all_servers.append({
-                                  'country': server['country'],
-                                  'server_count': 1,  # Each API entry is one server
-                                  'city_count': 1,
-                                  'features': server['features'],
-                                  'server_type': 'Secure Core' if 'Secure Core' in server['features'] else 'Plus',
-                                  'server_name': server['server_name'],
-                                  'hostname': server['hostname'], 
-                                  'entry_ip': server['entry_ip'],
-                                  'exit_ip': server['exit_ip']
-                              })
+                  # Calculate totals
+                  total_servers = len(processed_servers)
+                  total_countries = len(country_summary)
+                  total_plus = sum(s['plus_servers'] for s in country_summary)
+                  total_secure_core = sum(s['secure_core_servers'] for s in country_summary)
+                  total_free = sum(s['free_servers'] for s in country_summary)
                   
-                  # Step 2: Fetch the main page for additional data
-                  print("Step 2: Fetching main page for additional server data...")
-                  html_content = fetch_page_with_retry('https://protonvpn.com/vpn-servers')
+                  print(f"\n=== Final Statistics ===")
+                  print(f"Total servers: {total_servers}")
+                  print(f"Total countries: {total_countries}")
+                  print(f"Plus servers: {total_plus}")
+                  print(f"Secure Core servers: {total_secure_core}")
+                  print(f"Free servers: {total_free}")
                   
-                  # Save HTML for debugging
-                  with open('debug_page.html', 'w', encoding='utf-8') as f:
-                      f.write(html_content)
-                  print("Saved HTML content to debug_page.html for analysis")
+                  # Create output data structure
+                  data = {
+                      'metadata': {
+                          'source': 'Proton VPN API',
+                          'scraped_at': datetime.now(timezone.utc).isoformat(),
+                          'total_servers': total_servers,
+                          'total_countries': total_countries,
+                          'total_plus_servers': total_plus,
+                          'total_secure_core_servers': total_secure_core,
+                          'total_free_servers': total_free,
+                          'data_quality': 'api_direct'
+                      },
+                      'country_summary': country_summary,
+                      'individual_servers': processed_servers[:1000],  # Limit to first 1000 for file size
+                      'sample_raw_data': raw_data if isinstance(raw_data, dict) else {}
+                  }
                   
-                  # Extract text content
-                  soup = BeautifulSoup(html_content, 'html.parser')
-                  text = soup.get_text()
-                  
-                  print(f"HTML size: {len(html_content)} chars, Text size: {len(text)} chars")
-                  
-                  # Step 3: Look for IP addresses in the HTML content
-                  print("Step 3: Searching for IP addresses in HTML content...")
-                  ip_data = extract_ip_addresses(text, html_content)
-                  
-                  # Step 4: Extract server count data from text if we don't have much from API
-                  if len(all_servers) < 50:
-                      print("Step 4: Extracting server count data from text...")
-                      text_servers = extract_servers_from_text(text)
-                      
-                      # Merge with API data, preferring API data when available
-                      api_countries = {s['country'].lower() for s in all_servers}
-                      for text_server in text_servers:
-                          if text_server['country'].lower() not in api_countries:
-                              all_servers.append(text_server)
-                  
-              except Exception as e:
-                  print(f"Scraping failed: {e}")
-                  import traceback
-                  traceback.print_exc()
-              
-              # Use manual fallback if we got very little data
-              if len(all_servers) < 20:
-                  print("Using manual fallback data due to low extraction results...")
-                  
-                  manual_servers = [
-                      {'country': 'United States', 'server_count': 3188, 'city_count': 17, 'features': ['Streaming support', 'P2P', 'TOR'], 'server_type': 'Plus'},
-                      {'country': 'Canada', 'server_count': 849, 'city_count': 3, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Switzerland', 'server_count': 790, 'city_count': 1, 'features': ['Streaming support', 'P2P', 'TOR'], 'server_type': 'Plus'},
-                      {'country': 'United Kingdom', 'server_count': 553, 'city_count': 5, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Germany', 'server_count': 483, 'city_count': 2, 'features': ['Streaming support', 'P2P', 'TOR'], 'server_type': 'Plus'},
-                      {'country': 'Netherlands', 'server_count': 432, 'city_count': 1, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'France', 'server_count': 294, 'city_count': 2, 'features': ['Streaming support', 'P2P', 'TOR'], 'server_type': 'Plus'},
-                      {'country': 'Australia', 'server_count': 268, 'city_count': 5, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Sweden', 'server_count': 267, 'city_count': 1, 'features': ['Streaming support', 'P2P', 'TOR'], 'server_type': 'Plus'},
-                      {'country': 'Venezuela', 'server_count': 119, 'city_count': 1, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Spain', 'server_count': 114, 'city_count': 2, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Brazil', 'server_count': 108, 'city_count': 1, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Romania', 'server_count': 105, 'city_count': 1, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      {'country': 'Austria', 'server_count': 104, 'city_count': 1, 'features': ['Streaming support', 'P2P'], 'server_type': 'Plus'},
-                      # Add Secure Core servers
-                      {'country': 'United States', 'server_count': 4, 'city_count': 1, 'features': ['Secure Core'], 'server_type': 'Secure Core'},
-                      {'country': 'Russia', 'server_count': 4, 'city_count': 1, 'features': ['Secure Core'], 'server_type': 'Secure Core'},
-                      {'country': 'Brazil', 'server_count': 5, 'city_count': 1, 'features': ['Secure Core'], 'server_type': 'Secure Core'},
-                      {'country': 'Germany', 'server_count': 3, 'city_count': 1, 'features': ['Secure Core'], 'server_type': 'Secure Core'},
-                      {'country': 'France', 'server_count': 3, 'city_count': 1, 'features': ['Secure Core'], 'server_type': 'Secure Core'},
+              else:
+                  print("API failed, using manual fallback data...")
+                  # Fallback data
+                  country_summary = [
+                      {'country': 'United States', 'server_count': 3188, 'city_count': 17, 'plus_servers': 3184, 'secure_core_servers': 4, 'free_servers': 0, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['New York', 'Los Angeles', 'Chicago']},
+                      {'country': 'Canada', 'server_count': 849, 'city_count': 3, 'plus_servers': 846, 'secure_core_servers': 3, 'free_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Toronto', 'Vancouver', 'Montreal']},
+                      {'country': 'Switzerland', 'server_count': 790, 'city_count': 1, 'plus_servers': 790, 'secure_core_servers': 0, 'free_servers': 0, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Zurich']},
+                      {'country': 'United Kingdom', 'server_count': 553, 'city_count': 5, 'plus_servers': 550, 'secure_core_servers': 3, 'free_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['London', 'Manchester']},
+                      {'country': 'Germany', 'server_count': 483, 'city_count': 2, 'plus_servers': 480, 'secure_core_servers': 3, 'free_servers': 0, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Frankfurt', 'Berlin']},
                   ]
                   
-                  all_servers = manual_servers
-                  print(f"Using {len(manual_servers)} manual fallback servers")
+                  data = {
+                      'metadata': {
+                          'source': 'Manual Fallback Data',
+                          'scraped_at': datetime.now(timezone.utc).isoformat(),
+                          'total_servers': sum(s['server_count'] for s in country_summary),
+                          'total_countries': len(country_summary),
+                          'data_quality': 'manual_fallback'
+                      },
+                      'country_summary': country_summary,
+                      'individual_servers': [],
+                      'sample_raw_data': {}
+                  }
               
-              # Create the final data structure with IP information
-              total_plus_servers = sum(s['server_count'] for s in all_servers if s['server_type'] == 'Plus')
-              total_secure_core_servers = sum(s['server_count'] for s in all_servers if s['server_type'] == 'Secure Core')
-              
-              data = {
-                  'metadata': {
-                      'source': 'Proton VPN Website Scraper + API',
-                      'scraped_at': datetime.now(timezone.utc).isoformat(),
-                      'total_plus_servers': total_plus_servers,
-                      'total_secure_core_servers': total_secure_core_servers,
-                      'total_countries': len(set(s['country'] for s in all_servers)),
-                      'scraping_method': 'Multi-strategy text extraction + API endpoints',
-                      'data_quality': 'automated' if len(all_servers) > 50 else 'manual_fallback',
-                      'ip_addresses_found': len(ip_data.get('ipv4_addresses', [])),
-                      'hostnames_found': len(ip_data.get('hostnames', [])),
-                      'api_servers_found': len(api_servers)
-                  },
-                  'servers': all_servers,
-                  'ip_data': ip_data,
-                  'raw_api_data': api_servers[:10] if api_servers else []  # Include sample API data
-              }
-              
-              # Save to JSON
+              # Save JSON
               with open('ExternalData/ProtonVPNServers.json', 'w') as f:
                   json.dump(data, f, indent=2)
               
-              # Create CSV with additional IP fields
+              # Save CSV - Country Summary
               import csv
               with open('ExternalData/ProtonVPNServers.csv', 'w', newline='', encoding='utf-8') as f:
                   writer = csv.writer(f)
-                  writer.writerow(['Country', 'ServerType', 'ServerCount', 'CityCount', 'Features', 'ServerName', 'Hostname', 'EntryIP', 'ExitIP'])
+                  writer.writerow(['Country', 'TotalServers', 'CityCount', 'PlusServers', 'SecureCoreServers', 'FreeServers', 'Features', 'Cities'])
                   
-                  for server in all_servers:
+                  for country in data['country_summary']:
                       writer.writerow([
-                          server['country'],
-                          server['server_type'],
-                          server['server_count'],
-                          server['city_count'],
-                          '; '.join(server['features']),
-                          server.get('server_name', ''),
-                          server.get('hostname', ''),
-                          server.get('entry_ip', ''),
-                          server.get('exit_ip', '')
+                          country['country'],
+                          country['server_count'],
+                          country['city_count'],
+                          country['plus_servers'],
+                          country['secure_core_servers'],
+                          country['free_servers'],
+                          '; '.join(country['features']),
+                          '; '.join(country['cities'])
                       ])
               
-              # Create separate IP data CSV if we found IPs
-              if ip_data.get('ipv4_addresses') or ip_data.get('hostnames'):
-                  with open('ExternalData/ProtonVPN_IPs.csv', 'w', newline='', encoding='utf-8') as f:
+              # Save detailed server list if we have it
+              if data['individual_servers']:
+                  with open('ExternalData/ProtonVPN_DetailedServers.csv', 'w', newline='', encoding='utf-8') as f:
                       writer = csv.writer(f)
-                      writer.writerow(['Type', 'Address'])
+                      writer.writerow(['ServerName', 'Domain', 'EntryIP', 'ExitIP', 'Country', 'City', 'ServerType', 'Tier', 'Features'])
                       
-                      for ip in ip_data.get('ipv4_addresses', []):
-                          writer.writerow(['IPv4', ip])
-                      for ip in ip_data.get('ipv6_addresses', []):
-                          writer.writerow(['IPv6', ip])
-                      for hostname in ip_data.get('hostnames', []):
-                          writer.writerow(['Hostname', hostname])
-                      for server_id in ip_data.get('server_ids', []):
-                          writer.writerow(['ServerID', server_id])
+                      for server in data['individual_servers']:
+                          writer.writerow([
+                              server['server_name'],
+                              server['domain'],
+                              server['entry_ip'],
+                              server['exit_ip'],
+                              server['country'],
+                              server['city'],
+                              server['server_type'],
+                              server['tier'],
+                              '; '.join(server['features'])
+                          ])
+                  print("Detailed server list saved to ProtonVPN_DetailedServers.csv")
               
-              print(f"\n=== Scraping Complete ===")
-              print(f"Total servers found: {len(all_servers)}")
-              print(f"Plus servers: {total_plus_servers} across {len([s for s in all_servers if s['server_type'] == 'Plus'])} countries")
-              print(f"Secure Core servers: {total_secure_core_servers} across {len([s for s in all_servers if s['server_type'] == 'Secure Core'])} countries")
-              print(f"IP addresses found: {len(ip_data.get('ipv4_addresses', []))}")
-              print(f"Hostnames found: {len(ip_data.get('hostnames', []))}")
-              print(f"Data saved to ExternalData/ProtonVPNServers.json and .csv")
-              if ip_data.get('ipv4_addresses') or ip_data.get('hostnames'):
-                  print(f"IP data saved to ExternalData/ProtonVPN_IPs.csv")
+              print(f"\n=== Export Complete ===")
+              print(f"Country summary: ExternalData/ProtonVPNServers.csv")
+              print(f"Full data: ExternalData/ProtonVPNServers.json")
+              if data['individual_servers']:
+                  print(f"Detailed servers: ExternalData/ProtonVPN_DetailedServers.csv")
           
           if __name__ == "__main__":
               main()
@@ -581,64 +396,36 @@ jobs:
           echo "=== Proton VPN Server Statistics ==="
           
           if [ -f "ExternalData/ProtonVPNServers.csv" ]; then
-            echo "Total entries: $(tail -n +2 ExternalData/ProtonVPNServers.csv | wc -l)"
+            echo "Total countries: $(tail -n +2 ExternalData/ProtonVPNServers.csv | wc -l)"
             
             echo ""
-            echo "Server type breakdown:"
-            tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f2 | sort | uniq -c | sort -nr
+            echo "Top 10 countries by server count:"
+            tail -n +2 ExternalData/ProtonVPNServers.csv | sort -t',' -k2 -nr | head -10 | awk -F',' '{print $1 ": " $2 " servers"}'
             
             echo ""
-            echo "Top 20 countries by server count:"
-            tail -n +2 ExternalData/ProtonVPNServers.csv | awk -F',' '{print $3 "," $1}' | sort -t',' -k1 -nr | head -20
-            
-            echo ""
-            echo "Countries with Secure Core servers:"
-            grep "Secure Core" ExternalData/ProtonVPNServers.csv | cut -d',' -f1 | sort
-            
-            echo ""
-            echo "Total server count by type:"
+            echo "Total server counts:"
             tail -n +2 ExternalData/ProtonVPNServers.csv | awk -F',' '{
-              if ($2 == "Plus") plus += $3;
-              if ($2 == "Secure Core") secure += $3;
+              total += $2;
+              plus += $4;
+              secure += $5;
+              free += $6;
             } END {
+              print "Total servers: " total;
               print "Plus servers: " plus;
               print "Secure Core servers: " secure;
-              print "Total: " (plus + secure)
+              print "Free servers: " free;
             }'
+            
+            echo ""
+            if [ -f "ExternalData/ProtonVPN_DetailedServers.csv" ]; then
+              echo "Detailed server entries: $(tail -n +2 ExternalData/ProtonVPN_DetailedServers.csv | wc -l)"
+              echo "Sample servers with IPs:"
+              tail -n +2 ExternalData/ProtonVPN_DetailedServers.csv | head -5 | awk -F',' '{print "  " $1 " (" $5 "): " $3 " -> " $4}'
+            fi
           else
             echo "No CSV file found - scraping may have failed"
           fi
       
-      - name: Debug scraping (if needed)
-        if: failure()
-        run: |
-          echo "=== Debug Information ==="
-          echo "Checking if debug files exist..."
-          
-          if [ -f "debug_page.html" ]; then
-            echo "HTML file size: $(wc -c < debug_page.html) bytes"
-            echo ""
-            echo "First 500 characters of page:"
-            head -c 500 debug_page.html
-            echo ""
-            echo ""
-            echo "Looking for country patterns in HTML:"
-            grep -i -E "(afghanistan|albania|algeria|australia|austria|belgium)" debug_page.html | head -5 || echo "No country patterns found"
-            echo ""
-            echo "Looking for server count patterns:"
-            grep -E "\d+\s+servers?" debug_page.html | head -5 || echo "No server patterns found"
-          else
-            echo "No debug HTML file found"
-          fi
-          
-          echo ""
-          echo "Current directory contents:"
-          ls -la
-          
-          echo ""
-          echo "ExternalData directory:"
-          ls -la ExternalData/ || echo "ExternalData directory not found"
-
       - name: Validate scraped data
         run: |
           python3 << 'EOF'
@@ -649,28 +436,32 @@ jobs:
               with open('ExternalData/ProtonVPNServers.json', 'r') as f:
                   data = json.load(f)
               
-              servers = data.get('servers', [])
+              countries = data.get('country_summary', [])
+              servers = data.get('individual_servers', [])
               metadata = data.get('metadata', {})
               
               print(f"Validation Results:")
               print(f"- Valid JSON: ✓")
-              print(f"- Total entries: {len(servers)}")
+              print(f"- Countries found: {len(countries)}")
+              print(f"- Individual servers: {len(servers)}")
               print(f"- Metadata present: {'✓' if metadata else '✗'}")
+              print(f"- Data quality: {metadata.get('data_quality', 'unknown')}")
               
-              if len(servers) == 0:
-                  print("❌ No servers found - scraping failed")
+              if len(countries) == 0:
+                  print("❌ No countries found - scraping failed")
                   sys.exit(1)
               
-              # Check for required fields
-              required_fields = ['country', 'server_count', 'server_type']
-              for i, server in enumerate(servers[:5]):  # Check first 5
-                  missing = [field for field in required_fields if field not in server]
-                  if missing:
-                      print(f"❌ Missing fields in entry {i}: {missing}")
-                      sys.exit(1)
+              total_servers = sum(c.get('server_count', 0) for c in countries)
+              print(f"- Total servers: {total_servers}")
+              
+              if servers:
+                  sample_server = servers[0]
+                  has_ips = bool(sample_server.get('entry_ip') or sample_server.get('exit_ip'))
+                  print(f"- IP addresses available: {'✓' if has_ips else '✗'}")
+                  if has_ips:
+                      print(f"- Sample server: {sample_server.get('server_name')} - {sample_server.get('entry_ip')} -> {sample_server.get('exit_ip')}")
               
               print(f"✓ Data validation passed")
-              print(f"Sample entry: {servers[0] if servers else 'None'}")
               
           except Exception as e:
               print(f"❌ Validation failed: {e}")
@@ -680,37 +471,39 @@ jobs:
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Proton VPN servers data - $(date -u '+%Y-%m-%d %H:%M UTC')"
-          file_pattern: 'ExternalData/ProtonVPNServers.*'
-          commit_user_name: 'Proton VPN Scraper'
+          commit_message: "Update Proton VPN servers data with API - $(date -u '+%Y-%m-%d %H:%M UTC')"
+          file_pattern: 'ExternalData/ProtonVPN*.*'
+          commit_user_name: 'Proton VPN API Scraper'
           commit_user_email: 'actions@github.com'
           push_options: '--force-with-lease'
       
       - name: Create summary
         run: |
-          echo "## Proton VPN Server Scraping Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Proton VPN Server Collection Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ -f "ExternalData/ProtonVPNServers.json" ]; then
-            echo "✅ **Scraping Successful**" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Collection Successful**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             
-            # Get metadata from JSON
             python3 -c "
           import json
           with open('ExternalData/ProtonVPNServers.json', 'r') as f:
               data = json.load(f)
           
           metadata = data['metadata']
-          servers = data['servers']
+          countries = data['country_summary']
+          servers = data['individual_servers']
           
-          print(f'- **Total Countries:** {metadata.get(\"total_countries\", \"N/A\")}')
+          print(f'- **Data Source:** {metadata.get(\"source\", \"Unknown\")}')
+          print(f'- **Total Countries:** {len(countries)}')
+          print(f'- **Total Servers:** {metadata.get(\"total_servers\", \"N/A\")}')
           print(f'- **Plus Servers:** {metadata.get(\"total_plus_servers\", \"N/A\")}')
           print(f'- **Secure Core Servers:** {metadata.get(\"total_secure_core_servers\", \"N/A\")}')
-          print(f'- **Scraped At:** {metadata.get(\"scraped_at\", \"N/A\")}')
-          print(f'- **Total Entries:** {len(servers)}')
+          print(f'- **Individual Server Records:** {len(servers)}')
+          print(f'- **Data Quality:** {metadata.get(\"data_quality\", \"Unknown\")}')
           " >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ **Scraping Failed**" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Collection Failed**" >> $GITHUB_STEP_SUMMARY
             echo "No data files were created." >> $GITHUB_STEP_SUMMARY
           fi
