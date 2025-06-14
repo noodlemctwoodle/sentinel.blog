@@ -5,11 +5,6 @@ on:
   schedule:
     - cron: "0 0 * * *"
 
-env:
-  # Add your API keys as GitHub secrets if using paid services
-  IPAPI_KEY: ${{ secrets.IPAPI_KEY }}
-  IPGEOLOCATION_KEY: ${{ secrets.IPGEOLOCATION_KEY }}
-
 jobs:
   pull-external-data:
     runs-on: ubuntu-latest
@@ -104,7 +99,7 @@ jobs:
           import requests
           import time
           import ipaddress
-          from datetime import datetime
+          from datetime import datetime, timezone
           
           # Helper function to validate IP
           def is_valid_ip(ip):
@@ -272,7 +267,7 @@ jobs:
           # Process unique IPs and enrich with multiple sources
           enriched_nodes = []
           api_calls = 0
-          max_api_calls = 900  # Leave some buffer for rate limits
+          max_api_calls = 800  # Conservative limit
           
           with open('unique_ips.txt', 'r') as f:
               ips = [line.strip() for line in f if line.strip() and is_valid_ip(line.strip())]
@@ -281,10 +276,9 @@ jobs:
           
           for i, ip in enumerate(ips):
               if i % 100 == 0:
-                  print(f'Processed {i}/{len(ips)} IPs')
+                  print(f'Processed {i}/{len(ips)} IPs, API calls: {api_calls}')
               
               geo_data = None
-              source = 'Unknown'
               
               # Try Onionoo first (already loaded)
               if ip in ip_to_geo:
@@ -303,32 +297,26 @@ jobs:
               
               # Try free APIs if still no data and under rate limit
               elif api_calls < max_api_calls:
-                  # Distribute calls across different APIs to maximize coverage
-                  api_choice = api_calls % 4
-                  
-                  if api_choice == 0:
-                      # Try ip-api.com (most generous rate limit: 45 requests/minute)
+                  # Try different APIs based on current call count
+                  if api_calls < 200:  # Use ip-api.com first (best rate limit)
                       geo_data = lookup_ip_api(ip)
                       if geo_data:
                           api_calls += 1
-                          time.sleep(1.5)  # Stay under rate limit
+                          time.sleep(1.5)  # Respect rate limit: 45/minute = 1.33s interval
                   
-                  elif api_choice == 1 and api_calls < max_api_calls - 50:
-                      # Try ipapi.co (1000/day, more conservative)
+                  elif api_calls < 400:  # Then ipapi.co
                       geo_data = lookup_ipapi_co(ip)
                       if geo_data:
                           api_calls += 1
                           time.sleep(1)
                   
-                  elif api_choice == 2:
-                      # Try geojs.io 
+                  elif api_calls < 600:  # Then geojs.io
                       geo_data = lookup_geojs(ip)
                       if geo_data:
                           api_calls += 1
                           time.sleep(0.5)
                   
-                  elif api_choice == 3:
-                      # Try ipinfo.io
+                  elif api_calls < 800:  # Finally ipinfo.io
                       geo_data = lookup_ipinfo_io(ip)
                       if geo_data:
                           api_calls += 1
@@ -386,7 +374,7 @@ jobs:
           data = {
               'metadata': {
                   'source': 'Multiple TOR sources with enhanced geolocation',
-                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'updated': datetime.now(timezone.utc).isoformat(),
                   'count': len(enriched_nodes),
                   'enriched_count': enriched_count,
                   'enrichment_percentage': enrichment_percentage,
