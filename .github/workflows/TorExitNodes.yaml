@@ -303,7 +303,8 @@ jobs:
               source = node['source']
               source_counts[source] = source_counts.get(source, 0) + 1
           
-          print(f'\\nEnrichment summary:')
+          print(f'')
+          print('Enrichment summary:')
           for source, count in source_counts.items():
               print(f'  {source}: {count} IPs')
           print(f'Total enriched: {enriched_count}/{len(enriched_nodes)} ({enrichment_percentage}%)')
@@ -339,8 +340,9 @@ jobs:
           with open('ExternalData/TorExitNodes.json', 'w') as f:
               json.dump(data, f, indent=2)
           
-          print(f'\\n✓ Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
-          print(f'Processing completed in seconds (no API rate limits!)')
+          print('')
+          print(f'Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
+          print('Processing completed in seconds (no API rate limits!)')
           
           # Close database connection
           if maxmind_reader:
@@ -378,4 +380,4 @@ jobs:
         with:
           commit_message: "Update TOR exit nodes with MaxMind geolocation"
           file_pattern: 'ExternalData/TorExitNodes.*'
-          push_options: '--force-with-leas
+          push_options: '--force-with-lease'
