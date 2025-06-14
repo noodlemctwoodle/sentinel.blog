@@ -15,59 +15,197 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Create directory if not exists
-        run: mkdir -p ExternalData
+        shell: bash
+        run: mkdir -p ${{ github.workspace }}/ExternalData
       
       - name: Fetch and process Proton VPN server data
+        id: fetch-data
+        shell: pwsh
         run: |
-          echo "Fetching Proton VPN server data..."
-          
-          # Download the JSON data
-          response=$(curl -s "https://api.protonmail.ch/vpn/logicals")
-          
-          # Check if we got valid JSON
-          if ! echo "$response" | jq . > /dev/null 2>&1; then
-            echo "Error: Invalid JSON response from API"
+          try {
+            # Define variables
+            $apiUrl = "https://api.protonmail.ch/vpn/logicals"
+            $outputCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes.csv"
+            $backupCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes_backup.csv"
+            
+            # Backup existing file if it exists
+            if (Test-Path $outputCsvPath) {
+              Copy-Item -Path $outputCsvPath -Destination $backupCsvPath -Force
+              Write-Output "Backed up previous data file"
+            }
+            
+            # Fetch data with retry logic
+            $maxRetries = 3
+            $retryCount = 0
+            $success = $false
+            
+            while (-not $success -and $retryCount -lt $maxRetries) {
+              try {
+                Write-Output "Fetching data from $apiUrl (Attempt $($retryCount + 1))"
+                $response = Invoke-RestMethod -Uri $apiUrl -ContentType "application/json" -TimeoutSec 30
+                $success = $true
+              } catch {
+                $retryCount++
+                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
+                if ($retryCount -lt $maxRetries) {
+                  $sleepTime = 2 * $retryCount
+                  Write-Output "Waiting $sleepTime seconds before retrying..."
+                  Start-Sleep -Seconds $sleepTime
+                }
+              }
+            }
+            
+            if (-not $success) {
+              throw "Failed to fetch Proton VPN server data after $maxRetries attempts"
+            }
+            
+            # Process the data
+            $csvObjects = @()
+            $totalServers = 0
+            $activeServers = 0
+            $countryCount = @{}
+            $cityCount = @{}
+            
+            foreach ($logicalServer in $response.LogicalServers) {
+              $city = $logicalServer.City
+              $exitCountry = $logicalServer.ExitCountry
+              
+              # Track countries and cities
+              if (-not [string]::IsNullOrEmpty($exitCountry)) {
+                if (-not $countryCount.ContainsKey($exitCountry)) {
+                  $countryCount[$exitCountry] = 0
+                }
+                $countryCount[$exitCountry]++
+              }
+              
+              if (-not [string]::IsNullOrEmpty($city)) {
+                if (-not $cityCount.ContainsKey($city)) {
+                  $cityCount[$city] = 0
+                }
+                $cityCount[$city]++
+              }
+              
+              foreach ($server in $logicalServer.Servers) {
+                $totalServers++
+                $servicesDown = $server.ServicesDown -eq 1
+                
+                if (-not $servicesDown) {
+                  $activeServers++
+                }
+                
+                # Create a custom object for CSV export
+                $csvObjects += [PSCustomObject]@{
+                  ExitIP = $server.ExitIP
+                  ServicesDown = $servicesDown
+                  City = $city
+                  ExitCountry = $exitCountry
+                  EntryCountry = $server.EntryCountry
+                  Status = if ($servicesDown) { "Down" } else { "Active" }
+                  ServerID = $server.ID
+                  Name = $logicalServer.Name
+                  Features = $logicalServer.Features -join ","
+                }
+              }
+            }
+            
+            # Sort the data by IP address
+            try {
+              $sortedCsvObjects = $csvObjects | Sort-Object { [version]($_.ExitIP -replace ':[0-9]+$', '') }
+            } catch {
+              Write-Output "Warning: Could not sort by IP version, using string sort instead: $($_.Exception.Message)"
+              $sortedCsvObjects = $csvObjects | Sort-Object ExitIP
+            }
+            
+            # Convert to CSV and save
+            if ($sortedCsvObjects.Count -gt 0) {
+              # Export to CSV with proper formatting
+              $sortedCsvObjects | Export-Csv -Path $outputCsvPath -NoTypeInformation -Force
+              
+              # Set outputs for use in later steps
+              "server_count=$totalServers" >> $env:GITHUB_OUTPUT
+              "active_servers=$activeServers" >> $env:GITHUB_OUTPUT
+              "country_count=$($countryCount.Count)" >> $env:GITHUB_OUTPUT
+              "updated=true" >> $env:GITHUB_OUTPUT
+              
+              Write-Output "✅ Successfully updated Proton VPN server data."
+              Write-Output "Found $totalServers servers ($activeServers active) across $($countryCount.Count) countries."
+              Write-Output "Top countries by server count:"
+              $countryCount.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5 | ForEach-Object {
+                Write-Output "- $($_.Key): $($_.Value) servers"
+              }
+            } else {
+              throw "No server data found in the API response"
+            }
+            
+          } catch {
+            # If we have a backup, restore it
+            if (Test-Path $backupCsvPath) {
+              Copy-Item -Path $backupCsvPath -Destination $outputCsvPath -Force
+              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
+            } else {
+              Write-Output "❌ Error: $($_.Exception.Message)"
+            }
+            
+            "updated=false" >> $env:GITHUB_OUTPUT
+            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
             exit 1
-          fi
-          
-          # Convert JSON to CSV using jq
-          echo "$response" | jq -r '
-            ["ExitIP","ServicesDown","City","ExitCountry","EntryCountry","Status","ServerID","Name","Features"],
-            (.LogicalServers[] as $logical |
-              $logical.Servers[] |
-              [
-                .ExitIP,
-                (.ServicesDown == 1),
-                $logical.City,
-                $logical.ExitCountry,
-                .EntryCountry,
-                (if .ServicesDown == 1 then "Down" else "Active" end),
-                .ID,
-                $logical.Name,
-                ($logical.Features | join(","))
-              ]
-            ) | @csv
-          ' > ExternalData/ProtonVPNExitNodes.csv
-          
-          # Verify file was created and has content
-          if [ ! -s ExternalData/ProtonVPNExitNodes.csv ]; then
-            echo "Error: Output file is empty or doesn't exist"
-            exit 1
-          fi
-          
-          # Count entries for logging (subtract 1 for header)
-          entries=$(($(wc -l < ExternalData/ProtonVPNExitNodes.csv) - 1))
-          echo "Processed $entries Proton VPN server entries"
+          }
       
-      - name: Commit and push changes
+      - name: Compare with previous data
+        id: compare
+        if: steps.fetch-data.outputs.updated == 'true'
+        shell: pwsh
+        run: |
+          $backupCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes_backup.csv"
+          $currentCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes.csv"
+          
+          if (Test-Path $backupCsvPath) {
+            $oldData = Import-Csv -Path $backupCsvPath
+            $newData = Import-Csv -Path $currentCsvPath
+            
+            $oldIPs = $oldData | ForEach-Object { $_.ExitIP }
+            $newIPs = $newData | ForEach-Object { $_.ExitIP }
+            
+            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
+            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
+            
+            $statusChanged = @()
+            foreach ($ip in $oldIPs) {
+              if ($ip -in $newIPs) {
+                $oldStatus = ($oldData | Where-Object { $_.ExitIP -eq $ip }).Status
+                $newStatus = ($newData | Where-Object { $_.ExitIP -eq $ip }).Status
+                
+                if ($oldStatus -ne $newStatus) {
+                  $statusChanged += $ip
+                }
+              }
+            }
+            
+            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
+            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
+            "status_changed=$($statusChanged.Count)" >> $env:GITHUB_OUTPUT
+            
+            if ($added.Count -gt 0 -or $removed.Count -gt 0 -or $statusChanged.Count -gt 0) {
+              Write-Output "Changes detected:"
+              Write-Output "- $($added.Count) new servers"
+              Write-Output "- $($removed.Count) removed servers"
+              Write-Output "- $($statusChanged.Count) servers with status changes"
+            } else {
+              Write-Output "No server changes detected"
+            }
+          } else {
+            "added_count=${{ steps.fetch-data.outputs.server_count }}" >> $env:GITHUB_OUTPUT
+            "removed_count=0" >> $env:GITHUB_OUTPUT
+            "status_changed=0" >> $env:GITHUB_OUTPUT
+            Write-Output "Initial data import - no previous data to compare with"
+          }
+      
+      - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Proton VPN servers - $(date -u +%Y-%m-%d)"
+          commit_message: "Update Proton VPN servers: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }} (±${{ steps.compare.outputs.status_changed || '0' }} status changes)"
           file_pattern: 'ExternalData/ProtonVPNExitNodes.csv'
           commit_user_name: 'Proton VPN Data Updater'
           commit_user_email: 'actions@github.com'
-          push_options: '--force-with-lease'
