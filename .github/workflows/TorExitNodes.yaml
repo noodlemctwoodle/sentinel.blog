@@ -51,7 +51,7 @@ jobs:
         run: |
           echo "Adding country enrichment from Onionoo API..."
           
-          python3 << 'EOF'
+          cat > enrich_data.py << 'EOF'
           import json
           import csv
           
@@ -105,6 +105,9 @@ jobs:
           enriched_count = sum(1 for row in enriched_rows if row['CountryCode'])
           print(f'Enriched {enriched_count} out of {len(enriched_rows)} IPs with country data')
           EOF
+          
+          python3 enrich_data.py
+          rm enrich_data.py
       
       - name: Create JSON
         run: |
@@ -153,7 +156,7 @@ jobs:
           tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^
       
       - name: Cleanup
-        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt enrich_data.py create_json.py
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
