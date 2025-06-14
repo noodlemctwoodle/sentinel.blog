@@ -674,6 +674,36 @@ jobs:
             echo "No CSV file found - scraping may have failed"
           fi
       
+      - name: Debug scraping (if needed)
+        if: failure()
+        run: |
+          echo "=== Debug Information ==="
+          echo "Checking if debug files exist..."
+          
+          if [ -f "debug_page.html" ]; then
+            echo "HTML file size: $(wc -c < debug_page.html) bytes"
+            echo ""
+            echo "First 500 characters of page:"
+            head -c 500 debug_page.html
+            echo ""
+            echo ""
+            echo "Looking for country patterns in HTML:"
+            grep -i -E "(afghanistan|albania|algeria|australia|austria|belgium)" debug_page.html | head -5 || echo "No country patterns found"
+            echo ""
+            echo "Looking for server count patterns:"
+            grep -E "\d+\s+servers?" debug_page.html | head -5 || echo "No server patterns found"
+          else
+            echo "No debug HTML file found"
+          fi
+          
+          echo ""
+          echo "Current directory contents:"
+          ls -la
+          
+          echo ""
+          echo "ExternalData directory:"
+          ls -la ExternalData/ || echo "ExternalData directory not found"
+
       - name: Validate scraped data
         run: |
           python3 << 'EOF'
