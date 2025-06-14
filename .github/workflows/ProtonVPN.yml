@@ -25,56 +25,30 @@ jobs:
         run: |
           echo "Fetching Proton VPN server data..."
           
-          # Download the JSON data with better error handling
-          response=$(curl -s -w "HTTP_CODE:%{http_code}" \
-            -H "x-pm-appversion: Other" \
-            -H "User-Agent: ProtonVPN/4.0.0" \
-            "https://api.protonmail.ch/vpn/logicals")
-          http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
-          json_data=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
-          
-          echo "HTTP Status Code: $http_code"
-          echo "Response length: $(echo "$json_data" | wc -c) characters"
-          
-          # Check HTTP status code
-          if [ "$http_code" != "200" ]; then
-            echo "Error: API returned HTTP $http_code"
-            echo "Response: $json_data"
-            exit 1
-          fi
+          # Download the JSON data
+          response=$(curl -s "https://api.protonmail.ch/vpn/logicals")
           
           # Check if we got valid JSON
-          if ! echo "$json_data" | jq . > /dev/null 2>&1; then
+          if ! echo "$response" | jq . > /dev/null 2>&1; then
             echo "Error: Invalid JSON response from API"
-            echo "Response: $json_data"
-            exit 1
-          fi
-          
-          # Check if LogicalServers exists and has data
-          logical_count=$(echo "$json_data" | jq '.LogicalServers | length // 0')
-          echo "Found $logical_count logical servers"
-          
-          if [ "$logical_count" -eq 0 ]; then
-            echo "Error: No LogicalServers found in response"
-            echo "Response structure: $(echo "$json_data" | jq 'keys')"
             exit 1
           fi
           
           # Convert JSON to CSV using jq
-          echo "$json_data" | jq -r '
+          echo "$response" | jq -r '
             ["ExitIP","ServicesDown","City","ExitCountry","EntryCountry","Status","ServerID","Name","Features"],
-            (.LogicalServers[]? as $logical |
-              $logical.Servers[]? |
+            (.LogicalServers[] as $logical |
+              $logical.Servers[] |
               [
-                .ExitIP // "",
+                .ExitIP,
                 (.ServicesDown == 1),
-                $logical.City // "",
-                $logical.ExitCountry // "",
-                .EntryCountry // "",
+                $logical.City,
+                $logical.ExitCountry,
+                .EntryCountry,
                 (if .ServicesDown == 1 then "Down" else "Active" end),
-                .ID // "",
-                $logical.Name // "",
-                (($logical.Features // []) | join(","))
+                .ID,
+                $logical.Name,
+                ($logical.Features | join(","))
               ]
             ) | @csv
           ' > ExternalData/ProtonVPNExitNodes.csv
