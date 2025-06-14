@@ -23,27 +23,52 @@ jobs:
       - name: Fetch TOR bulk exit list
         run: |
           echo "Fetching TOR bulk exit list..."
-          curl -s "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt || echo "Failed to fetch bulk list"
+          if curl -s "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt; then
+            lines=$(wc -l < tor_bulk.txt)
+            echo "✅ TOR bulk list: $lines lines"
+          else
+            echo "❌ Failed to fetch TOR bulk list"
+          fi
       
       - name: Fetch TOR Onionoo API data
         run: |
           echo "Fetching TOR Onionoo API data..."
-          curl -s "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json || echo "Failed to fetch Onionoo data"
+          if curl -s "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json; then
+            size=$(wc -c < tor_onionoo.json)
+            echo "✅ TOR Onionoo API: $size bytes"
+          else
+            echo "❌ Failed to fetch TOR Onionoo data"
+          fi
       
       - name: Fetch TorStatus rueckgr.at data
         run: |
           echo "Fetching TorStatus rueckgr.at data..."
-          curl -s "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv || echo "Failed to fetch rueckgr data"
+          if curl -s "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv; then
+            lines=$(wc -l < tor_rueckgr.csv)
+            echo "✅ TorStatus rueckgr.at: $lines lines"
+          else
+            echo "❌ Failed to fetch TorStatus rueckgr.at data"
+          fi
       
       - name: Fetch Dan.me.uk list
         run: |
           echo "Fetching Dan.me.uk list..."
-          curl -s "https://www.dan.me.uk/torlist/" > tor_dan.txt || echo "Failed to fetch dan.me.uk data"
+          if curl -s "https://www.dan.me.uk/torlist/" > tor_dan.txt; then
+            lines=$(wc -l < tor_dan.txt)
+            echo "✅ Dan.me.uk: $lines lines"
+          else
+            echo "❌ Failed to fetch Dan.me.uk data"
+          fi
       
       - name: Fetch HackerTarget list
         run: |
           echo "Fetching HackerTarget list..."
-          curl -s "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt || echo "Failed to fetch HackerTarget data"
+          if curl -s "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt; then
+            lines=$(wc -l < tor_hackertarget.txt)
+            echo "✅ HackerTarget: $lines lines"
+          else
+            echo "❌ Failed to fetch HackerTarget data"
+          fi
       
       - name: Process and combine data
         run: |
@@ -51,34 +76,222 @@ jobs:
           
           # Combine all sources
           touch all_ips.txt
+          source_count=0
           
           # Process bulk list
           if [ -s tor_bulk.txt ]; then
-            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' tor_bulk.txt >> all_ips.txt || true
+            before=$(wc -l < all_ips.txt)
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+      
+      - name: Create JSON output
+        run: |
+          python3 << 'EOF'
+          import json
+          from datetime import datetime
+          
+          # Read validated IPs
+          try:
+            with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          except:
+            ips = []
+          
+          # Create JSON structure
+          data = {
+            "metadata": {
+              "source": "Multiple TOR sources",
+              "sources": [
+                "https://check.torproject.org/torbulkexitlist",
+                "https://onionoo.torproject.org/details?flag=Exit",
+                "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",
+                "https://www.dan.me.uk/torlist/",
+                "https://api.hackertarget.com/torexit/?q=list"
+              ],
+              "updated": datetime.utcnow().isoformat() + "Z",
+              "count": len(ips)
+            },
+            "TorExitNodes": ips
+          }
+          
+          # Write JSON file
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+            json.dump(data, f, indent=2)
+          
+          print(f"Created TorExitNodes.json with {len(ips)} IPs")
+          EOF
+      
+      - name: Cleanup temporary files
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt validated_ips.txt
+      
+      - name: Commit updated data to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease' tor_bulk.txt >> all_ips.txt || true
+            after=$(wc -l < all_ips.txt)
+            added=$((after - before))
+            echo "📊 TOR bulk list contributed: $added IPs"
+            source_count=$((source_count + 1))
+          else
+            echo "⚠️ TOR bulk list: No data to process"
           fi
           
           # Process Onionoo JSON
           if [ -s tor_onionoo.json ] && command -v jq >/dev/null; then
+            before=$(wc -l < all_ips.txt)
             jq -r '.relays[]?.exit_addresses[]? // .relays[]?.or_addresses[]?' tor_onionoo.json 2>/dev/null | \
             grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | \
             sed 's/:[0-9]*$//' >> all_ips.txt || true
+            after=$(wc -l < all_ips.txt)
+            added=$((after - before))
+            echo "📊 TOR Onionoo API contributed: $added IPs"
+            source_count=$((source_count + 1))
+          else
+            echo "⚠️ TOR Onionoo API: No data to process or jq not available"
           fi
           
           # Process rueckgr CSV
           if [ -s tor_rueckgr.csv ]; then
+            before=$(wc -l < all_ips.txt)
             tail -n +2 tor_rueckgr.csv | cut -d',' -f1 | \
             grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> all_ips.txt || true
+            after=$(wc -l < all_ips.txt)
+            added=$((after - before))
+            echo "📊 TorStatus rueckgr.at contributed: $added IPs"
+            source_count=$((source_count + 1))
+          else
+            echo "⚠️ TorStatus rueckgr.at: No data to process"
           fi
           
           # Process Dan.me.uk
           if [ -s tor_dan.txt ]; then
-            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' tor_dan.txt >> all_ips.txt || true
+            before=$(wc -l < all_ips.txt)
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+      
+      - name: Create JSON output
+        run: |
+          python3 << 'EOF'
+          import json
+          from datetime import datetime
+          
+          # Read validated IPs
+          try:
+            with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          except:
+            ips = []
+          
+          # Create JSON structure
+          data = {
+            "metadata": {
+              "source": "Multiple TOR sources",
+              "sources": [
+                "https://check.torproject.org/torbulkexitlist",
+                "https://onionoo.torproject.org/details?flag=Exit",
+                "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",
+                "https://www.dan.me.uk/torlist/",
+                "https://api.hackertarget.com/torexit/?q=list"
+              ],
+              "updated": datetime.utcnow().isoformat() + "Z",
+              "count": len(ips)
+            },
+            "TorExitNodes": ips
+          }
+          
+          # Write JSON file
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+            json.dump(data, f, indent=2)
+          
+          print(f"Created TorExitNodes.json with {len(ips)} IPs")
+          EOF
+      
+      - name: Cleanup temporary files
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt validated_ips.txt
+      
+      - name: Commit updated data to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease' tor_dan.txt >> all_ips.txt || true
+            after=$(wc -l < all_ips.txt)
+            added=$((after - before))
+            echo "📊 Dan.me.uk contributed: $added IPs"
+            source_count=$((source_count + 1))
+          else
+            echo "⚠️ Dan.me.uk: No data to process"
           fi
           
           # Process HackerTarget
           if [ -s tor_hackertarget.txt ]; then
-            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' tor_hackertarget.txt >> all_ips.txt || true
+            before=$(wc -l < all_ips.txt)
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+      
+      - name: Create JSON output
+        run: |
+          python3 << 'EOF'
+          import json
+          from datetime import datetime
+          
+          # Read validated IPs
+          try:
+            with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          except:
+            ips = []
+          
+          # Create JSON structure
+          data = {
+            "metadata": {
+              "source": "Multiple TOR sources",
+              "sources": [
+                "https://check.torproject.org/torbulkexitlist",
+                "https://onionoo.torproject.org/details?flag=Exit",
+                "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",
+                "https://www.dan.me.uk/torlist/",
+                "https://api.hackertarget.com/torexit/?q=list"
+              ],
+              "updated": datetime.utcnow().isoformat() + "Z",
+              "count": len(ips)
+            },
+            "TorExitNodes": ips
+          }
+          
+          # Write JSON file
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+            json.dump(data, f, indent=2)
+          
+          print(f"Created TorExitNodes.json with {len(ips)} IPs")
+          EOF
+      
+      - name: Cleanup temporary files
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt validated_ips.txt
+      
+      - name: Commit updated data to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease' tor_hackertarget.txt >> all_ips.txt || true
+            after=$(wc -l < all_ips.txt)
+            added=$((after - before))
+            echo "📊 HackerTarget contributed: $added IPs"
+            source_count=$((source_count + 1))
+          else
+            echo "⚠️ HackerTarget: No data to process"
           fi
+          
+          echo "🔍 Total sources that provided data: $source_count/5"
           
           # Remove duplicates and validate
           sort all_ips.txt | uniq > unique_ips.txt
@@ -92,7 +305,7 @@ jobs:
           done < unique_ips.txt
           
           total_ips=$(wc -l < validated_ips.txt)
-          echo "Found $total_ips unique TOR exit node IPs"
+          echo "✅ Found $total_ips unique TOR exit node IPs from $source_count sources"
           
           # Create CSV
           echo "ExitIP,Country,City,Source" > ExternalData/TorExitNodes.csv
@@ -100,7 +313,7 @@ jobs:
             echo "$ip,,,Multiple Sources" >> ExternalData/TorExitNodes.csv
           done < validated_ips.txt
           
-          echo "Created TorExitNodes.csv with $total_ips IPs"
+          echo "📄 Created TorExitNodes.csv with $total_ips IPs"
       
       - name: Create JSON output
         run: |
