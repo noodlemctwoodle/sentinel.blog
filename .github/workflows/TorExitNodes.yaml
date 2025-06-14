@@ -190,12 +190,10 @@ jobs:
               echo "}" >> ExternalData/TorExitNodes.json
               
               # Create CSV output
-              {
-                echo "ExitIP,Country,City,Source"
-                while IFS= read -r ip; do
-                  echo "$ip,,,Multiple Sources"
-                done < "$temp_dir/validated_ips.txt"
-              } > ExternalData/TorExitNodes.csv
+              echo "ExitIP,Country,City,Source" > ExternalData/TorExitNodes.csv
+              while IFS= read -r ip; do
+                echo "$ip,,,Multiple Sources" >> ExternalData/TorExitNodes.csv
+              done < "$temp_dir/validated_ips.txt"
               
               echo "Successfully created TorExitNodes.json and TorExitNodes.csv with $total_ips IPs"
             else
