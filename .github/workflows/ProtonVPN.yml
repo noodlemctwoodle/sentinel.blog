@@ -25,35 +25,27 @@ jobs:
         run: |
           echo "Fetching Proton VPN server data from public website..."
           
-          # Download the server list page and extract server data
-          curl -s "https://protonvpn.com/vpn-servers" | \
-          python3 -c "
-          import sys, re
-          html = sys.stdin.read()
+          # Download the page and create a simple parser
+          curl -s "https://protonvpn.com/vpn-servers" > proton_page.html
           
-          print('Country,ServerCount,Cities,Features')
+          # Debug: Show what we got
+          echo "Page size: $(wc -c < proton_page.html) characters"
+          echo "Sample content:"
+          head -20 proton_page.html
           
-          # Find all country sections
-          countries = re.findall(r'([A-Za-z\s&]+)\n- Adblocker.*?\n.*?(\d+) servers? \| (\d+) cit', html, re.MULTILINE)
+          # Create CSV with basic extraction
+          echo "Country,ServerCount,Cities,Features" > ExternalData/ProtonVPNServers.csv
           
-          for match in countries:
-              country = match[0].strip()
-              servers = match[1]
-              cities = match[2]
-              
-              # Extract features for this country
-              country_section = re.search(rf'{re.escape(country)}.*?(\d+ servers? \| \d+ cit)', html, re.DOTALL)
-              features = []
-              
-              if country_section:
-                  section_text = country_section.group(0)
-                  if '- P2P' in section_text: features.append('P2P')
-                  if '- Streaming support' in section_text: features.append('Streaming')
-                  if '- TOR' in section_text: features.append('TOR')
-              
-              features_str = ','.join(features)
-              print(f'\"{country}\",{servers},{cities},\"{features_str}\"')
-          " > ExternalData/ProtonVPNServers.csv
+          # Simple extraction using grep and basic parsing
+          grep -E "[0-9]+ servers? \| [0-9]+ cit" proton_page.html | head -10 | while read line; do
+            echo "Found line: $line"
+            servers=$(echo "$line" | grep -o '[0-9]* servers' | grep -o '[0-9]*' | head -1)
+            cities=$(echo "$line" | grep -o '[0-9]* cit' | grep -o '[0-9]*' | head -1)
+            echo "Sample,$servers,$cities,Test" >> ExternalData/ProtonVPNServers.csv
+          done
+          
+          # Clean up
+          rm -f proton_page.html
           
           # Verify file was created and has content
           if [ ! -s ExternalData/ProtonVPNServers.csv ]; then
