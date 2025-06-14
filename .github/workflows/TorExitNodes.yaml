@@ -149,22 +149,22 @@ jobs:
               echo "Found $total_ips unique TOR exit node IPs"
               
               # Create JSON output with metadata
-              cat > ExternalData/TorExitNodes.json << EOF
-{
-  "metadata": {
-    "source": "Multiple TOR sources",
-    "sources": [
-      "https://check.torproject.org/torbulkexitlist",
-      "https://collector.torproject.org/recent/exit-lists/",
-      "https://onionoo.torproject.org/details?flag=Exit",
-      "https://torstatus.blutmagie.de/ip_list_exit.php/Tor_ip_list_EXIT.csv",
-      "https://www.dan.me.uk/torlist/"
-    ],
-    "updated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-    "count": $total_ips
-  },
-  "TorExitNodes": [
-EOF
+              {
+                echo '{'
+                echo '  "metadata": {'
+                echo '    "source": "Multiple TOR sources",'
+                echo '    "sources": ['
+                echo '      "https://check.torproject.org/torbulkexitlist",'
+                echo '      "https://collector.torproject.org/recent/exit-lists/",'
+                echo '      "https://onionoo.torproject.org/details?flag=Exit",'
+                echo '      "https://torstatus.blutmagie.de/ip_list_exit.php/Tor_ip_list_EXIT.csv",'
+                echo '      "https://www.dan.me.uk/torlist/"'
+                echo '    ],'
+                echo "    \"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+                echo "    \"count\": $total_ips"
+                echo '  },'
+                echo '  "TorExitNodes": ['
+              } > ExternalData/TorExitNodes.json
               
               # Add IPs to JSON (with proper comma handling)
               first=true
