@@ -1,12 +1,15 @@
 {
   "metadata": {
-    "source": "Proton VPN Website Scraper",
-    "scraped_at": "2025-06-14T15:50:30.040674+00:00",
+    "source": "Proton VPN Website Scraper + API",
+    "scraped_at": "2025-06-14T15:59:33.087244+00:00",
     "total_plus_servers": 7674,
     "total_secure_core_servers": 19,
     "total_countries": 15,
-    "scraping_method": "Multi-strategy text extraction",
-    "data_quality": "manual_fallback"
+    "scraping_method": "Multi-strategy text extraction + API endpoints",
+    "data_quality": "manual_fallback",
+    "ip_addresses_found": 0,
+    "hostnames_found": 0,
+    "api_servers_found": 0
   },
   "servers": [
     {
@@ -199,5 +202,12 @@
       ],
       "server_type": "Secure Core"
     }
-  ]
+  ],
+  "ip_data": {
+    "ipv4_addresses": [],
+    "ipv6_addresses": [],
+    "hostnames": [],
+    "server_ids": []
+  },
+  "raw_api_data": []
 }
