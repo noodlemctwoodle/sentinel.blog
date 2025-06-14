@@ -10,33 +10,110 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    
     steps:
       - name: Checkout main
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create directory if not exists
+        run: mkdir -p ExternalData
+      
       - name: Fetch Microsoft Sentinel Prices and create CSV
-        shell: pwsh
         run: |
-          $apiUrl = "https://prices.azure.com/api/retail/prices?currencyCode=GBP&`$filter=productName eq 'Sentinel' and (location eq 'UK South' or location eq 'UK West')"
-          $response = Invoke-RestMethod -Uri $apiUrl -Method Get
-          $items = $response.Items
-          $sortedItems = $items | Sort-Object location, skuName
-          $selectedItems = $sortedItems | Select-Object skuName, unitOfMeasure, type, retailPrice, unitPrice, currencyCode, location, effectiveStartDate, meterId, meterName, skuId, productName, serviceFamily
+          echo "Fetching Microsoft Sentinel pricing data..."
           
-          $csvFilePath = "UKSentinelPrices.csv"
-          $jsonFilePath = "UKSentinelPrices.json"
+          # Add retry logic for rate limiting
+          max_attempts=5
+          attempt=1
           
-          $externalDataPath = "${{ github.workspace }}/ExternalData/"
-          if (-not (Test-Path -Path $externalDataPath)) { 
-              New-Item -ItemType Directory -Path $externalDataPath -ErrorAction SilentlyContinue 
-          }
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts..."
+            
+            # Use curl with proper headers and delay
+            response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+              -H "User-Agent: SentinelPriceMonitor/1.0" \
+              -H "Accept: application/json" \
+              "https://prices.azure.com/api/retail/prices?currencyCode=GBP&\$filter=productName eq 'Sentinel' and (location eq 'UK South' or location eq 'UK West')")
+            
+            # Extract HTTP status and body
+            http_code=$(echo "$response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
+            json_data=$(echo "$response" | sed 's/HTTPSTATUS:[0-9]*$//')
+            
+            echo "HTTP Status: $http_code"
+            
+            if [ "$http_code" = "200" ]; then
+              echo "Successfully retrieved pricing data"
+              break
+            elif [ "$http_code" = "429" ]; then
+              if [ $attempt -lt $max_attempts ]; then
+                # Exponential backoff: 30s, 60s, 120s, 240s
+                sleep_time=$((30 * attempt))
+                echo "Rate limited. Waiting ${sleep_time} seconds before retry..."
+                sleep $sleep_time
+              else
+                echo "Rate limit exceeded after $max_attempts attempts"
+                exit 1
+              fi
+            else
+              echo "API error: HTTP $http_code"
+              echo "Response: $json_data"
+              exit 1
+            fi
+            
+            attempt=$((attempt + 1))
+          done
           
-          $selectedItems | Export-Csv -Path "$externalDataPath$csvFilePath" -Force
+          # Validate JSON response
+          if ! echo "$json_data" | jq . > /dev/null 2>&1; then
+            echo "Error: Invalid JSON response"
+            exit 1
+          fi
           
-          $jsonContent = $selectedItems | ConvertTo-Json -Depth 99
-          $jsonContent | Out-File -FilePath "$externalDataPath$jsonFilePath" -Force 
+          # Check if we have items
+          item_count=$(echo "$json_data" | jq '.Items | length // 0')
+          echo "Found $item_count pricing items"
           
-      - name: Commit updated CSV to repo
+          if [ "$item_count" -eq 0 ]; then
+            echo "Warning: No pricing items found"
+            # Create empty files rather than failing
+            echo "skuName,unitOfMeasure,type,retailPrice,unitPrice,currencyCode,location,effectiveStartDate,meterId,meterName,skuId,productName,serviceFamily" > ExternalData/UKSentinelPrices.csv
+            echo '{"message": "No pricing data available"}' > ExternalData/UKSentinelPrices.json
+          else
+            # Convert to CSV using jq
+            echo "$json_data" | jq -r '
+              ["skuName","unitOfMeasure","type","retailPrice","unitPrice","currencyCode","location","effectiveStartDate","meterId","meterName","skuId","productName","serviceFamily"],
+              (.Items | sort_by(.location, .skuName)[] | 
+                [
+                  .skuName // "",
+                  .unitOfMeasure // "",
+                  .type // "",
+                  .retailPrice // 0,
+                  .unitPrice // 0,
+                  .currencyCode // "",
+                  .location // "",
+                  .effectiveStartDate // "",
+                  .meterId // "",
+                  .meterName // "",
+                  .skuId // "",
+                  .productName // "",
+                  .serviceFamily // ""
+                ]
+              ) | @csv
+            ' > ExternalData/UKSentinelPrices.csv
+            
+            # Save JSON as well
+            echo "$json_data" | jq '.Items | sort_by(.location, .skuName)' > ExternalData/UKSentinelPrices.json
+          fi
+          
+          echo "Processing completed successfully"
+      
+      - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: Update Microsoft Sentinel Prices CSV
+          commit_message: "Update Microsoft Sentinel Prices - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/UKSentinelPrices.*'
+          commit_user_name: 'Sentinel Price Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease'
