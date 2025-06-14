@@ -1,4 +1,4 @@
-name: Pull Proton VPN Server Data
+name: Pull Proton VPN Server Data with Geolocation
 
 on:
   workflow_dispatch:
@@ -21,93 +21,521 @@ jobs:
       - name: Create directory if not exists
         run: mkdir -p ExternalData
       
-      - name: Fetch and process Proton VPN server data
+      - name: Download MaxMind GeoLite2 Database
         run: |
-          echo "Creating ProtonVPN server location reference..."
+          echo "Downloading MaxMind GeoLite2 database..."
           
-          # Since the website is JavaScript-rendered, we'll create a reference 
-          # based on known ProtonVPN server locations from their public information
-          cat > ExternalData/ProtonVPNServers.csv << 'EOF'
-          Country,ServerCount,Cities,Features
-          "United States",3188,17,"Streaming,P2P,TOR"
-          "Germany",483,2,"Streaming,P2P,TOR"
-          "Netherlands",432,1,"Streaming,P2P"
-          "Canada",849,3,"Streaming,P2P"
-          "United Kingdom",553,5,"Streaming,P2P"
-          "France",294,2,"Streaming,P2P,TOR"
-          "Switzerland",790,1,"Streaming,P2P,TOR"
-          "Sweden",267,1,"Streaming,P2P,TOR"
-          "Japan",79,2,"Streaming,P2P"
-          "Australia",268,5,"Streaming,P2P"
-          "Italy",74,2,"Streaming,P2P"
-          "Spain",114,2,"Streaming,P2P"
-          "Brazil",108,1,"Streaming,P2P"
-          "Romania",105,1,"Streaming,P2P"
-          "Austria",104,1,"Streaming,P2P"
-          "Venezuela",119,1,"Streaming,P2P"
-          "Denmark",94,1,"Streaming,P2P"
-          "Belgium",70,1,"Streaming,P2P"
-          "Norway",56,1,"Streaming,P2P"
-          "Mexico",76,2,"Streaming,P2P"
-          "Singapore",53,1,"Streaming,P2P"
-          "New Zealand",57,1,"Streaming,P2P"
-          "Hong Kong SAR China",42,1,"Streaming,P2P,TOR"
-          "Finland",41,1,"Streaming,P2P"
-          "Poland",41,1,"Streaming,P2P"
-          "Portugal",48,1,"Streaming,P2P"
-          "Greece",64,1,"Streaming,P2P"
-          "Ireland",49,1,"Streaming,P2P"
-          "Luxembourg",40,1,"Streaming,P2P"
-          "Czechia",55,1,"Streaming,P2P"
-          "Croatia",48,1,"Streaming,P2P"
-          "Bulgaria",41,1,"Streaming,P2P"
-          "Slovakia",62,1,"Streaming,P2P"
-          "Slovenia",64,1,"Streaming,P2P"
-          "Serbia",48,1,"Streaming,P2P"
-          "Estonia",20,1,"Streaming,P2P"
-          "Latvia",20,1,"P2P"
-          "Lithuania",56,2,"Streaming,P2P"
-          "Hungary",24,1,"Streaming,P2P"
-          "Ukraine",64,1,"Streaming,P2P"
-          "Russia",53,1,"Streaming,P2P"
-          "Iceland",24,1,"Streaming,P2P"
-          "Moldova",36,1,"Streaming,P2P"
-          "Israel",14,2,"P2P"
-          "India",30,1,"Streaming,P2P"
-          "South Korea",12,1,"Streaming,P2P"
-          "Taiwan",20,2,"P2P"
-          "Thailand",36,1,"Streaming,P2P"
-          "Malaysia",36,2,"Streaming,P2P"
-          "Indonesia",18,1,"Streaming,P2P"
-          "Philippines",12,1,"Streaming,P2P"
-          "Vietnam",12,1,"P2P"
-          "South Africa",35,1,"Streaming,P2P"
-          "Egypt",16,1,"P2P"
-          "Nigeria",40,2,"Streaming,P2P"
-          "Argentina",16,1,"Streaming,P2P"
-          "Chile",8,1,"Streaming,P2P"
-          "Colombia",28,1,"Streaming,P2P"
-          "Peru",8,1,"Streaming,P2P"
-          "Ecuador",8,1,"Streaming,P2P"
-          "Costa Rica",1,1,"Streaming,P2P"
-          "El Salvador",53,1,"Streaming,P2P"
-          EOF
-          
-          # Verify file was created and has content
-          if [ ! -s ExternalData/ProtonVPNServers.csv ]; then
-            echo "Error: Output file is empty or doesn't exist"
-            exit 1
+          # Method 1: Try direct download from MaxMind (requires free account)
+          if [ -n "${{ secrets.MAXMIND_LICENSE_KEY }}" ]; then
+            echo "Using MaxMind license key..."
+            wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXMIND_LICENSE_KEY }}&suffix=tar.gz"
+            if [ -f GeoLite2-City.tar.gz ] && [ -s GeoLite2-City.tar.gz ]; then
+              tar -xzf GeoLite2-City.tar.gz
+              find . -name "GeoLite2-City.mmdb" -exec mv {} . \;
+              echo "✓ Downloaded official MaxMind GeoLite2 database"
+            else
+              echo "Failed to download from MaxMind, trying alternative..."
+            fi
           fi
           
-          # Count entries for logging (subtract 1 for header)
-          entries=$(($(wc -l < ExternalData/ProtonVPNServers.csv) - 1))
-          echo "Processed $entries ProtonVPN server countries"
+          # Method 2: Alternative source (GitHub mirror)
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Trying alternative MaxMind source..."
+            wget -O GeoLite2-City.mmdb "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb" || true
+          fi
+          
+          # Method 3: Fallback to CSV format
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Downloading IP2Location as fallback..."
+            wget -O ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB5.CSV" || true
+            if [ -f ip2location.csv ] && [ -s ip2location.csv ]; then
+              echo "✓ Downloaded IP2Location CSV database"
+            fi
+          else
+            echo "✓ MaxMind database ready: $(ls -lh GeoLite2-City.mmdb)"
+          fi
+      
+      - name: Install Python dependencies
+        run: |
+          pip install requests maxminddb-geolite2 geoip2 maxminddb ipaddress beautifulsoup4
+      
+      - name: Fetch Proton VPN server data
+        run: |
+          echo "Fetching Proton VPN server data..."
+          
+          # Configure curl with better SSL handling
+          export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2"
+          
+          # Try multiple Proton VPN data sources
+          echo "Fetching from Proton VPN API..."
+          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/logicals" > proton_logicals.json || echo "Failed to fetch logicals API"
+          echo "Logicals API: $(wc -c < proton_logicals.json) bytes"
+          
+          echo "Fetching server config..."
+          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/config" > proton_config.json || echo "Failed to fetch config API"
+          echo "Config API: $(wc -c < proton_config.json) bytes"
+          
+          echo "Fetching server status..."
+          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/servers" > proton_servers.json || echo "Failed to fetch servers API"
+          echo "Servers API: $(wc -c < proton_servers.json) bytes"
+          
+          # Try alternative endpoints
+          echo "Trying alternative endpoints..."
+          curl -s $CURL_OPTS -L "https://account-api.protonvpn.com/vpn/logicals" > proton_alt_logicals.json || echo "Failed to fetch from alt endpoint"
+          echo "Alt logicals: $(wc -c < proton_alt_logicals.json) bytes"
+          
+          # Check which sources have valid JSON data
+          echo ""
+          echo "=== Data Source Status ==="
+          for file in proton_logicals.json proton_config.json proton_servers.json proton_alt_logicals.json; do
+            if [ -f "$file" ] && [ -s "$file" ]; then
+              if python3 -c "import json; json.load(open('$file'))" 2>/dev/null; then
+                echo "✓ $file: Valid JSON ($(wc -c < "$file") bytes)"
+              else
+                echo "✗ $file: Invalid JSON or error page"
+                head -3 "$file" 2>/dev/null || echo "  (empty file)"
+              fi
+            else
+              echo "✗ $file: Failed or empty"
+            fi
+          done
+      
+      - name: Process and enrich Proton VPN data with MaxMind
+        run: |
+          python3 -c "
+          import json
+          import csv
+          import ipaddress
+          import os
+          import socket
+          from datetime import datetime, timezone
+          
+          # Helper function to validate IP
+          def is_valid_ip(ip):
+              try:
+                  ipaddress.ip_address(ip)
+                  return True
+              except ValueError:
+                  return False
+          
+          # Helper function to resolve hostname to IP
+          def resolve_hostname(hostname):
+              try:
+                  return socket.gethostbyname(hostname)
+              except:
+                  return None
+          
+          # Load MaxMind database
+          def load_maxmind_db():
+              try:
+                  import maxminddb
+                  if os.path.exists('GeoLite2-City.mmdb'):
+                      reader = maxminddb.open_database('GeoLite2-City.mmdb')
+                      print('✓ Loaded MaxMind GeoLite2 database')
+                      return reader
+                  else:
+                      print('MaxMind database not found')
+                      return None
+              except ImportError:
+                  try:
+                      # Try alternative import
+                      import geoip2.database
+                      if os.path.exists('GeoLite2-City.mmdb'):
+                          reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+                          print('✓ Loaded MaxMind database with geoip2')
+                          return reader
+                  except ImportError:
+                      print('MaxMind libraries not available')
+              return None
+          
+          # Lookup IP in MaxMind database
+          def lookup_maxmind(ip, reader):
+              try:
+                  if hasattr(reader, 'get'):  # maxminddb reader
+                      response = reader.get(ip)
+                      if response:
+                          country = response.get('country', {})
+                          city = response.get('city', {})
+                          subdivisions = response.get('subdivisions', [{}])
+                          location = response.get('location', {})
+                          return {
+                              'cc': country.get('iso_code', ''),
+                              'cn': country.get('names', {}).get('en', ''),
+                              'city': city.get('names', {}).get('en', ''),
+                              'region': subdivisions[0].get('names', {}).get('en', '') if subdivisions else '',
+                              'latitude': location.get('latitude', ''),
+                              'longitude': location.get('longitude', ''),
+                              'source': 'MaxMind GeoLite2'
+                          }
+                  else:  # geoip2 reader
+                      response = reader.city(ip)
+                      return {
+                          'cc': response.country.iso_code or '',
+                          'cn': response.country.name or '',
+                          'city': response.city.name or '',
+                          'region': response.subdivisions.most_specific.name or '',
+                          'latitude': float(response.location.latitude) if response.location.latitude else '',
+                          'longitude': float(response.location.longitude) if response.location.longitude else '',
+                          'source': 'MaxMind GeoLite2'
+                      }
+              except Exception as e:
+                  # IP not found in database is normal, not an error
+                  pass
+              return None
+          
+          # Load IP2Location CSV fallback
+          def load_ip2location_csv():
+              ip_ranges = []
+              try:
+                  if os.path.exists('ip2location.csv'):
+                      with open('ip2location.csv', 'r') as f:
+                          reader = csv.reader(f)
+                          for row in reader:
+                              if len(row) >= 6 and row[0].isdigit():
+                                  try:
+                                      ip_from = int(row[0])
+                                      ip_to = int(row[1])
+                                      country_code = row[2].strip('\\\"')
+                                      country_name = row[3].strip('\\\"')
+                                      region = row[4].strip('\\\"') if len(row) > 4 else ''
+                                      city = row[5].strip('\\\"') if len(row) > 5 else ''
+                                      if country_code and country_code != '-':
+                                          ip_ranges.append({
+                                              'from': ip_from,
+                                              'to': ip_to,
+                                              'cc': country_code,
+                                              'cn': country_name,
+                                              'region': region,
+                                              'city': city
+                                          })
+                                  except (ValueError, IndexError):
+                                      continue
+                      print(f'✓ Loaded {len(ip_ranges)} IP ranges from IP2Location CSV')
+              except Exception as e:
+                  print(f'Could not load IP2Location CSV: {e}')
+              return ip_ranges
+          
+          # Convert IP to integer for range lookup
+          def ip_to_int(ip):
+              parts = ip.split('.')
+              return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+          
+          # Lookup IP in CSV database
+          def lookup_ip_in_csv(ip, ip_ranges):
+              try:
+                  ip_int = ip_to_int(ip)
+                  for range_data in ip_ranges:
+                      if range_data['from'] <= ip_int <= range_data['to']:
+                          return {
+                              'cc': range_data['cc'],
+                              'cn': range_data['cn'],
+                              'city': range_data['city'],
+                              'region': range_data['region'],
+                              'latitude': '',
+                              'longitude': '',
+                              'source': 'IP2Location CSV'
+                          }
+              except:
+                  pass
+              return None
+          
+          # Load MaxMind and IP2Location databases
+          maxmind_reader = load_maxmind_db()
+          ip2location_ranges = load_ip2location_csv()
+          
+          # Try to load Proton VPN data from various sources
+          proton_servers = []
+          data_sources = ['proton_logicals.json', 'proton_servers.json', 'proton_alt_logicals.json', 'proton_config.json']
+          
+          print('Loading Proton VPN server data...')
+          
+          for source_file in data_sources:
+              try:
+                  if os.path.exists(source_file) and os.path.getsize(source_file) > 0:
+                      with open(source_file, 'r') as f:
+                          data = json.load(f)
+                      
+                      print(f'Processing {source_file}...')
+                      
+                      # Handle different API response formats
+                      servers_data = []
+                      if isinstance(data, dict):
+                          if 'LogicalServers' in data:
+                              servers_data = data['LogicalServers']
+                          elif 'Servers' in data:
+                              servers_data = data['Servers']
+                          elif 'servers' in data:
+                              servers_data = data['servers']
+                          elif 'logicals' in data:
+                              servers_data = data['logicals']
+                          else:
+                              # Try the data itself if it's a list
+                              if isinstance(data, list):
+                                  servers_data = data
+                      elif isinstance(data, list):
+                          servers_data = data
+                      
+                      print(f'  Found {len(servers_data)} server entries')
+                      
+                      for server in servers_data:
+                          if isinstance(server, dict):
+                              # Extract server information
+                              server_name = server.get('Name', server.get('name', ''))
+                              server_domain = server.get('Domain', server.get('domain', ''))
+                              exit_ip = server.get('ExitIP', server.get('exit_ip', ''))
+                              entry_ip = server.get('EntryIP', server.get('entry_ip', ''))
+                              country_code = server.get('ExitCountry', server.get('Country', server.get('country', '')))
+                              city = server.get('City', server.get('city', ''))
+                              features = server.get('Features', server.get('features', 0))
+                              tier = server.get('Tier', server.get('tier', 0))
+                              load = server.get('Load', server.get('load', 0))
+                              
+                              # Get the best IP to use for geolocation
+                              target_ip = exit_ip or entry_ip
+                              if not target_ip and server_domain:
+                                  target_ip = resolve_hostname(server_domain)
+                              
+                              if target_ip and is_valid_ip(target_ip):
+                                  proton_servers.append({
+                                      'server_name': server_name,
+                                      'server_domain': server_domain,
+                                      'exit_ip': exit_ip,
+                                      'entry_ip': entry_ip,
+                                      'target_ip': target_ip,
+                                      'country_code': country_code,
+                                      'city': city,
+                                      'features': features,
+                                      'tier': tier,
+                                      'load': load,
+                                      'source_file': source_file
+                                  })
+                      
+                      if servers_data:
+                          break  # Use the first successful source
+                          
+              except Exception as e:
+                  print(f'Error processing {source_file}: {e}')
+                  continue
+          
+          if not proton_servers:
+              print('❌ No Proton VPN server data found from any API endpoint.')
+              print('Available data sources returned:')
+              for source_file in data_sources:
+                  if os.path.exists(source_file):
+                      size = os.path.getsize(source_file)
+                      print(f'  {source_file}: {size} bytes')
+                      if size > 0:
+                          try:
+                              with open(source_file, 'r') as f:
+                                  content = f.read(200)  # First 200 chars
+                              print(f'    Content preview: {content[:100]}...')
+                          except:
+                              pass
+              
+              print('Unable to proceed without valid server data.')
+              exit(1)
+          
+          # Enrich servers with geolocation data
+          enriched_servers = []
+          maxmind_count = 0
+          ip2location_count = 0
+          api_count = 0
+          no_data_count = 0
+          
+          print(f'Processing {len(proton_servers)} Proton VPN servers...')
+          
+          for i, server in enumerate(proton_servers):
+              if i % 100 == 0:
+                  print(f'Processed {i}/{len(proton_servers)} servers')
+              
+              target_ip = server.get('target_ip', '')
+              if not target_ip:
+                  continue
+              
+              geo_data = None
+              
+              # Try MaxMind database first
+              if maxmind_reader and is_valid_ip(target_ip):
+                  geo_data = lookup_maxmind(target_ip, maxmind_reader)
+                  if geo_data:
+                      maxmind_count += 1
+              
+              # Try IP2Location CSV as fallback
+              if not geo_data and ip2location_ranges and '.' in target_ip:  # IPv4 only
+                  geo_data = lookup_ip_in_csv(target_ip, ip2location_ranges)
+                  if geo_data:
+                      ip2location_count += 1
+              
+              # Create enriched server entry
+              if geo_data:
+                  # Use MaxMind/IP2Location data, fall back to API data
+                  enriched_server = {
+                      'server_name': server.get('server_name', ''),
+                      'server_domain': server.get('server_domain', ''),
+                      'exit_ip': server.get('exit_ip', ''),
+                      'entry_ip': server.get('entry_ip', ''),
+                      'target_ip': target_ip,
+                      'country_code': geo_data.get('cc') or server.get('country_code', ''),
+                      'country_name': geo_data.get('cn') or '',
+                      'region': geo_data.get('region') or '',
+                      'city': geo_data.get('city') or server.get('city', ''),
+                      'latitude': geo_data.get('latitude', ''),
+                      'longitude': geo_data.get('longitude', ''),
+                      'features': server.get('features', ''),
+                      'tier': server.get('tier', ''),
+                      'load': server.get('load', ''),
+                      'api_country': server.get('country_code', ''),
+                      'api_city': server.get('city', ''),
+                      'geo_source': geo_data.get('source', 'Unknown'),
+                      'source_file': server.get('source_file', 'reference')
+                  }
+              else:
+                  # Use only API data
+                  api_count += 1
+                  enriched_server = {
+                      'server_name': server.get('server_name', ''),
+                      'server_domain': server.get('server_domain', ''),
+                      'exit_ip': server.get('exit_ip', ''),
+                      'entry_ip': server.get('entry_ip', ''),
+                      'target_ip': target_ip,
+                      'country_code': server.get('country_code', ''),
+                      'country_name': '',
+                      'region': '',
+                      'city': server.get('city', ''),
+                      'latitude': '',
+                      'longitude': '',
+                      'features': server.get('features', ''),
+                      'tier': server.get('tier', ''),
+                      'load': server.get('load', ''),
+                      'api_country': server.get('country_code', ''),
+                      'api_city': server.get('city', ''),
+                      'geo_source': 'Proton API',
+                      'source_file': server.get('source_file', 'reference')
+                  }
+              
+              enriched_servers.append(enriched_server)
+          
+          # Calculate statistics
+          total_servers = len(enriched_servers)
+          
+          # Count by geo source
+          source_counts = {}
+          for server in enriched_servers:
+              source = server['geo_source']
+              source_counts[source] = source_counts.get(source, 0) + 1
+          
+          # Count by country
+          country_counts = {}
+          for server in enriched_servers:
+              country = server['country_code']
+              if country:
+                  country_counts[country] = country_counts.get(country, 0) + 1
+          
+          print('')
+          print('Processing summary:')
+          for source, count in source_counts.items():
+              print(f'  {source}: {count} servers')
+          print(f'Total processed: {total_servers} servers')
+          
+          # Create enriched CSV
+          with open('ExternalData/ProtonVPNServers.csv', 'w', newline='') as f:
+              writer = csv.writer(f)
+              writer.writerow([
+                  'ServerName', 'ServerDomain', 'ExitIP', 'EntryIP', 'TargetIP',
+                  'CountryCode', 'CountryName', 'Region', 'City', 
+                  'Latitude', 'Longitude', 'Features', 'Tier', 'Load',
+                  'APICountry', 'APICity', 'GeoSource', 'SourceFile'
+              ])
+              for server in enriched_servers:
+                  writer.writerow([
+                      server['server_name'],
+                      server['server_domain'],
+                      server['exit_ip'],
+                      server['entry_ip'],
+                      server['target_ip'],
+                      server['country_code'],
+                      server['country_name'],
+                      server['region'],
+                      server['city'],
+                      server['latitude'],
+                      server['longitude'],
+                      server['features'],
+                      server['tier'],
+                      server['load'],
+                      server['api_country'],
+                      server['api_city'],
+                      server['geo_source'],
+                      server['source_file']
+                  ])
+          
+          # Create enriched JSON
+          data = {
+              'metadata': {
+                  'source': 'Proton VPN API with MaxMind GeoLite2 enrichment',
+                  'updated': datetime.now(timezone.utc).isoformat(),
+                  'total_servers': total_servers,
+                  'processing_method': 'API + Local database lookup',
+                  'geo_source_breakdown': source_counts,
+                  'country_breakdown': dict(sorted(country_counts.items(), key=lambda x: x[1], reverse=True)[:20])
+              },
+              'ProtonVPNServers': enriched_servers
+          }
+          
+          with open('ExternalData/ProtonVPNServers.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print('')
+          print(f'Created enriched data: {total_servers} Proton VPN servers')
+          print('Processing completed successfully!')
+          
+          # Close database connection
+          if maxmind_reader:
+              try:
+                  maxmind_reader.close()
+              except:
+                  pass
+                  
+          "
+      
+      - name: Generate statistics
+        run: |
+          echo "=== Proton VPN Server Statistics ==="
+          echo "Total servers: $(tail -n +2 ExternalData/ProtonVPNServers.csv | wc -l)"
+          
+          echo ""
+          echo "Top 20 countries by server count:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f6 | grep -v '^$' | sort | uniq -c | sort -nr | head -20
+          
+          echo ""
+          echo "Geolocation sources breakdown:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f17 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Top 10 cities by server count:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f9 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          
+          echo ""
+          echo "Server tiers breakdown:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f13 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Data sources breakdown:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f18 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Sample servers with high load:"
+          tail -n +2 ExternalData/ProtonVPNServers.csv | sort -t',' -k14 -nr | head -5 | cut -d',' -f1,6,9,14
+      
+      - name: Cleanup temporary files
+        run: |
+          rm -f proton_*.json
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
       
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Proton VPN servers - $(date -u +%Y-%m-%d)"
-          file_pattern: 'ExternalData/ProtonVPNServers.csv'
+          commit_message: "Update Proton VPN servers with MaxMind geolocation enrichment - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/ProtonVPNServers.*'
           commit_user_name: 'Proton VPN Data Updater'
           commit_user_email: 'actions@github.com'
           push_options: '--force-with-lease'
