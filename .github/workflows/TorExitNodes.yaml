@@ -25,16 +25,43 @@ jobs:
       - name: Create directory
         run: mkdir -p ExternalData
       
-      - name: Download MaxMind GeoLite2 Database
+      - name: Setup Geolocation Databases
         run: |
-          echo "Downloading MaxMind GeoLite2 database..."
-          # Option 1: Direct download (may require registration)
-          # wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=YOUR_LICENSE_KEY&suffix=tar.gz"
+          echo "Setting up geolocation databases..."
           
-          # Option 2: Use IP2Location LITE (free, no registration)
-          wget -O IP2LOCATION-LITE-DB11.CSV.ZIP "https://www.ip2location.com/download/?token=guest&file=DB11LITECSV"
-          unzip -q IP2LOCATION-LITE-DB11.CSV.ZIP
-          echo "Downloaded IP2Location database: $(wc -l < IP2LOCATION-LITE-DB11.CSV) records"
+          # Try to download IP2Location alternative source
+          echo "Attempting to download IP2Location LITE database..."
+          if curl -s -o ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB11.CSV"; then
+            if [ -s ip2location.csv ] && file ip2location.csv | grep -q "ASCII\|UTF"; then
+              echo "Successfully downloaded IP2Location database: $(wc -l < ip2location.csv) records"
+              mv ip2location.csv IP2LOCATION-LITE-DB11.CSV
+            else
+              echo "IP2Location download failed or returned invalid data"
+              rm -f ip2location.csv
+            fi
+          else
+            echo "Failed to download IP2Location database"
+          fi
+          
+          # Create a simple country code database as fallback
+          echo "Creating fallback country database..."
+          cat > country_fallback.csv << 'EOF'
+          # Simple country code mappings for common IP ranges
+          # Format: start_ip,end_ip,country_code,country_name
+          1.0.0.0,1.255.255.255,AU,Australia
+          2.0.0.0,2.255.255.255,FR,France
+          3.0.0.0,3.255.255.255,US,United States
+          4.0.0.0,4.255.255.255,US,United States
+          5.0.0.0,5.255.255.255,US,United States
+          8.8.8.8,8.8.8.8,US,United States
+          EOF
+          
+          # Verify what we have
+          if [ -f "IP2LOCATION-LITE-DB11.CSV" ]; then
+            echo "✓ IP2Location database available"
+          else
+            echo "⚠ Will use API-only geolocation"
+          fi
       
       - name: Install Python dependencies
         run: |
@@ -94,24 +121,31 @@ jobs:
                   with open('IP2LOCATION-LITE-DB11.CSV', 'r') as f:
                       reader = csv.reader(f)
                       for row in reader:
-                          if len(row) >= 8:
-                              ip_from = int(row[0])
-                              ip_to = int(row[1])
-                              country_code = row[2].strip('\"')
-                              country_name = row[3].strip('\"')
-                              region = row[4].strip('\"')
-                              city = row[5].strip('\"')
-                              if country_code and country_code != '-':
-                                  ip_ranges.append({
-                                      'from': ip_from,
-                                      'to': ip_to,
-                                      'cc': country_code,
-                                      'cn': country_name,
-                                      'region': region,
-                                      'city': city
-                                  })
+                          # Skip header or invalid rows
+                          if len(row) >= 6 and row[0].isdigit():
+                              try:
+                                  ip_from = int(row[0])
+                                  ip_to = int(row[1])
+                                  country_code = row[2].strip('\"')
+                                  country_name = row[3].strip('\"')
+                                  region = row[4].strip('\"') if len(row) > 4 else ''
+                                  city = row[5].strip('\"') if len(row) > 5 else ''
+                                  if country_code and country_code != '-':
+                                      ip_ranges.append({
+                                          'from': ip_from,
+                                          'to': ip_to,
+                                          'cc': country_code,
+                                          'cn': country_name,
+                                          'region': region,
+                                          'city': city
+                                      })
+                              except (ValueError, IndexError):
+                                  continue
                   print(f'Loaded {len(ip_ranges)} IP ranges from IP2Location')
                   return ip_ranges
+              except FileNotFoundError:
+                  print('IP2Location database not found, using API-only mode')
+                  return []
               except Exception as e:
                   print(f'Error loading IP2Location database: {e}')
                   return []
@@ -134,13 +168,13 @@ jobs:
                       }
               return None
           
-          # Free API lookup functions
+          # Free API lookup functions with better error handling
           def lookup_ip_api(ip):
               try:
-                  response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
+                  response = requests.get(f'http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,region,regionName,city', timeout=10)
                   if response.status_code == 200:
                       data = response.json()
-                      if data['status'] == 'success':
+                      if data.get('status') == 'success':
                           return {
                               'cc': data.get('countryCode', ''),
                               'cn': data.get('country', ''),
@@ -148,16 +182,18 @@ jobs:
                               'region': data.get('regionName', ''),
                               'source': 'ip-api.com'
                           }
+                      else:
+                          print(f'IP-API failed for {ip}: {data.get(\"message\", \"Unknown error\")}')
               except Exception as e:
                   print(f'IP-API error for {ip}: {e}')
               return None
           
           def lookup_ipapi_co(ip):
               try:
-                  response = requests.get(f'https://ipapi.co/{ip}/json/', timeout=5)
+                  response = requests.get(f'https://ipapi.co/{ip}/json/', timeout=10)
                   if response.status_code == 200:
                       data = response.json()
-                      if 'error' not in data:
+                      if 'error' not in data and data.get('country_code'):
                           return {
                               'cc': data.get('country_code', ''),
                               'cn': data.get('country_name', ''),
@@ -165,24 +201,44 @@ jobs:
                               'region': data.get('region', ''),
                               'source': 'ipapi.co'
                           }
+                      else:
+                          print(f'IPAPI.co failed for {ip}: {data.get(\"error\", \"No data\")}')
               except Exception as e:
                   print(f'IPAPI.co error for {ip}: {e}')
               return None
           
           def lookup_geojs(ip):
               try:
-                  response = requests.get(f'https://get.geojs.io/v1/ip/geo/{ip}.json', timeout=5)
+                  response = requests.get(f'https://get.geojs.io/v1/ip/geo/{ip}.json', timeout=10)
                   if response.status_code == 200:
                       data = response.json()
-                      return {
-                          'cc': data.get('country_code', ''),
-                          'cn': data.get('country', ''),
-                          'city': data.get('city', ''),
-                          'region': data.get('region', ''),
-                          'source': 'geojs.io'
-                      }
+                      if data.get('country_code'):
+                          return {
+                              'cc': data.get('country_code', ''),
+                              'cn': data.get('country', ''),
+                              'city': data.get('city', ''),
+                              'region': data.get('region', ''),
+                              'source': 'geojs.io'
+                          }
               except Exception as e:
                   print(f'GeoJS error for {ip}: {e}')
+              return None
+          
+          def lookup_ipinfo_io(ip):
+              try:
+                  response = requests.get(f'https://ipinfo.io/{ip}/json', timeout=10)
+                  if response.status_code == 200:
+                      data = response.json()
+                      if data.get('country'):
+                          return {
+                              'cc': data.get('country', ''),
+                              'cn': data.get('country', ''),  # ipinfo doesn't provide full country name in free tier
+                              'city': data.get('city', ''),
+                              'region': data.get('region', ''),
+                              'source': 'ipinfo.io'
+                          }
+              except Exception as e:
+                  print(f'IPInfo.io error for {ip}: {e}')
               return None
           
           # Load Onionoo data for initial enrichment
@@ -247,25 +303,36 @@ jobs:
               
               # Try free APIs if still no data and under rate limit
               elif api_calls < max_api_calls:
-                  # Try ip-api.com (most generous rate limit)
-                  geo_data = lookup_ip_api(ip)
-                  if geo_data:
-                      api_calls += 1
-                      time.sleep(0.1)  # Be nice to the API
+                  # Distribute calls across different APIs to maximize coverage
+                  api_choice = api_calls % 4
                   
-                  # Try ipapi.co if ip-api failed
-                  elif api_calls < max_api_calls - 1:
+                  if api_choice == 0:
+                      # Try ip-api.com (most generous rate limit: 45 requests/minute)
+                      geo_data = lookup_ip_api(ip)
+                      if geo_data:
+                          api_calls += 1
+                          time.sleep(1.5)  # Stay under rate limit
+                  
+                  elif api_choice == 1 and api_calls < max_api_calls - 50:
+                      # Try ipapi.co (1000/day, more conservative)
                       geo_data = lookup_ipapi_co(ip)
                       if geo_data:
                           api_calls += 1
-                          time.sleep(0.1)
+                          time.sleep(1)
                   
-                  # Try geojs.io as last resort
-                  elif api_calls < max_api_calls - 2:
+                  elif api_choice == 2:
+                      # Try geojs.io 
                       geo_data = lookup_geojs(ip)
                       if geo_data:
                           api_calls += 1
-                          time.sleep(0.1)
+                          time.sleep(0.5)
+                  
+                  elif api_choice == 3:
+                      # Try ipinfo.io
+                      geo_data = lookup_ipinfo_io(ip)
+                      if geo_data:
+                          api_calls += 1
+                          time.sleep(1)
               
               # Create node entry
               if geo_data:
@@ -352,7 +419,7 @@ jobs:
       - name: Cleanup
         run: |
           rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
-          rm -f IP2LOCATION-LITE-DB11.CSV* *.zip
+          rm -f IP2LOCATION-LITE-DB11.CSV* *.zip *.csv country_fallback.csv ip2location.csv
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
