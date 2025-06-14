@@ -5,6 +5,11 @@ on:
   schedule:
     - cron: "0 0 * * *"
 
+env:
+  # Add your API keys as GitHub secrets if using paid services
+  IPAPI_KEY: ${{ secrets.IPAPI_KEY }}
+  IPGEOLOCATION_KEY: ${{ secrets.IPGEOLOCATION_KEY }}
+
 jobs:
   pull-external-data:
     runs-on: ubuntu-latest
@@ -19,6 +24,21 @@ jobs:
       
       - name: Create directory
         run: mkdir -p ExternalData
+      
+      - name: Download MaxMind GeoLite2 Database
+        run: |
+          echo "Downloading MaxMind GeoLite2 database..."
+          # Option 1: Direct download (may require registration)
+          # wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=YOUR_LICENSE_KEY&suffix=tar.gz"
+          
+          # Option 2: Use IP2Location LITE (free, no registration)
+          wget -O IP2LOCATION-LITE-DB11.CSV.ZIP "https://www.ip2location.com/download/?token=guest&file=DB11LITECSV"
+          unzip -q IP2LOCATION-LITE-DB11.CSV.ZIP
+          echo "Downloaded IP2Location database: $(wc -l < IP2LOCATION-LITE-DB11.CSV) records"
+      
+      - name: Install Python dependencies
+        run: |
+          pip install requests maxminddb geoip2 ipaddress
       
       - name: Fetch all TOR sources
         run: |
@@ -48,21 +68,126 @@ jobs:
           sort all_ips.txt | uniq > unique_ips.txt
           total_ips=$(wc -l < unique_ips.txt)
           echo "Total unique IPs: $total_ips"
-          echo "ExitIP,CountryCode,CountryName,City,Source" > ExternalData/TorExitNodes.csv
-          while read ip; do
-            echo "$ip,,,," >> ExternalData/TorExitNodes.csv
-          done < unique_ips.txt
       
-      - name: Create basic JSON
+      - name: Enhanced geolocation enrichment
         run: |
-          echo "Processing country enrichment..."
           python3 -c "
           import json
           import csv
+          import requests
+          import time
+          import ipaddress
           from datetime import datetime
           
-          # Load Onionoo data for enrichment
+          # Helper function to validate IP
+          def is_valid_ip(ip):
+              try:
+                  ipaddress.ip_address(ip)
+                  return True
+              except ValueError:
+                  return False
+          
+          # Load IP2Location database
+          def load_ip2location_db():
+              ip_ranges = []
+              try:
+                  with open('IP2LOCATION-LITE-DB11.CSV', 'r') as f:
+                      reader = csv.reader(f)
+                      for row in reader:
+                          if len(row) >= 8:
+                              ip_from = int(row[0])
+                              ip_to = int(row[1])
+                              country_code = row[2].strip('\"')
+                              country_name = row[3].strip('\"')
+                              region = row[4].strip('\"')
+                              city = row[5].strip('\"')
+                              if country_code and country_code != '-':
+                                  ip_ranges.append({
+                                      'from': ip_from,
+                                      'to': ip_to,
+                                      'cc': country_code,
+                                      'cn': country_name,
+                                      'region': region,
+                                      'city': city
+                                  })
+                  print(f'Loaded {len(ip_ranges)} IP ranges from IP2Location')
+                  return ip_ranges
+              except Exception as e:
+                  print(f'Error loading IP2Location database: {e}')
+                  return []
+          
+          # Convert IP to integer for range lookup
+          def ip_to_int(ip):
+              parts = ip.split('.')
+              return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+          
+          # Lookup IP in database
+          def lookup_ip_in_db(ip, ip_ranges):
+              ip_int = ip_to_int(ip)
+              for range_data in ip_ranges:
+                  if range_data['from'] <= ip_int <= range_data['to']:
+                      return {
+                          'cc': range_data['cc'],
+                          'cn': range_data['cn'],
+                          'city': range_data['city'],
+                          'region': range_data['region']
+                      }
+              return None
+          
+          # Free API lookup functions
+          def lookup_ip_api(ip):
+              try:
+                  response = requests.get(f'http://ip-api.com/json/{ip}', timeout=5)
+                  if response.status_code == 200:
+                      data = response.json()
+                      if data['status'] == 'success':
+                          return {
+                              'cc': data.get('countryCode', ''),
+                              'cn': data.get('country', ''),
+                              'city': data.get('city', ''),
+                              'region': data.get('regionName', ''),
+                              'source': 'ip-api.com'
+                          }
+              except Exception as e:
+                  print(f'IP-API error for {ip}: {e}')
+              return None
+          
+          def lookup_ipapi_co(ip):
+              try:
+                  response = requests.get(f'https://ipapi.co/{ip}/json/', timeout=5)
+                  if response.status_code == 200:
+                      data = response.json()
+                      if 'error' not in data:
+                          return {
+                              'cc': data.get('country_code', ''),
+                              'cn': data.get('country_name', ''),
+                              'city': data.get('city', ''),
+                              'region': data.get('region', ''),
+                              'source': 'ipapi.co'
+                          }
+              except Exception as e:
+                  print(f'IPAPI.co error for {ip}: {e}')
+              return None
+          
+          def lookup_geojs(ip):
+              try:
+                  response = requests.get(f'https://get.geojs.io/v1/ip/geo/{ip}.json', timeout=5)
+                  if response.status_code == 200:
+                      data = response.json()
+                      return {
+                          'cc': data.get('country_code', ''),
+                          'cn': data.get('country', ''),
+                          'city': data.get('city', ''),
+                          'region': data.get('region', ''),
+                          'source': 'geojs.io'
+                      }
+              except Exception as e:
+                  print(f'GeoJS error for {ip}: {e}')
+              return None
+          
+          # Load Onionoo data for initial enrichment
           ip_to_geo = {}
+          onionoo_count = 0
           try:
               with open('tor_onionoo.json', 'r') as f:
                   onionoo = json.load(f)
@@ -73,38 +198,109 @@ jobs:
                   addresses = relay.get('exit_addresses', []) + relay.get('or_addresses', [])
                   for addr in addresses:
                       ip = addr.split(':')[0]
-                      if '.' in ip and len(ip.split('.')) == 4:
-                          ip_to_geo[ip] = {'cc': country, 'cn': country_name, 'city': city}
-              print(f'Loaded geo data for {len(ip_to_geo)} IPs')
-          except:
-              print('No geo enrichment available')
-          
-          # Process unique IPs and create enriched data
-          enriched_nodes = []
-          enriched_count = 0
-          with open('unique_ips.txt', 'r') as f:
-              for line in f:
-                  ip = line.strip()
-                  if ip:
-                      if ip in ip_to_geo:
-                          geo = ip_to_geo[ip]
-                          node = {
-                              'ip': ip,
-                              'country_code': geo['cc'],
-                              'country_name': geo['cn'], 
-                              'city': geo['city'],
+                      if is_valid_ip(ip):
+                          ip_to_geo[ip] = {
+                              'cc': country,
+                              'cn': country_name,
+                              'city': city,
                               'source': 'Onionoo API'
                           }
-                          enriched_count += 1
-                      else:
-                          node = {
-                              'ip': ip,
-                              'country_code': None,
-                              'country_name': None,
-                              'city': None,
-                              'source': 'Multiple Sources'
-                          }
-                      enriched_nodes.append(node)
+                          onionoo_count += 1
+              print(f'Loaded geo data from Onionoo for {onionoo_count} IPs')
+          except Exception as e:
+              print(f'Error loading Onionoo data: {e}')
+          
+          # Load IP2Location database
+          ip_ranges = load_ip2location_db()
+          
+          # Process unique IPs and enrich with multiple sources
+          enriched_nodes = []
+          api_calls = 0
+          max_api_calls = 900  # Leave some buffer for rate limits
+          
+          with open('unique_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip() and is_valid_ip(line.strip())]
+          
+          print(f'Processing {len(ips)} unique IPs...')
+          
+          for i, ip in enumerate(ips):
+              if i % 100 == 0:
+                  print(f'Processed {i}/{len(ips)} IPs')
+              
+              geo_data = None
+              source = 'Unknown'
+              
+              # Try Onionoo first (already loaded)
+              if ip in ip_to_geo:
+                  geo_data = ip_to_geo[ip]
+              
+              # Try IP2Location database (offline lookup)
+              elif ip_ranges:
+                  db_result = lookup_ip_in_db(ip, ip_ranges)
+                  if db_result:
+                      geo_data = {
+                          'cc': db_result['cc'],
+                          'cn': db_result['cn'],
+                          'city': db_result['city'],
+                          'source': 'IP2Location DB'
+                      }
+              
+              # Try free APIs if still no data and under rate limit
+              elif api_calls < max_api_calls:
+                  # Try ip-api.com (most generous rate limit)
+                  geo_data = lookup_ip_api(ip)
+                  if geo_data:
+                      api_calls += 1
+                      time.sleep(0.1)  # Be nice to the API
+                  
+                  # Try ipapi.co if ip-api failed
+                  elif api_calls < max_api_calls - 1:
+                      geo_data = lookup_ipapi_co(ip)
+                      if geo_data:
+                          api_calls += 1
+                          time.sleep(0.1)
+                  
+                  # Try geojs.io as last resort
+                  elif api_calls < max_api_calls - 2:
+                      geo_data = lookup_geojs(ip)
+                      if geo_data:
+                          api_calls += 1
+                          time.sleep(0.1)
+              
+              # Create node entry
+              if geo_data:
+                  node = {
+                      'ip': ip,
+                      'country_code': geo_data.get('cc', ''),
+                      'country_name': geo_data.get('cn', ''),
+                      'city': geo_data.get('city', ''),
+                      'source': geo_data.get('source', 'Multiple Sources')
+                  }
+              else:
+                  node = {
+                      'ip': ip,
+                      'country_code': '',
+                      'country_name': '',
+                      'city': '',
+                      'source': 'No geo data'
+                  }
+              
+              enriched_nodes.append(node)
+          
+          # Calculate enrichment statistics
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          enrichment_percentage = round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+          
+          # Count by source
+          source_counts = {}
+          for node in enriched_nodes:
+              source = node['source']
+              source_counts[source] = source_counts.get(source, 0) + 1
+          
+          print(f'Enrichment summary:')
+          for source, count in source_counts.items():
+              print(f'  {source}: {count} IPs')
+          print(f'Total API calls made: {api_calls}')
           
           # Create enriched CSV
           with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
@@ -113,20 +309,22 @@ jobs:
               for node in enriched_nodes:
                   writer.writerow([
                       node['ip'],
-                      node['country_code'] or '',
-                      node['country_name'] or '',
-                      node['city'] or '',
+                      node['country_code'],
+                      node['country_name'],
+                      node['city'],
                       node['source']
                   ])
           
           # Create enriched JSON
           data = {
               'metadata': {
-                  'source': 'Multiple TOR sources with country enrichment',
+                  'source': 'Multiple TOR sources with enhanced geolocation',
                   'updated': datetime.utcnow().isoformat() + 'Z',
                   'count': len(enriched_nodes),
                   'enriched_count': enriched_count,
-                  'enrichment_percentage': round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+                  'enrichment_percentage': enrichment_percentage,
+                  'api_calls_used': api_calls,
+                  'source_breakdown': source_counts
               },
               'TorExitNodes': enriched_nodes
           }
@@ -134,18 +332,31 @@ jobs:
           with open('ExternalData/TorExitNodes.json', 'w') as f:
               json.dump(data, f, indent=2)
           
-          print(f'Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data)')
+          print(f'Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
           "
+      
+      - name: Generate statistics
+        run: |
+          echo "=== TOR Exit Node Statistics ==="
+          echo "Top 15 countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -15
           
-          echo "Top 10 countries by exit node count:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          echo ""
+          echo "Data sources breakdown:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f5 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Total unique exit nodes: $(tail -n +2 ExternalData/TorExitNodes.csv | wc -l)"
+          echo "Nodes with geo data: $(tail -n +2 ExternalData/TorExitNodes.csv | awk -F',' '$2 != \"\"' | wc -l)"
       
       - name: Cleanup
-        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+          rm -f IP2LOCATION-LITE-DB11.CSV* *.zip
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update TOR exit nodes"
+          commit_message: "Update TOR exit nodes with enhanced geolocation"
           file_pattern: 'ExternalData/TorExitNodes.*'
           push_options: '--force-with-lease'
