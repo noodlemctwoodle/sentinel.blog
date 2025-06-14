@@ -24,6 +24,11 @@ jobs:
         run: |
           echo "Fetching Microsoft Sentinel pricing data..."
           
+          # Define the API URL with proper encoding
+          api_url="https://prices.azure.com/api/retail/prices"
+          filter_param="productName eq 'Sentinel' and (location eq 'UK South' or location eq 'UK West')"
+          currency="GBP"
+          
           # Add retry logic for rate limiting
           max_attempts=5
           attempt=1
@@ -31,15 +36,38 @@ jobs:
           while [ $attempt -le $max_attempts ]; do
             echo "Attempt $attempt of $max_attempts..."
             
-            # Use curl with proper headers and delay
+            # Use curl with proper URL encoding
             response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
               -H "User-Agent: SentinelPriceMonitor/1.0" \
               -H "Accept: application/json" \
-              "https://prices.azure.com/api/retail/prices?currencyCode=GBP&\$filter=productName eq 'Sentinel' and (location eq 'UK South' or location eq 'UK West')")
+              -G \
+              --data-urlencode "currencyCode=$currency" \
+              --data-urlencode "\$filter=$filter_param" \
+              "$api_url" 2>&1)
+            
+            # Check if curl succeeded
+            if [ $? -ne 0 ]; then
+              echo "Curl failed: $response"
+              if [ $attempt -lt $max_attempts ]; then
+                sleep_time=$((10 * attempt))
+                echo "Waiting ${sleep_time} seconds before retry..."
+                sleep $sleep_time
+                attempt=$((attempt + 1))
+                continue
+              else
+                echo "Failed after $max_attempts attempts"
+                exit 1
+              fi
+            fi
             
             # Extract HTTP status and body
-            http_code=$(echo "$response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
-            json_data=$(echo "$response" | sed 's/HTTPSTATUS:[0-9]*$//')
+            if echo "$response" | grep -q "HTTPSTATUS:"; then
+              http_code=$(echo "$response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
+              json_data=$(echo "$response" | sed 's/HTTPSTATUS:[0-9]*$//')
+            else
+              echo "No HTTP status found in response: $response"
+              exit 1
+            fi
             
             echo "HTTP Status: $http_code"
             
@@ -58,8 +86,14 @@ jobs:
               fi
             else
               echo "API error: HTTP $http_code"
-              echo "Response: $json_data"
-              exit 1
+              echo "Response sample (first 500 chars): $(echo "$json_data" | head -c 500)"
+              if [ $attempt -lt $max_attempts ]; then
+                sleep_time=$((10 * attempt))
+                echo "Waiting ${sleep_time} seconds before retry..."
+                sleep $sleep_time
+              else
+                exit 1
+              fi
             fi
             
             attempt=$((attempt + 1))
@@ -68,6 +102,7 @@ jobs:
           # Validate JSON response
           if ! echo "$json_data" | jq . > /dev/null 2>&1; then
             echo "Error: Invalid JSON response"
+            echo "Response sample: $(echo "$json_data" | head -c 1000)"
             exit 1
           fi
           
