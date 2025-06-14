@@ -26,7 +26,10 @@ jobs:
           echo "Fetching Proton VPN server data..."
           
           # Download the JSON data with better error handling
-          response=$(curl -s -w "HTTP_CODE:%{http_code}" "https://api.protonmail.ch/vpn/logicals")
+          response=$(curl -s -w "HTTP_CODE:%{http_code}" \
+            -H "x-pm-appversion: Other" \
+            -H "User-Agent: ProtonVPN/4.0.0" \
+            "https://api.protonmail.ch/vpn/logicals")
           http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
           json_data=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
           
