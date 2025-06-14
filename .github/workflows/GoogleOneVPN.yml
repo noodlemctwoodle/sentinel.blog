@@ -66,15 +66,47 @@ jobs:
           # Configure curl with better SSL handling
           export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2"
           
-          # Fetch Google One VPN geofeed data
+          # Fetch Google One VPN geofeed data (updated URL)
           echo "Fetching from Google's geofeed..."
-          curl -s $CURL_OPTS "https://www.gstatic.com/g1vpn/geofeed" > google_vpn_geofeed.txt || echo "Failed to fetch geofeed data"
+          curl -s $CURL_OPTS -L "https://www.gstatic.com/vpn/geofeed" > google_vpn_geofeed.txt || echo "Failed to fetch geofeed data"
           echo "Geofeed data: $(wc -l < google_vpn_geofeed.txt) lines"
           
-          # Check if we got valid data
+          # Check if we got valid data (should be geofeed format, not HTML)
           if [ -f google_vpn_geofeed.txt ] && [ -s google_vpn_geofeed.txt ]; then
-            echo "✓ Successfully downloaded Google One VPN geofeed data"
-            head -10 google_vpn_geofeed.txt
+            # Check if it's actually HTML (redirect page)
+            if grep -q "<HTML>" google_vpn_geofeed.txt; then
+              echo "✗ Received HTML redirect page instead of geofeed data"
+              echo "Content received:"
+              cat google_vpn_geofeed.txt
+              echo ""
+              echo "Trying alternative URLs..."
+              
+              # Try the redirected URL directly
+              curl -s $CURL_OPTS -L "https://www.gstatic.com/vpn/geofeed" > google_vpn_geofeed_alt.txt || true
+              if [ -f google_vpn_geofeed_alt.txt ] && [ -s google_vpn_geofeed_alt.txt ] && ! grep -q "<HTML>" google_vpn_geofeed_alt.txt; then
+                mv google_vpn_geofeed_alt.txt google_vpn_geofeed.txt
+                echo "✓ Successfully fetched from alternative URL"
+              else
+                # Try other potential Google VPN geofeed URLs
+                for alt_url in "https://www.gstatic.com/ipranges/goog.txt" "https://www.gstatic.com/ipranges/cloud.json"; do
+                  echo "Trying $alt_url..."
+                  curl -s $CURL_OPTS -L "$alt_url" > google_vpn_geofeed_test.txt || true
+                  if [ -f google_vpn_geofeed_test.txt ] && [ -s google_vpn_geofeed_test.txt ]; then
+                    echo "Found data at $alt_url"
+                    head -5 google_vpn_geofeed_test.txt
+                    break
+                  fi
+                done
+                rm -f google_vpn_geofeed_test.txt
+                
+                echo "No valid geofeed data found from any source"
+                exit 1
+              fi
+            else
+              echo "✓ Successfully downloaded Google One VPN geofeed data"
+              echo "Sample content:"
+              head -10 google_vpn_geofeed.txt
+            fi
           else
             echo "✗ Failed to download Google One VPN geofeed data"
             exit 1
