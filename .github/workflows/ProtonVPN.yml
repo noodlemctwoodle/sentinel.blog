@@ -63,34 +63,76 @@ jobs:
         run: |
           echo "Fetching Proton VPN server data..."
           
-          # Configure curl with better SSL handling
+          # Configure curl with better SSL handling and required headers
           export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2"
           
-          # Try multiple Proton VPN data sources
-          echo "Fetching from Proton VPN API..."
-          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/logicals" > proton_logicals.json || echo "Failed to fetch logicals API"
+          # Try multiple Proton VPN data sources with proper headers/parameters
+          echo "Fetching from Proton VPN API with required headers..."
+          
+          # Add required headers for Proton APIs
+          curl -s $CURL_OPTS -L \
+            -H "x-pm-appversion: 4.0.0" \
+            -H "User-Agent: ProtonVPN/4.0.0" \
+            "https://api.protonmail.ch/vpn/logicals" > proton_logicals.json || echo "Failed to fetch logicals API"
           echo "Logicals API: $(wc -c < proton_logicals.json) bytes"
           
-          echo "Fetching server config..."
-          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/config" > proton_config.json || echo "Failed to fetch config API"
+          # Try with Platform parameter for config
+          curl -s $CURL_OPTS -L \
+            -H "x-pm-appversion: 4.0.0" \
+            -H "User-Agent: ProtonVPN/4.0.0" \
+            "https://api.protonmail.ch/vpn/config?Platform=linux" > proton_config.json || echo "Failed to fetch config API"
           echo "Config API: $(wc -c < proton_config.json) bytes"
           
-          echo "Fetching server status..."
-          curl -s $CURL_OPTS -L "https://api.protonmail.ch/vpn/servers" > proton_servers.json || echo "Failed to fetch servers API"
+          # Try servers endpoint with headers
+          curl -s $CURL_OPTS -L \
+            -H "x-pm-appversion: 4.0.0" \
+            -H "User-Agent: ProtonVPN/4.0.0" \
+            "https://api.protonmail.ch/vpn/servers" > proton_servers.json || echo "Failed to fetch servers API"
           echo "Servers API: $(wc -c < proton_servers.json) bytes"
           
-          # Try alternative endpoints
-          echo "Trying alternative endpoints..."
-          curl -s $CURL_OPTS -L "https://account-api.protonvpn.com/vpn/logicals" > proton_alt_logicals.json || echo "Failed to fetch from alt endpoint"
-          echo "Alt logicals: $(wc -c < proton_alt_logicals.json) bytes"
+          # Try alternative newer API endpoints
+          echo "Trying newer API endpoints..."
+          curl -s $CURL_OPTS -L \
+            -H "x-pm-appversion: 4.0.0" \
+            -H "User-Agent: ProtonVPN/4.0.0" \
+            "https://api.protonvpn.ch/vpn/logicals" > proton_new_logicals.json || echo "Failed to fetch from new endpoint"
+          echo "New logicals: $(wc -c < proton_new_logicals.json) bytes"
+          
+          # Try the public server list endpoint (no auth required)
+          echo "Trying public endpoints..."
+          curl -s $CURL_OPTS -L "https://api.protonvpn.ch/vpn/servers" > proton_public_servers.json || echo "Failed to fetch public servers"
+          echo "Public servers: $(wc -c < proton_public_servers.json) bytes"
+          
+          # Try fetching from ProtonVPN's public server list page
+          echo "Trying to extract from public sources..."
+          curl -s $CURL_OPTS -L "https://protonvpn.com/api/vpn/servers" > proton_web_servers.json || echo "Failed to fetch web servers"
+          echo "Web servers: $(wc -c < proton_web_servers.json) bytes"
           
           # Check which sources have valid JSON data
           echo ""
           echo "=== Data Source Status ==="
-          for file in proton_logicals.json proton_config.json proton_servers.json proton_alt_logicals.json; do
+          for file in proton_logicals.json proton_config.json proton_servers.json proton_new_logicals.json proton_public_servers.json proton_web_servers.json; do
             if [ -f "$file" ] && [ -s "$file" ]; then
-              if python3 -c "import json; json.load(open('$file'))" 2>/dev/null; then
+              if python3 -c "import json; data=json.load(open('$file')); print('Keys:', list(data.keys()) if isinstance(data, dict) else 'List with', len(data), 'items')" 2>/dev/null; then
                 echo "✓ $file: Valid JSON ($(wc -c < "$file") bytes)"
+                # Show a preview of successful responses
+                python3 -c "
+import json
+try:
+    with open('$file', 'r') as f:
+        data = json.load(f)
+    if isinstance(data, dict) and 'Code' not in data:
+        if 'LogicalServers' in data:
+            print('  Contains LogicalServers:', len(data['LogicalServers']))
+        elif 'Servers' in data:
+            print('  Contains Servers:', len(data['Servers']))
+        else:
+            print('  Keys:', list(data.keys())[:5])
+    elif isinstance(data, list):
+        print('  List with', len(data), 'items')
+except:
+    pass
+                "
               else
                 echo "✗ $file: Invalid JSON or error page"
                 head -3 "$file" 2>/dev/null || echo "  (empty file)"
@@ -245,7 +287,7 @@ jobs:
           
           # Try to load Proton VPN data from various sources
           proton_servers = []
-          data_sources = ['proton_logicals.json', 'proton_servers.json', 'proton_alt_logicals.json', 'proton_config.json']
+          data_sources = ['proton_logicals.json', 'proton_new_logicals.json', 'proton_servers.json', 'proton_public_servers.json', 'proton_web_servers.json', 'proton_config.json']
           
           print('Loading Proton VPN server data...')
           
