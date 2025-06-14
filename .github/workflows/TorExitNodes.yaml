@@ -61,16 +61,43 @@ jobs:
       - name: Fetch all TOR sources
         run: |
           echo "Fetching TOR exit nodes from multiple sources..."
-          curl -s "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt
+          
+          # Configure curl with better SSL handling
+          export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2 -k"
+          
+          # Fetch from torproject.org (primary source)
+          echo "Fetching from torproject.org..."
+          curl -s $CURL_OPTS "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt || echo "Failed to fetch bulk list"
           echo "Bulk list: $(wc -l < tor_bulk.txt) lines"
-          curl -s "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json
+          
+          # Fetch Onionoo data
+          echo "Fetching Onionoo data..."
+          curl -s $CURL_OPTS "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json || echo "Failed to fetch Onionoo data"
           echo "Onionoo API: $(wc -c < tor_onionoo.json) bytes"
-          curl -s "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv
+          
+          # Fetch from alternative sources (with error handling)
+          echo "Fetching from rueckgr.at..."
+          curl -s $CURL_OPTS "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv || echo "Failed to fetch rueckgr data"
           echo "Rueckgr CSV: $(wc -l < tor_rueckgr.csv) lines"
-          curl -s "https://www.dan.me.uk/torlist/" > tor_dan.txt
+          
+          echo "Fetching from dan.me.uk..."
+          curl -s $CURL_OPTS "https://www.dan.me.uk/torlist/" > tor_dan.txt || echo "Failed to fetch dan.me.uk data"
           echo "Dan.me.uk: $(wc -l < tor_dan.txt) lines"
-          curl -s "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt
+          
+          echo "Fetching from hackertarget..."
+          curl -s $CURL_OPTS "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt || echo "Failed to fetch hackertarget data"
           echo "HackerTarget: $(wc -l < tor_hackertarget.txt) lines"
+          
+          # Check which sources succeeded
+          echo ""
+          echo "=== Source Status ==="
+          for file in tor_bulk.txt tor_onionoo.json tor_rueckgr.csv tor_dan.txt tor_hackertarget.txt; do
+            if [ -f "$file" ] && [ -s "$file" ]; then
+              echo "✓ $file: $(wc -l < "$file" 2>/dev/null || echo "N/A") lines"
+            else
+              echo "✗ $file: Failed or empty"
+            fi
+          done
       
       - name: Process data
         run: |
