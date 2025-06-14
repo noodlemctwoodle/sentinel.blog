@@ -45,31 +45,357 @@ jobs:
           
           # Initialize
           touch all_ips.txt
+          touch enriched_data.json
           
-          # Process each source
-          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_bulk.txt >> all_ips.txt || true
+          # Create enriched data from Onionoo API first (has country info)
+          if command -v jq >/dev/null && [ -s tor_onionoo.json ]; then
+            echo "Extracting enriched data from Onionoo API..."
+            jq -r '.relays[] | select(.exit_addresses != null) | {
+              ips: (.exit_addresses // .or_addresses),
+              country: .country,
+              country_name: .country_name,
+              city: .city_name,
+              nickname: .nickname,
+              flags: .flags
+            }' tor_onionoo.json > relay_info.json
+            
+            # Extract IPs with country info to temp file
+            jq -r '.relays[] | select(.exit_addresses != null) | 
+              (.exit_addresses // .or_addresses)[] as $ip | 
+              [$ip, .country, .country_name, .city_name] | @csv' tor_onionoo.json > enriched_ips.csv || true
+          fi
           
+          # Process bulk list (no country info)
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          import csv
+          from datetime import datetime
+          
+          # Read enriched CSV data
+          enriched_nodes = []
+          try:
+              with open('ExternalData/TorExitNodes.csv', 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      enriched_nodes.append({
+                          'ip': row['ExitIP'],
+                          'country_code': row['CountryCode'] or None,
+                          'country_name': row['CountryName'] or None,
+                          'city': row['City'] or None,
+                          'source': row['Source']
+                      })
+          except:
+              enriched_nodes = []
+          
+          # Create enriched JSON structure
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources with country enrichment',
+                  'sources': [
+                      'https://check.torproject.org/torbulkexitlist',
+                      'https://onionoo.torproject.org/details?flag=Exit',
+                      'https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv',
+                      'https://www.dan.me.uk/torlist/',
+                      'https://api.hackertarget.com/torexit/?q=list'
+                  ],
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(enriched_nodes),
+                  'enrichment': {
+                      'country_data_available': sum(1 for node in enriched_nodes if node['country_code']),
+                      'enrichment_percentage': round(sum(1 for node in enriched_nodes if node['country_code']) / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+                  }
+              },
+              'TorExitNodes': enriched_nodes
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          print(f'Created JSON with {len(enriched_nodes)} IPs ({enriched_count} with country data)')
+          "
+          
+          # Show country distribution
+          echo "Country distribution:"
+          if [ -s ExternalData/TorExitNodes.csv ]; then
+            tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt enriched_ips.csv relay_info.json
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_bulk.txt >> all_ips.txt || true
+          
+          # Process Onionoo for IPs
           if command -v jq >/dev/null; then
             jq -r '.relays[]?.exit_addresses[]? // .relays[]?.or_addresses[]?' tor_onionoo.json 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed 's/:[0-9]*$//' >> all_ips.txt || true
           fi
           
+          # Process other sources (no country info)
           tail -n +2 tor_rueckgr.csv | cut -d',' -f1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
           
-          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_dan.txt >> all_ips.txt || true
+          with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
           
-          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_hackertarget.txt >> all_ips.txt || true
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(ips)
+              },
+              'TorExitNodes': ips
+          }
           
-          # Clean up
-          sort all_ips.txt | uniq > validated_ips.txt
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
           
-          total_ips=$(wc -l < validated_ips.txt)
+          print(f'Created JSON with {len(ips)} IPs')
+          "
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_dan.txt >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
+          
+          with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(ips)
+              },
+              'TorExitNodes': ips
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(ips)} IPs')
+          "
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_hackertarget.txt >> all_ips.txt || true
+          
+          # Get unique IPs
+          sort all_ips.txt | uniq > unique_ips.txt
+          
+          total_ips=$(wc -l < unique_ips.txt)
           echo "Total unique IPs: $total_ips"
           
-          # Create CSV
-          echo "ExitIP,Country,City,Source" > ExternalData/TorExitNodes.csv
+          # Create enriched CSV
+          echo "ExitIP,CountryCode,CountryName,City,Source" > ExternalData/TorExitNodes.csv
+          
+          # First add IPs with country info from Onionoo
+          if [ -s enriched_ips.csv ]; then
+            while IFS=',' read -r ip country country_name city; do
+              # Remove quotes from CSV parsing
+              ip=$(echo "$ip" | tr -d '"')
+              country=$(echo "$country" | tr -d '"')
+              country_name=$(echo "$country_name" | tr -d '"')
+              city=$(echo "$city" | tr -d '"')
+              echo "$ip,$country,$country_name,$city,Onionoo API" >> ExternalData/TorExitNodes.csv
+            done < enriched_ips.csv
+          fi
+          
+          # Add remaining IPs without country info
           while read ip; do
-            echo "$ip,,,Multiple Sources" >> ExternalData/TorExitNodes.csv
-          done < validated_ips.txt
+            if ! grep -q "^$ip," ExternalData/TorExitNodes.csv 2>/dev/null; then
+              echo "$ip,,,Other Sources" >> ExternalData/TorExitNodes.csv
+            fi
+          done < unique_ips.txt
+          
+          enriched_count=$(grep -c "Onionoo API" ExternalData/TorExitNodes.csv || echo 0)
+          echo "IPs with country info: $enriched_count"
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
+          
+          with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(ips)
+              },
+              'TorExitNodes': ips
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(ips)} IPs')
+          "
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -10
+          fi
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_bulk.txt >> all_ips.txt || true
+          
+          # Process Onionoo for IPs
+          if command -v jq >/dev/null; then
+            jq -r '.relays[]?.exit_addresses[]? // .relays[]?.or_addresses[]?' tor_onionoo.json 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed 's/:[0-9]*$//' >> all_ips.txt || true
+          fi
+          
+          # Process other sources (no country info)
+          tail -n +2 tor_rueckgr.csv | cut -d',' -f1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
+          
+          with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(ips)
+              },
+              'TorExitNodes': ips
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(ips)} IPs')
+          "
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_dan.txt >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Create JSON
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
+          
+          with open('validated_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip()]
+          
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(ips)
+              },
+              'TorExitNodes': ips
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(ips)} IPs')
+          "
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt validated_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_hackertarget.txt >> all_ips.txt || true
+          
+          # Get unique IPs
+          sort all_ips.txt | uniq > unique_ips.txt
+          
+          total_ips=$(wc -l < unique_ips.txt)
+          echo "Total unique IPs: $total_ips"
+          
+          # Create enriched CSV
+          echo "ExitIP,CountryCode,CountryName,City,Source" > ExternalData/TorExitNodes.csv
+          
+          # First add IPs with country info from Onionoo
+          if [ -s enriched_ips.csv ]; then
+            while IFS=',' read -r ip country country_name city; do
+              # Remove quotes from CSV parsing
+              ip=$(echo "$ip" | tr -d '"')
+              country=$(echo "$country" | tr -d '"')
+              country_name=$(echo "$country_name" | tr -d '"')
+              city=$(echo "$city" | tr -d '"')
+              echo "$ip,$country,$country_name,$city,Onionoo API" >> ExternalData/TorExitNodes.csv
+            done < enriched_ips.csv
+          fi
+          
+          # Add remaining IPs without country info
+          while read ip; do
+            if ! grep -q "^$ip," ExternalData/TorExitNodes.csv 2>/dev/null; then
+              echo "$ip,,,Other Sources" >> ExternalData/TorExitNodes.csv
+            fi
+          done < unique_ips.txt
+          
+          enriched_count=$(grep -c "Onionoo API" ExternalData/TorExitNodes.csv || echo 0)
+          echo "IPs with country info: $enriched_count"
       
       - name: Create JSON
         run: |
