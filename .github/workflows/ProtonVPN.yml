@@ -273,40 +273,68 @@ jobs:
           maxmind_reader = load_maxmind_db()
           ip2location_ranges = load_ip2location_csv()
           
-          # Try to load Proton VPN data from web scraping
+          # Try to load Proton VPN data from API or web scraping
           proton_servers = []
           
-          print('Loading Proton VPN server data from web scraping...')
+          print('Loading Proton VPN server data...')
           
-          try:
-              if os.path.exists('proton_scraped_servers.json') and os.path.getsize('proton_scraped_servers.json') > 0:
+          # Try API data first
+          if os.path.exists('proton_api_servers.json') and os.path.getsize('proton_api_servers.json') > 0:
+              try:
+                  with open('proton_api_servers.json', 'r') as f:
+                      api_servers = json.load(f)
+                  
+                  print(f'Processing {len(api_servers)} servers from API...')
+                  
+                  for server in api_servers:
+                      if isinstance(server, dict) and server.get('exit_ip'):
+                          proton_servers.append({
+                              'server_name': server.get('server_name', ''),
+                              'server_domain': server.get('domain', ''),
+                              'exit_ip': server.get('exit_ip', ''),
+                              'entry_ip': server.get('entry_ip', ''),
+                              'target_ip': server.get('exit_ip', ''),
+                              'country_code': server.get('country_code', ''),
+                              'city': server.get('city', ''),
+                              'features': server.get('features', ''),
+                              'tier': server.get('tier', ''),
+                              'load': server.get('load', ''),
+                              'source_file': 'proton_api_servers.json'
+                          })
+                  
+                  print(f'Loaded {len(proton_servers)} servers from API')
+              except Exception as e:
+                  print(f'Error processing API servers: {e}')
+          
+          # Fallback to scraped data if no API data
+          elif os.path.exists('proton_scraped_servers.json') and os.path.getsize('proton_scraped_servers.json') > 0:
+              try:
                   with open('proton_scraped_servers.json', 'r') as f:
                       scraped_servers = json.load(f)
                   
                   print(f'Processing {len(scraped_servers)} servers from web scraping...')
                   
                   for server in scraped_servers:
-                      if isinstance(server, dict) and 'ip' in server:
+                      if isinstance(server, dict) and server.get('exit_ip'):
                           proton_servers.append({
                               'server_name': server.get('server_name', ''),
-                              'server_domain': server.get('hostname', ''),
-                              'exit_ip': server.get('ip', ''),
-                              'entry_ip': '',
-                              'target_ip': server.get('ip', ''),
+                              'server_domain': server.get('domain', ''),
+                              'exit_ip': server.get('exit_ip', ''),
+                              'entry_ip': server.get('entry_ip', ''),
+                              'target_ip': server.get('exit_ip', ''),
                               'country_code': server.get('country_code', ''),
-                              'city': '',
-                              'features': '',
-                              'tier': '',
-                              'load': '',
+                              'city': server.get('city', ''),
+                              'features': server.get('features', ''),
+                              'tier': server.get('tier', ''),
+                              'load': server.get('load', ''),
                               'source_file': 'proton_scraped_servers.json'
                           })
                   
-                  print(f'Converted {len(proton_servers)} scraped servers to processing format')
-              else:
-                  print('No web scraping data found')
-                  
-          except Exception as e:
-              print(f'Error processing scraped servers: {e}')
+                  print(f'Loaded {len(proton_servers)} servers from web scraping')
+              except Exception as e:
+                  print(f'Error processing scraped servers: {e}')
+          else:
+              print('No server data found from either API or web scraping')
           
           if not proton_servers:
               print('❌ No Proton VPN server data found from any API endpoint.')
