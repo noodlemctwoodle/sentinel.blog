@@ -113,26 +113,14 @@ jobs:
           echo "=== Data Source Status ==="
           for file in proton_logicals.json proton_config.json proton_servers.json proton_new_logicals.json proton_public_servers.json proton_web_servers.json; do
             if [ -f "$file" ] && [ -s "$file" ]; then
-              if python3 -c "import json; data=json.load(open('$file')); print('Keys:', list(data.keys()) if isinstance(data, dict) else 'List with', len(data), 'items')" 2>/dev/null; then
+              if python3 -c "import json; json.load(open('$file'))" 2>/dev/null; then
                 echo "✓ $file: Valid JSON ($(wc -c < "$file") bytes)"
-                # Show a preview of successful responses
-                python3 -c "
-import json
-try:
-    with open('$file', 'r') as f:
-        data = json.load(f)
-    if isinstance(data, dict) and 'Code' not in data:
-        if 'LogicalServers' in data:
-            print('  Contains LogicalServers:', len(data['LogicalServers']))
-        elif 'Servers' in data:
-            print('  Contains Servers:', len(data['Servers']))
-        else:
-            print('  Keys:', list(data.keys())[:5])
-    elif isinstance(data, list):
-        print('  List with', len(data), 'items')
-except:
-    pass
-                "
+                # Check if it contains server data
+                if python3 -c "import json; data=json.load(open('$file')); exit(0 if ('LogicalServers' in data or 'Servers' in data or isinstance(data, list)) else 1)" 2>/dev/null; then
+                  echo "  → Contains server data"
+                else
+                  echo "  → No server data found"
+                fi
               else
                 echo "✗ $file: Invalid JSON or error page"
                 head -3 "$file" 2>/dev/null || echo "  (empty file)"
