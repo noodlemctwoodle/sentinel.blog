@@ -108,6 +108,128 @@ jobs:
       
       - name: Create JSON
         run: |
+          echo "Creating JSON output..."
+          
+          python3 -c "
+          import json
+          import csv
+          from datetime import datetime
+          
+          enriched_nodes = []
+          try:
+              with open('ExternalData/TorExitNodes.csv', 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      enriched_nodes.append({
+                          'ip': row['ExitIP'],
+                          'country_code': row['CountryCode'] if row['CountryCode'] else None,
+                          'country_name': row['CountryName'] if row['CountryName'] else None,
+                          'city': row['City'] if row['City'] else None,
+                          'source': row['Source']
+                      })
+          except Exception as e:
+              print(f'Error reading CSV: {e}')
+              enriched_nodes = []
+          
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources with country enrichment',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(enriched_nodes),
+                  'enriched_count': enriched_count,
+                  'enrichment_percentage': round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+              },
+              'TorExitNodes': enriched_nodes
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(enriched_nodes)} IPs ({enriched_count} with country data)')
+          "
+          
+          echo "Top countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with country enrichment"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_bulk.txt >> all_ips.txt || true
+          
+          if command -v jq >/dev/null; then
+            jq -r '.relays[]?.exit_addresses[]? // .relays[]?.or_addresses[]?' tor_onionoo.json 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed 's/:[0-9]*$//' >> all_ips.txt || true
+          fi
+          
+          tail -n +2 tor_rueckgr.csv | cut -d',' -f1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Enrich with country data
+        run: |
+          echo "Adding country enrichment from Onionoo API..."
+          
+          python3 << 'EOF'
+          import json
+          import csv
+          
+          try:
+              with open('tor_onionoo.json', 'r') as f:
+                  onionoo_data = json.load(f)
+          except:
+              print('No Onionoo data available')
+              exit()
+          
+          ip_to_country = {}
+          for relay in onionoo_data.get('relays', []):
+              country = relay.get('country', '')
+              country_name = relay.get('country_name', '')
+              city = relay.get('city_name', '')
+              
+              exit_addresses = relay.get('exit_addresses', [])
+              or_addresses = relay.get('or_addresses', [])
+              all_addresses = exit_addresses + or_addresses
+              
+              for addr in all_addresses:
+                  ip = addr.split(':')[0]
+                  if '.' in ip and len(ip.split('.')) == 4:
+                      ip_to_country[ip] = {
+                          'country_code': country,
+                          'country_name': country_name,
+                          'city': city
+                      }
+          
+          print(f'Created mapping for {len(ip_to_country)} IPs')
+          
+          enriched_rows = []
+          with open('ExternalData/TorExitNodes.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  ip = row['ExitIP']
+                  if ip in ip_to_country:
+                      geo_data = ip_to_country[ip]
+                      row['CountryCode'] = geo_data['country_code']
+                      row['CountryName'] = geo_data['country_name']
+                      row['City'] = geo_data['city']
+                      row['Source'] = 'Onionoo API'
+                  enriched_rows.append(row)
+          
+          with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
+              if enriched_rows:
+                  writer = csv.DictWriter(f, fieldnames=enriched_rows[0].keys())
+                  writer.writeheader()
+                  writer.writerows(enriched_rows)
+          
+          enriched_count = sum(1 for row in enriched_rows if row['CountryCode'])
+          print(f'Enriched {enriched_count} out of {len(enriched_rows)} IPs with country data')
+          EOF
+      
+      - name: Create JSON
+        run: |
           python3 << 'EOF'
           import json
           import csv
@@ -148,6 +270,251 @@ jobs:
           
           echo "Top countries by exit node count:"
           tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with country enrichment"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_dan.txt >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+
+      
+      - name: Enrich with country data
+        run: |
+          echo "Adding country enrichment from Onionoo API..."
+          
+          python3 << 'EOF'
+          import json
+          import csv
+          
+          try:
+              with open('tor_onionoo.json', 'r') as f:
+                  onionoo_data = json.load(f)
+          except:
+              print('No Onionoo data available')
+              exit()
+          
+          ip_to_country = {}
+          for relay in onionoo_data.get('relays', []):
+              country = relay.get('country', '')
+              country_name = relay.get('country_name', '')
+              city = relay.get('city_name', '')
+              
+              exit_addresses = relay.get('exit_addresses', [])
+              or_addresses = relay.get('or_addresses', [])
+              all_addresses = exit_addresses + or_addresses
+              
+              for addr in all_addresses:
+                  ip = addr.split(':')[0]
+                  if '.' in ip and len(ip.split('.')) == 4:
+                      ip_to_country[ip] = {
+                          'country_code': country,
+                          'country_name': country_name,
+                          'city': city
+                      }
+          
+          print(f'Created mapping for {len(ip_to_country)} IPs')
+          
+          enriched_rows = []
+          with open('ExternalData/TorExitNodes.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  ip = row['ExitIP']
+                  if ip in ip_to_country:
+                      geo_data = ip_to_country[ip]
+                      row['CountryCode'] = geo_data['country_code']
+                      row['CountryName'] = geo_data['country_name']
+                      row['City'] = geo_data['city']
+                      row['Source'] = 'Onionoo API'
+                  enriched_rows.append(row)
+          
+          with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
+              if enriched_rows:
+                  writer = csv.DictWriter(f, fieldnames=enriched_rows[0].keys())
+                  writer.writeheader()
+                  writer.writerows(enriched_rows)
+          
+          enriched_count = sum(1 for row in enriched_rows if row['CountryCode'])
+          print(f'Enriched {enriched_count} out of {len(enriched_rows)} IPs with country data')
+          EOF
+      
+      - name: Create JSON
+        run: |
+          python3 << 'EOF'
+          import json
+          import csv
+          from datetime import datetime
+          
+          enriched_nodes = []
+          try:
+              with open('ExternalData/TorExitNodes.csv', 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      enriched_nodes.append({
+                          'ip': row['ExitIP'],
+                          'country_code': row['CountryCode'] if row['CountryCode'] else None,
+                          'country_name': row['CountryName'] if row['CountryName'] else None,
+                          'city': row['City'] if row['City'] else None,
+                          'source': row['Source']
+                      })
+          except:
+              enriched_nodes = []
+          
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources with country enrichment',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(enriched_nodes),
+                  'enriched_count': enriched_count,
+                  'enrichment_percentage': round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+              },
+              'TorExitNodes': enriched_nodes
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(enriched_nodes)} IPs ({enriched_count} with country data)')
+          EOF
+          
+          echo "Top countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with country enrichment"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' tor_hackertarget.txt >> all_ips.txt || true
+          
+          sort all_ips.txt | uniq > unique_ips.txt
+          
+          total_ips=$(wc -l < unique_ips.txt)
+          echo "Total unique IPs: $total_ips"
+          
+          echo "ExitIP,CountryCode,CountryName,City,Source" > ExternalData/TorExitNodes.csv
+          while read ip; do
+            echo "$ip,,,," >> ExternalData/TorExitNodes.csv
+          done < unique_ips.txt
+      
+      - name: Enrich with country data
+        run: |
+          echo "Adding country enrichment from Onionoo API..."
+          
+          python3 << 'EOF'
+          import json
+          import csv
+          
+          try:
+              with open('tor_onionoo.json', 'r') as f:
+                  onionoo_data = json.load(f)
+          except:
+              print('No Onionoo data available')
+              exit()
+          
+          ip_to_country = {}
+          for relay in onionoo_data.get('relays', []):
+              country = relay.get('country', '')
+              country_name = relay.get('country_name', '')
+              city = relay.get('city_name', '')
+              
+              exit_addresses = relay.get('exit_addresses', [])
+              or_addresses = relay.get('or_addresses', [])
+              all_addresses = exit_addresses + or_addresses
+              
+              for addr in all_addresses:
+                  ip = addr.split(':')[0]
+                  if '.' in ip and len(ip.split('.')) == 4:
+                      ip_to_country[ip] = {
+                          'country_code': country,
+                          'country_name': country_name,
+                          'city': city
+                      }
+          
+          print(f'Created mapping for {len(ip_to_country)} IPs')
+          
+          enriched_rows = []
+          with open('ExternalData/TorExitNodes.csv', 'r') as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  ip = row['ExitIP']
+                  if ip in ip_to_country:
+                      geo_data = ip_to_country[ip]
+                      row['CountryCode'] = geo_data['country_code']
+                      row['CountryName'] = geo_data['country_name']
+                      row['City'] = geo_data['city']
+                      row['Source'] = 'Onionoo API'
+                  enriched_rows.append(row)
+          
+          with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
+              if enriched_rows:
+                  writer = csv.DictWriter(f, fieldnames=enriched_rows[0].keys())
+                  writer.writeheader()
+                  writer.writerows(enriched_rows)
+          
+          enriched_count = sum(1 for row in enriched_rows if row['CountryCode'])
+          print(f'Enriched {enriched_count} out of {len(enriched_rows)} IPs with country data')
+          EOF
+      
+      - name: Create JSON
+        run: |
+          python3 << 'EOF'
+          import json
+          import csv
+          from datetime import datetime
+          
+          enriched_nodes = []
+          try:
+              with open('ExternalData/TorExitNodes.csv', 'r') as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      enriched_nodes.append({
+                          'ip': row['ExitIP'],
+                          'country_code': row['CountryCode'] if row['CountryCode'] else None,
+                          'country_name': row['CountryName'] if row['CountryName'] else None,
+                          'city': row['City'] if row['City'] else None,
+                          'source': row['Source']
+                      })
+          except:
+              enriched_nodes = []
+          
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources with country enrichment',
+                  'updated': datetime.utcnow().isoformat() + 'Z',
+                  'count': len(enriched_nodes),
+                  'enriched_count': enriched_count,
+                  'enrichment_percentage': round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+              },
+              'TorExitNodes': enriched_nodes
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print(f'Created JSON with {len(enriched_nodes)} IPs ({enriched_count} with country data)')
+          EOF
+          
+          echo "Top countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+      
+      - name: Cleanup
+        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with country enrichment"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -10
       
       - name: Cleanup
         run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
