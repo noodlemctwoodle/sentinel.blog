@@ -1,4 +1,4 @@
-name: Pull Google One VPN IP Ranges
+name: Pull Google One VPN IP Ranges with Geolocation
 
 on:
   workflow_dispatch:
@@ -15,143 +15,423 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Create directory if not exists
-        shell: bash
-        run: mkdir -p ${{ github.workspace }}/ExternalData
+        run: mkdir -p ExternalData
       
-      - name: Pull and process Google One VPN IP Ranges
-        id: fetch-data
-        shell: pwsh
+      - name: Download MaxMind GeoLite2 Database
         run: |
-          try {
-            # Define variables
-            $sourceUrl = "https://www.gstatic.com/g1vpn/geofeed"
-            $outputCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.csv"
-            $backupCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_backup.csv"
-            
-            # Backup existing file if it exists
-            if (Test-Path $outputCsvPath) {
-              Copy-Item -Path $outputCsvPath -Destination $backupCsvPath -Force
-              Write-Output "Backed up previous data file"
-            }
-            
-            # Fetch data with retry logic
-            $maxRetries = 3
-            $retryCount = 0
-            $success = $false
-            
-            while (-not $success -and $retryCount -lt $maxRetries) {
-              try {
-                $response = Invoke-WebRequest -Uri $sourceUrl -TimeoutSec 30
-                $success = $true
-              } catch {
-                $retryCount++
-                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
-                if ($retryCount -lt $maxRetries) {
-                  Start-Sleep -Seconds (2 * $retryCount)
-                }
-              }
-            }
-            
-            if (-not $success) {
-              throw "Failed to fetch Google One VPN IP ranges after $maxRetries attempts"
-            }
-            
-            if ($response.StatusCode -eq 200) {
-              # Parse CSV data
-              $IPRanges = $response.Content | ConvertFrom-Csv -Header @('IPRange', 'Country', 'LanguageCode', 'City')
-              $IPRanges = $IPRanges | Where-Object { $_.IPRange -notmatch '^#' }
-              
-              # Process IP ranges and add address family
-              $ipv4Count = 0
-              $ipv6Count = 0
-              $countryStats = @{}
-              
-              foreach ($IPRange in $IPRanges) {
-                try {
-                  $ipAddress = $IPRange.IPRange -replace '/.*'
-                  $AddressFamily = [System.Net.IPAddress]::Parse($ipAddress).AddressFamily.ToString()
-                  
-                  $IPRange | Add-Member -MemberType NoteProperty -Name 'AddressFamily' -Value $AddressFamily -Force
-                  
-                  # Count by address family
-                  if ($AddressFamily -eq 'InterNetwork') {
-                    $ipv4Count++
-                  } elseif ($AddressFamily -eq 'InterNetworkV6') {
-                    $ipv6Count++
-                  }
-                  
-                  # Count by country
-                  if (-not [string]::IsNullOrEmpty($IPRange.Country)) {
-                    if (-not $countryStats.ContainsKey($IPRange.Country)) {
-                      $countryStats[$IPRange.Country] = 0
-                    }
-                    $countryStats[$IPRange.Country]++
-                  }
-                } catch {
-                  Write-Output "Warning: Could not process IP range $($IPRange.IPRange): $($_.Exception.Message)"
-                }
-              }
-              
-              # Save CSV output only
-              $IPRanges | Export-Csv -Path $outputCsvPath -Force -NoTypeInformation
-              
-              # Set outputs for use in later steps
-              "ip_count=$($IPRanges.Count)" >> $env:GITHUB_OUTPUT
-              "ipv4_count=$ipv4Count" >> $env:GITHUB_OUTPUT
-              "ipv6_count=$ipv6Count" >> $env:GITHUB_OUTPUT
-              "updated=true" >> $env:GITHUB_OUTPUT
-              
-              Write-Output "✅ Successfully updated Google One VPN IP ranges."
-              Write-Output "Found $($IPRanges.Count) IP ranges ($ipv4Count IPv4, $ipv6Count IPv6)"
-            } else {
-              throw "Failed to fetch Google One VPN IP ranges. Status code: $($response.StatusCode)"
-            }
-          } catch {
-            # If we have a backup, restore it
-            if (Test-Path $backupCsvPath) {
-              Copy-Item -Path $backupCsvPath -Destination $outputCsvPath -Force
-              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
-            } else {
-              Write-Output "❌ Error: $($_.Exception.Message)"
-            }
-            
-            "updated=false" >> $env:GITHUB_OUTPUT
-            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
-            exit 1
-          }
-      
-      - name: Compare with previous data
-        id: compare
-        if: steps.fetch-data.outputs.updated == 'true'
-        shell: pwsh
-        run: |
-          $backupCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges_backup.csv"
-          $currentCsvPath = "${{ github.workspace }}/ExternalData/GoogleOneVPNIPRanges.csv"
+          echo "Downloading MaxMind GeoLite2 database..."
           
-          if (Test-Path $backupCsvPath) {
-            $oldData = Import-Csv -Path $backupCsvPath
-            $newData = Import-Csv -Path $currentCsvPath
-            
-            $oldIPs = $oldData | ForEach-Object { $_.IPRange }
-            $newIPs = $newData | ForEach-Object { $_.IPRange }
-            
-            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
-            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
-            
-            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
-            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
-            
-            Write-Output "Changes detected: $($added.Count) new IPs, $($removed.Count) removed IPs"
-          } else {
-            "added_count=${{ steps.fetch-data.outputs.ip_count }}" >> $env:GITHUB_OUTPUT
-            "removed_count=0" >> $env:GITHUB_OUTPUT
-            Write-Output "Initial data import - no previous data to compare with"
-          }
+          # Method 1: Try direct download from MaxMind (requires free account)
+          if [ -n "${{ secrets.MAXMIND_LICENSE_KEY }}" ]; then
+            echo "Using MaxMind license key..."
+            wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXMIND_LICENSE_KEY }}&suffix=tar.gz"
+            if [ -f GeoLite2-City.tar.gz ] && [ -s GeoLite2-City.tar.gz ]; then
+              tar -xzf GeoLite2-City.tar.gz
+              find . -name "GeoLite2-City.mmdb" -exec mv {} . \;
+              echo "✓ Downloaded official MaxMind GeoLite2 database"
+            else
+              echo "Failed to download from MaxMind, trying alternative..."
+            fi
+          fi
+          
+          # Method 2: Alternative source (GitHub mirror)
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Trying alternative MaxMind source..."
+            wget -O GeoLite2-City.mmdb "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb" || true
+          fi
+          
+          # Method 3: Fallback to CSV format
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Downloading IP2Location as fallback..."
+            wget -O ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB5.CSV" || true
+            if [ -f ip2location.csv ] && [ -s ip2location.csv ]; then
+              echo "✓ Downloaded IP2Location CSV database"
+            fi
+          else
+            echo "✓ MaxMind database ready: $(ls -lh GeoLite2-City.mmdb)"
+          fi
       
-      - name: Commit updated data to repo
+      - name: Install Python dependencies
+        run: |
+          pip install requests maxminddb-geolite2 geoip2 maxminddb ipaddress
+      
+      - name: Fetch Google One VPN IP Ranges
+        run: |
+          echo "Fetching Google One VPN IP ranges..."
+          
+          # Configure curl with better SSL handling
+          export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2"
+          
+          # Fetch Google One VPN geofeed data
+          echo "Fetching from Google's geofeed..."
+          curl -s $CURL_OPTS "https://www.gstatic.com/g1vpn/geofeed" > google_vpn_geofeed.txt || echo "Failed to fetch geofeed data"
+          echo "Geofeed data: $(wc -l < google_vpn_geofeed.txt) lines"
+          
+          # Check if we got valid data
+          if [ -f google_vpn_geofeed.txt ] && [ -s google_vpn_geofeed.txt ]; then
+            echo "✓ Successfully downloaded Google One VPN geofeed data"
+            head -10 google_vpn_geofeed.txt
+          else
+            echo "✗ Failed to download Google One VPN geofeed data"
+            exit 1
+          fi
+      
+      - name: Process and enrich Google VPN data with MaxMind
+        run: |
+          python3 -c "
+          import json
+          import csv
+          import ipaddress
+          import os
+          from datetime import datetime, timezone
+          
+          # Helper function to validate IP
+          def is_valid_ip(ip):
+              try:
+                  ipaddress.ip_address(ip)
+                  return True
+              except ValueError:
+                  return False
+          
+          # Helper function to get network info
+          def get_network_info(ip_range):
+              try:
+                  network = ipaddress.ip_network(ip_range, strict=False)
+                  # Get the first IP in the range for geolocation lookup
+                  first_ip = str(network.network_address)
+                  return {
+                      'network': str(network),
+                      'first_ip': first_ip,
+                      'num_addresses': network.num_addresses,
+                      'address_family': 'IPv4' if network.version == 4 else 'IPv6'
+                  }
+              except ValueError:
+                  return None
+          
+          # Load MaxMind database
+          def load_maxmind_db():
+              try:
+                  import maxminddb
+                  if os.path.exists('GeoLite2-City.mmdb'):
+                      reader = maxminddb.open_database('GeoLite2-City.mmdb')
+                      print('✓ Loaded MaxMind GeoLite2 database')
+                      return reader
+                  else:
+                      print('MaxMind database not found')
+                      return None
+              except ImportError:
+                  try:
+                      # Try alternative import
+                      import geoip2.database
+                      if os.path.exists('GeoLite2-City.mmdb'):
+                          reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+                          print('✓ Loaded MaxMind database with geoip2')
+                          return reader
+                  except ImportError:
+                      print('MaxMind libraries not available')
+              return None
+          
+          # Lookup IP in MaxMind database
+          def lookup_maxmind(ip, reader):
+              try:
+                  if hasattr(reader, 'get'):  # maxminddb reader
+                      response = reader.get(ip)
+                      if response:
+                          country = response.get('country', {})
+                          city = response.get('city', {})
+                          subdivisions = response.get('subdivisions', [{}])
+                          location = response.get('location', {})
+                          return {
+                              'cc': country.get('iso_code', ''),
+                              'cn': country.get('names', {}).get('en', ''),
+                              'city': city.get('names', {}).get('en', ''),
+                              'region': subdivisions[0].get('names', {}).get('en', '') if subdivisions else '',
+                              'latitude': location.get('latitude', ''),
+                              'longitude': location.get('longitude', ''),
+                              'source': 'MaxMind GeoLite2'
+                          }
+                  else:  # geoip2 reader
+                      response = reader.city(ip)
+                      return {
+                          'cc': response.country.iso_code or '',
+                          'cn': response.country.name or '',
+                          'city': response.city.name or '',
+                          'region': response.subdivisions.most_specific.name or '',
+                          'latitude': float(response.location.latitude) if response.location.latitude else '',
+                          'longitude': float(response.location.longitude) if response.location.longitude else '',
+                          'source': 'MaxMind GeoLite2'
+                      }
+              except Exception as e:
+                  # IP not found in database is normal, not an error
+                  pass
+              return None
+          
+          # Load IP2Location CSV fallback
+          def load_ip2location_csv():
+              ip_ranges = []
+              try:
+                  if os.path.exists('ip2location.csv'):
+                      with open('ip2location.csv', 'r') as f:
+                          reader = csv.reader(f)
+                          for row in reader:
+                              if len(row) >= 6 and row[0].isdigit():
+                                  try:
+                                      ip_from = int(row[0])
+                                      ip_to = int(row[1])
+                                      country_code = row[2].strip('\\\"')
+                                      country_name = row[3].strip('\\\"')
+                                      region = row[4].strip('\\\"') if len(row) > 4 else ''
+                                      city = row[5].strip('\\\"') if len(row) > 5 else ''
+                                      if country_code and country_code != '-':
+                                          ip_ranges.append({
+                                              'from': ip_from,
+                                              'to': ip_to,
+                                              'cc': country_code,
+                                              'cn': country_name,
+                                              'region': region,
+                                              'city': city
+                                          })
+                                  except (ValueError, IndexError):
+                                      continue
+                      print(f'✓ Loaded {len(ip_ranges)} IP ranges from IP2Location CSV')
+              except Exception as e:
+                  print(f'Could not load IP2Location CSV: {e}')
+              return ip_ranges
+          
+          # Convert IP to integer for range lookup
+          def ip_to_int(ip):
+              parts = ip.split('.')
+              return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+          
+          # Lookup IP in CSV database
+          def lookup_ip_in_csv(ip, ip_ranges):
+              try:
+                  ip_int = ip_to_int(ip)
+                  for range_data in ip_ranges:
+                      if range_data['from'] <= ip_int <= range_data['to']:
+                          return {
+                              'cc': range_data['cc'],
+                              'cn': range_data['cn'],
+                              'city': range_data['city'],
+                              'region': range_data['region'],
+                              'latitude': '',
+                              'longitude': '',
+                              'source': 'IP2Location CSV'
+                          }
+              except:
+                  pass
+              return None
+          
+          # Load MaxMind and IP2Location databases
+          maxmind_reader = load_maxmind_db()
+          ip2location_ranges = load_ip2location_csv()
+          
+          # Parse Google VPN geofeed data
+          enriched_ranges = []
+          maxmind_count = 0
+          ip2location_count = 0
+          geofeed_count = 0
+          no_data_count = 0
+          
+          print('Processing Google One VPN geofeed data...')
+          
+          try:
+              with open('google_vpn_geofeed.txt', 'r') as f:
+                  lines = f.readlines()
+              
+              for i, line in enumerate(lines):
+                  line = line.strip()
+                  if not line or line.startswith('#'):
+                      continue
+                  
+                  # Parse geofeed format: prefix,country_code,region_code,city
+                  parts = [p.strip() for p in line.split(',')]
+                  if len(parts) < 2:
+                      continue
+                  
+                  ip_range = parts[0]
+                  geofeed_country = parts[1] if len(parts) > 1 else ''
+                  geofeed_region = parts[2] if len(parts) > 2 else ''
+                  geofeed_city = parts[3] if len(parts) > 3 else ''
+                  
+                  # Get network information
+                  network_info = get_network_info(ip_range)
+                  if not network_info:
+                      continue
+                  
+                  # Try to get enhanced geolocation from MaxMind
+                  geo_data = None
+                  
+                  # Try MaxMind database first
+                  if maxmind_reader and network_info['first_ip']:
+                      geo_data = lookup_maxmind(network_info['first_ip'], maxmind_reader)
+                      if geo_data:
+                          maxmind_count += 1
+                  
+                  # Try IP2Location CSV as fallback (IPv4 only)
+                  if not geo_data and ip2location_ranges and network_info['address_family'] == 'IPv4':
+                      geo_data = lookup_ip_in_csv(network_info['first_ip'], ip2location_ranges)
+                      if geo_data:
+                          ip2location_count += 1
+                  
+                  # Create enriched entry
+                  if geo_data:
+                      # Use MaxMind/IP2Location data, fall back to geofeed data
+                      enriched_range = {
+                          'ip_range': ip_range,
+                          'country_code': geo_data.get('cc') or geofeed_country,
+                          'country_name': geo_data.get('cn') or '',
+                          'region': geo_data.get('region') or geofeed_region,
+                          'city': geo_data.get('city') or geofeed_city,
+                          'latitude': geo_data.get('latitude', ''),
+                          'longitude': geo_data.get('longitude', ''),
+                          'address_family': network_info['address_family'],
+                          'num_addresses': network_info['num_addresses'],
+                          'geofeed_country': geofeed_country,
+                          'geofeed_region': geofeed_region,
+                          'geofeed_city': geofeed_city,
+                          'geo_source': geo_data.get('source', 'Unknown')
+                      }
+                  else:
+                      # Use only geofeed data
+                      geofeed_count += 1
+                      enriched_range = {
+                          'ip_range': ip_range,
+                          'country_code': geofeed_country,
+                          'country_name': '',
+                          'region': geofeed_region,
+                          'city': geofeed_city,
+                          'latitude': '',
+                          'longitude': '',
+                          'address_family': network_info['address_family'],
+                          'num_addresses': network_info['num_addresses'],
+                          'geofeed_country': geofeed_country,
+                          'geofeed_region': geofeed_region,
+                          'geofeed_city': geofeed_city,
+                          'geo_source': 'Google Geofeed'
+                      }
+                  
+                  enriched_ranges.append(enriched_range)
+              
+              # Calculate statistics
+              total_ranges = len(enriched_ranges)
+              ipv4_ranges = len([r for r in enriched_ranges if r['address_family'] == 'IPv4'])
+              ipv6_ranges = len([r for r in enriched_ranges if r['address_family'] == 'IPv6'])
+              total_addresses = sum(r['num_addresses'] for r in enriched_ranges)
+              
+              # Count by geo source
+              source_counts = {}
+              for range_data in enriched_ranges:
+                  source = range_data['geo_source']
+                  source_counts[source] = source_counts.get(source, 0) + 1
+              
+              print(f'')
+              print('Processing summary:')
+              for source, count in source_counts.items():
+                  print(f'  {source}: {count} ranges')
+              print(f'Total processed: {total_ranges} ranges ({ipv4_ranges} IPv4, {ipv6_ranges} IPv6)')
+              print(f'Total IP addresses covered: {total_addresses:,}')
+              
+              # Create enriched CSV
+              with open('ExternalData/GoogleOneVPNIPRanges.csv', 'w', newline='') as f:
+                  writer = csv.writer(f)
+                  writer.writerow([
+                      'IPRange', 'CountryCode', 'CountryName', 'Region', 'City', 
+                      'Latitude', 'Longitude', 'AddressFamily', 'NumAddresses',
+                      'GeofeedCountry', 'GeofeedRegion', 'GeofeedCity', 'GeoSource'
+                  ])
+                  for range_data in enriched_ranges:
+                      writer.writerow([
+                          range_data['ip_range'],
+                          range_data['country_code'],
+                          range_data['country_name'],
+                          range_data['region'],
+                          range_data['city'],
+                          range_data['latitude'],
+                          range_data['longitude'],
+                          range_data['address_family'],
+                          range_data['num_addresses'],
+                          range_data['geofeed_country'],
+                          range_data['geofeed_region'],
+                          range_data['geofeed_city'],
+                          range_data['geo_source']
+                      ])
+              
+              # Create enriched JSON
+              data = {
+                  'metadata': {
+                      'source': 'Google One VPN geofeed with MaxMind GeoLite2 enrichment',
+                      'updated': datetime.now(timezone.utc).isoformat(),
+                      'total_ranges': total_ranges,
+                      'ipv4_ranges': ipv4_ranges,
+                      'ipv6_ranges': ipv6_ranges,
+                      'total_addresses': total_addresses,
+                      'processing_method': 'Local database lookup (no API calls)',
+                      'geo_source_breakdown': source_counts
+                  },
+                  'GoogleOneVPNRanges': enriched_ranges
+              }
+              
+              with open('ExternalData/GoogleOneVPNIPRanges.json', 'w') as f:
+                  json.dump(data, f, indent=2)
+              
+              print('')
+              print(f'Created enriched data: {total_ranges} IP ranges covering {total_addresses:,} addresses')
+              print('Processing completed successfully!')
+              
+              # Close database connection
+              if maxmind_reader:
+                  try:
+                      maxmind_reader.close()
+                  except:
+                      pass
+                      
+          except Exception as e:
+              print(f'Error processing Google VPN data: {e}')
+              exit(1)
+          "
+      
+      - name: Generate statistics
+        run: |
+          echo "=== Google One VPN IP Ranges Statistics ==="
+          echo "Total IP ranges: $(tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | wc -l)"
+          
+          echo ""
+          echo "Address family breakdown:"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | cut -d',' -f8 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Top 20 countries by IP range count:"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | cut -d',' -f2 | grep -v '^$' | sort | uniq -c | sort -nr | head -20
+          
+          echo ""
+          echo "Geolocation sources breakdown:"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | cut -d',' -f13 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Top 10 cities by IP range count:"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | cut -d',' -f5 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          
+          echo ""
+          echo "Top 10 regions by IP range count:"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | cut -d',' -f4 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          
+          echo ""
+          echo "Sample of large IP ranges (by number of addresses):"
+          tail -n +2 ExternalData/GoogleOneVPNIPRanges.csv | sort -t',' -k9 -nr | head -10 | cut -d',' -f1,2,5,8,9
+      
+      - name: Cleanup temporary files
+        run: |
+          rm -f google_vpn_geofeed.txt
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
+      
+      - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Google One VPN IP ranges: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }}"
-          file_pattern: 'ExternalData/GoogleOneVPNIPRanges.csv'
+          commit_message: "Update Google One VPN IP ranges with MaxMind geolocation enrichment"
+          file_pattern: 'ExternalData/GoogleOneVPNIPRanges.*'
+          push_options: '--force-with-lease'
