@@ -942,10 +942,27 @@ jobs:
               unique_servers = list(country_servers.values())
               print(f"Total unique servers after deduplication: {len(unique_servers)}")
               
+              # Final validation and summary
+              final_total = sum(s['server_count'] for s in unique_servers)
+              print(f"\n=== Extraction Summary ===")
+              print(f"Total servers extracted: {final_total}")
+              print(f"Expected total: ~{total_expected_servers}")
+              print(f"Coverage: {(final_total/total_expected_servers)*100:.1f}%")
+              
+              if final_total < total_expected_servers * 0.5:  # Less than 50% coverage
+                  print("⚠️  Low coverage detected. Data may be incomplete.")
+              elif final_total > total_expected_servers * 1.2:  # More than 120% - possible duplicates
+                  print("⚠️  High server count detected. May include duplicates.")
+              else:
+                  print("✅ Good server count coverage.")
+              
               # Debug: show what we found
               if unique_servers:
+                  print(f"\nCountries found: {len(unique_servers)}")
                   print("Sample servers found:")
-                  for server in unique_servers[:10]:
+                  # Sort by server count to show largest first
+                  sorted_servers = sorted(unique_servers, key=lambda x: x['server_count'], reverse=True)
+                  for server in sorted_servers[:15]:
                       print(f"  {server['country']}: {server['server_count']} servers ({server['server_type']})")
               
               return unique_servers
