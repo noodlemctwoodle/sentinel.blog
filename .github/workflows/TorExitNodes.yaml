@@ -175,16 +175,13 @@ jobs:
                 echo '  "TorExitNodes": ['
               } > ExternalData/TorExitNodes.json
               
-              # Add IPs to JSON (with proper comma handling)
-              first=true
+              # Add IPs to JSON using a simpler approach
               while IFS= read -r ip; do
-                if [ "$first" = true ]; then
-                  echo "    \"$ip\"" >> ExternalData/TorExitNodes.json
-                  first=false
-                else
-                  echo "    ,\"$ip\"" >> ExternalData/TorExitNodes.json
-                fi
+                echo "    \"$ip\"," >> ExternalData/TorExitNodes.json
               done < "$temp_dir/validated_ips.txt"
+              
+              # Remove the last comma and close the JSON
+              sed -i '$ s/,$//' ExternalData/TorExitNodes.json
               
               echo "  ]" >> ExternalData/TorExitNodes.json
               echo "}" >> ExternalData/TorExitNodes.json
