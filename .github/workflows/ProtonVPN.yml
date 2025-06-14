@@ -275,7 +275,7 @@ jobs:
           
           # Try to load Proton VPN data from various sources
           proton_servers = []
-          data_sources = ['proton_logicals.json', 'proton_new_logicals.json', 'proton_web_logicals.json', 'proton_public_servers.json', 'proton_account_servers.json', 'proton_config.json']
+          data_sources = ['proton_logicals.json', 'proton_web_logicals.json', 'proton_account_servers.json', 'proton_mail_logicals.json', 'proton_dns_servers.json']
           
           print('Loading Proton VPN server data...')
           
