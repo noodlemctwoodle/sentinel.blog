@@ -107,16 +107,209 @@ jobs:
             fi
           fi
           
-          # Source 4: Alternative TOR exit node lists
-          echo "=== Fetching from TorDNSEL ==="
-          if fetch_with_retry "https://torstatus.blutmagie.de/ip_list_exit.php/Tor_ip_list_EXIT.csv" "$temp_dir/tor_blutmagie.txt"; then
-            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$temp_dir/tor_blutmagie.txt" >> "$all_ips"
+          # Source 4: TorStatus rueckgr.at (replacement for blutmagie)
+          echo "=== Fetching from TorStatus rueckgr.at ==="
+          if fetch_with_retry "https://torstatus.rueckgr.at/query_export.php/Tor_query_EXPORT.csv" "$temp_dir/tor_rueckgr.csv"; then
+            # Skip header and extract IPs
+            tail -n +2 "$temp_dir/tor_rueckgr.csv" | cut -d',' -f1 | \
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> "$all_ips"
+          fi
+          
+          # Source 5: Alternative CSV export from rueckgr.at
+          echo "=== Fetching exit nodes CSV from rueckgr.at ==="
+          if fetch_with_retry "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" "$temp_dir/tor_rueckgr_exit.csv"; then
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' "$temp_dir/tor_rueckgr_exit.csv" >> "$all_ips"
           fi
           
           # Source 5: Dan.me.uk TOR exit list
           echo "=== Fetching from Dan.me.uk ==="
           if fetch_with_retry "https://www.dan.me.uk/torlist/" "$temp_dir/tor_dan.txt"; then
-            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$' "$temp_dir/tor_dan.txt" >> "$all_ips"
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+          
+          # Process and deduplicate the collected IPs
+          if [ -s "$all_ips" ]; then
+            echo "=== Processing collected data ==="
+            
+            # Remove duplicates, sort, and validate IPs
+            sort "$all_ips" | uniq > "$temp_dir/unique_ips.txt"
+            
+            # Additional validation - ensure IPs are valid
+            while IFS= read -r ip; do
+              if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                # Check each octet is 0-255
+                IFS='.' read -ra octets <<< "$ip"
+                valid=true
+                for octet in "${octets[@]}"; do
+                  if (( octet > 255 )); then
+                    valid=false
+                    break
+                  fi
+                done
+                if [ "$valid" = true ]; then
+                  echo "$ip" >> "$temp_dir/validated_ips.txt"
+                fi
+              fi
+            done < "$temp_dir/unique_ips.txt"
+            
+            if [ -s "$temp_dir/validated_ips.txt" ]; then
+              total_ips=$(wc -l < "$temp_dir/validated_ips.txt")
+              echo "Found $total_ips unique TOR exit node IPs"
+              
+              # Create JSON output with metadata
+              {
+                echo '{'
+                echo '  "metadata": {'
+                echo '    "source": "Multiple TOR sources",'
+                echo '    "sources": ['
+                echo '      "https://check.torproject.org/torbulkexitlist",'
+                echo '      "https://collector.torproject.org/recent/exit-lists/",'
+                echo '      "https://onionoo.torproject.org/details?flag=Exit",'
+                echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_query_EXPORT.csv",'
+                echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",'
+                echo '      "https://www.dan.me.uk/torlist/",'
+                echo '      "https://api.hackertarget.com/torexit/?q=list"'
+                echo '    ],'
+                echo "    \"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+                echo "    \"count\": $total_ips"
+                echo '  },'
+                echo '  "TorExitNodes": ['
+              } > ExternalData/TorExitNodes.json
+              
+              # Add IPs to JSON (with proper comma handling)
+              first=true
+              while IFS= read -r ip; do
+                if [ "$first" = true ]; then
+                  echo "    \"$ip\"" >> ExternalData/TorExitNodes.json
+                  first=false
+                else
+                  echo "    ,\"$ip\"" >> ExternalData/TorExitNodes.json
+                fi
+              done < "$temp_dir/validated_ips.txt"
+              
+              echo "  ]" >> ExternalData/TorExitNodes.json
+              echo "}" >> ExternalData/TorExitNodes.json
+              
+              # Create CSV output
+              {
+                echo "ExitIP,Country,City,Source"
+                while IFS= read -r ip; do
+                  echo "$ip,,,Multiple Sources"
+                done < "$temp_dir/validated_ips.txt"
+              } > ExternalData/TorExitNodes.csv
+              
+              echo "Successfully created TorExitNodes.json and TorExitNodes.csv with $total_ips IPs"
+            else
+              echo "No valid IPs found after validation"
+              exit 1
+            fi
+          else
+            echo "No data collected from any source"
+            exit 1
+          fi
+          
+          # Cleanup
+          rm -rf "$temp_dir"
+      
+      - name: Commit updated data to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease' "$temp_dir/tor_dan.txt" >> "$all_ips"
+          fi
+          
+          # Source 6: HackerTarget TOR exit nodes
+          echo "=== Fetching from HackerTarget ==="
+          if fetch_with_retry "https://api.hackertarget.com/torexit/?q=list" "$temp_dir/tor_hackertarget.txt"; then
+            grep -E '^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}
+          
+          # Process and deduplicate the collected IPs
+          if [ -s "$all_ips" ]; then
+            echo "=== Processing collected data ==="
+            
+            # Remove duplicates, sort, and validate IPs
+            sort "$all_ips" | uniq > "$temp_dir/unique_ips.txt"
+            
+            # Additional validation - ensure IPs are valid
+            while IFS= read -r ip; do
+              if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                # Check each octet is 0-255
+                IFS='.' read -ra octets <<< "$ip"
+                valid=true
+                for octet in "${octets[@]}"; do
+                  if (( octet > 255 )); then
+                    valid=false
+                    break
+                  fi
+                done
+                if [ "$valid" = true ]; then
+                  echo "$ip" >> "$temp_dir/validated_ips.txt"
+                fi
+              fi
+            done < "$temp_dir/unique_ips.txt"
+            
+            if [ -s "$temp_dir/validated_ips.txt" ]; then
+              total_ips=$(wc -l < "$temp_dir/validated_ips.txt")
+              echo "Found $total_ips unique TOR exit node IPs"
+              
+              # Create JSON output with metadata
+              {
+                echo '{'
+                echo '  "metadata": {'
+                echo '    "source": "Multiple TOR sources",'
+                echo '    "sources": ['
+                echo '      "https://check.torproject.org/torbulkexitlist",'
+                echo '      "https://collector.torproject.org/recent/exit-lists/",'
+                echo '      "https://onionoo.torproject.org/details?flag=Exit",'
+                echo '      "https://torstatus.blutmagie.de/ip_list_exit.php/Tor_ip_list_EXIT.csv",'
+                echo '      "https://www.dan.me.uk/torlist/"'
+                echo '    ],'
+                echo "    \"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+                echo "    \"count\": $total_ips"
+                echo '  },'
+                echo '  "TorExitNodes": ['
+              } > ExternalData/TorExitNodes.json
+              
+              # Add IPs to JSON (with proper comma handling)
+              first=true
+              while IFS= read -r ip; do
+                if [ "$first" = true ]; then
+                  echo "    \"$ip\"" >> ExternalData/TorExitNodes.json
+                  first=false
+                else
+                  echo "    ,\"$ip\"" >> ExternalData/TorExitNodes.json
+                fi
+              done < "$temp_dir/validated_ips.txt"
+              
+              echo "  ]" >> ExternalData/TorExitNodes.json
+              echo "}" >> ExternalData/TorExitNodes.json
+              
+              # Also create a simple text list
+              cp "$temp_dir/validated_ips.txt" ExternalData/TorExitNodes.txt
+              
+              echo "Successfully created TorExitNodes.json and TorExitNodes.txt with $total_ips IPs"
+            else
+              echo "No valid IPs found after validation"
+              exit 1
+            fi
+          else
+            echo "No data collected from any source"
+            exit 1
+          fi
+          
+          # Cleanup
+          rm -rf "$temp_dir"
+      
+      - name: Commit updated data to repo
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          commit_user_name: 'TOR Exit Node Updater'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease' "$temp_dir/tor_hackertarget.txt" >> "$all_ips"
           fi
           
           # Process and deduplicate the collected IPs
