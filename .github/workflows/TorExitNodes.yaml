@@ -156,24 +156,22 @@ jobs:
               echo "Found $total_ips unique TOR exit node IPs"
               
               # Create JSON output with metadata
-              {
-                echo '{'
-                echo '  "metadata": {'
-                echo '    "source": "Multiple TOR sources",'
-                echo '    "sources": ['
-                echo '      "https://check.torproject.org/torbulkexitlist",'
-                echo '      "https://collector.torproject.org/recent/exit-lists/",'
-                echo '      "https://onionoo.torproject.org/details?flag=Exit",'
-                echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_query_EXPORT.csv",'
-                echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",'
-                echo '      "https://www.dan.me.uk/torlist/",'
-                echo '      "https://api.hackertarget.com/torexit/?q=list"'
-                echo '    ],'
-                echo "    \"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
-                echo "    \"count\": $total_ips"
-                echo '  },'
-                echo '  "TorExitNodes": ['
-              } > ExternalData/TorExitNodes.json
+              echo '{' > ExternalData/TorExitNodes.json
+              echo '  "metadata": {' >> ExternalData/TorExitNodes.json
+              echo '    "source": "Multiple TOR sources",' >> ExternalData/TorExitNodes.json
+              echo '    "sources": [' >> ExternalData/TorExitNodes.json
+              echo '      "https://check.torproject.org/torbulkexitlist",' >> ExternalData/TorExitNodes.json
+              echo '      "https://collector.torproject.org/recent/exit-lists/",' >> ExternalData/TorExitNodes.json
+              echo '      "https://onionoo.torproject.org/details?flag=Exit",' >> ExternalData/TorExitNodes.json
+              echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_query_EXPORT.csv",' >> ExternalData/TorExitNodes.json
+              echo '      "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv",' >> ExternalData/TorExitNodes.json
+              echo '      "https://www.dan.me.uk/torlist/",' >> ExternalData/TorExitNodes.json
+              echo '      "https://api.hackertarget.com/torexit/?q=list"' >> ExternalData/TorExitNodes.json
+              echo '    ],' >> ExternalData/TorExitNodes.json
+              echo "    \"updated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"," >> ExternalData/TorExitNodes.json
+              echo "    \"count\": $total_ips" >> ExternalData/TorExitNodes.json
+              echo '  },' >> ExternalData/TorExitNodes.json
+              echo '  "TorExitNodes": [' >> ExternalData/TorExitNodes.json
               
               # Add IPs to JSON using a simpler approach
               while IFS= read -r ip; do
