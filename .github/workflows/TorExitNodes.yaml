@@ -25,9 +25,9 @@ jobs:
           echo "Fetching TOR bulk exit list..."
           if curl -s "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt; then
             lines=$(wc -l < tor_bulk.txt)
-            echo "✅ TOR bulk list: $lines lines"
+            echo "SUCCESS: TOR bulk list - $lines lines"
           else
-            echo "❌ Failed to fetch TOR bulk list"
+            echo "FAILED: TOR bulk list"
           fi
       
       - name: Fetch TOR Onionoo API data
@@ -35,9 +35,9 @@ jobs:
           echo "Fetching TOR Onionoo API data..."
           if curl -s "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json; then
             size=$(wc -c < tor_onionoo.json)
-            echo "✅ TOR Onionoo API: $size bytes"
+            echo "SUCCESS: TOR Onionoo API - $size bytes"
           else
-            echo "❌ Failed to fetch TOR Onionoo data"
+            echo "FAILED: TOR Onionoo data"
           fi
       
       - name: Fetch TorStatus rueckgr.at data
@@ -45,9 +45,9 @@ jobs:
           echo "Fetching TorStatus rueckgr.at data..."
           if curl -s "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv; then
             lines=$(wc -l < tor_rueckgr.csv)
-            echo "✅ TorStatus rueckgr.at: $lines lines"
+            echo "SUCCESS: TorStatus rueckgr.at - $lines lines"
           else
-            echo "❌ Failed to fetch TorStatus rueckgr.at data"
+            echo "FAILED: TorStatus rueckgr.at data"
           fi
       
       - name: Fetch Dan.me.uk list
@@ -55,9 +55,9 @@ jobs:
           echo "Fetching Dan.me.uk list..."
           if curl -s "https://www.dan.me.uk/torlist/" > tor_dan.txt; then
             lines=$(wc -l < tor_dan.txt)
-            echo "✅ Dan.me.uk: $lines lines"
+            echo "SUCCESS: Dan.me.uk - $lines lines"
           else
-            echo "❌ Failed to fetch Dan.me.uk data"
+            echo "FAILED: Dan.me.uk data"
           fi
       
       - name: Fetch HackerTarget list
@@ -65,9 +65,9 @@ jobs:
           echo "Fetching HackerTarget list..."
           if curl -s "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt; then
             lines=$(wc -l < tor_hackertarget.txt)
-            echo "✅ HackerTarget: $lines lines"
+            echo "SUCCESS: HackerTarget - $lines lines"
           else
-            echo "❌ Failed to fetch HackerTarget data"
+            echo "FAILED: HackerTarget data"
           fi
       
       - name: Process and combine data
