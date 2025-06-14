@@ -356,11 +356,23 @@ jobs:
         run: |
           echo "=== TOR Exit Node Statistics ==="
           echo "Top 20 countries by exit node count:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -20
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^
+      
+      - name: Cleanup
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with MaxMind geolocation"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -20
           
           echo ""
           echo "Data sources breakdown:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f6 | sort | uniq -c | sort -nr
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f10 | sort | uniq -c | sort -nr
           
           echo ""
           echo "Total unique exit nodes: $(tail -n +2 ExternalData/TorExitNodes.csv | wc -l)"
@@ -368,7 +380,35 @@ jobs:
           
           echo ""
           echo "Top 10 cities by exit node count:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f4 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f4 | grep -v '^
+      
+      - name: Cleanup
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with MaxMind geolocation"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -10
+          
+          echo ""
+          echo "Top 10 regions by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f5 | grep -v '^
+      
+      - name: Cleanup
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
+      
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update TOR exit nodes with MaxMind geolocation"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -10
       
       - name: Cleanup
         run: |
