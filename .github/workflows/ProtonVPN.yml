@@ -92,58 +92,77 @@ jobs:
               soup = BeautifulSoup(html_content, 'html.parser')
               servers = []
               
-              # Find the Plus section
-              plus_section = soup.find('div', {'id': 'plus'}) or soup.find('h2', string='Plus')
-              if plus_section:
-                  plus_section = plus_section.find_parent() if plus_section.find_parent() else plus_section
+              # Get all text content and parse it line by line
+              text = soup.get_text()
+              lines = text.split('\n')
               
-              if not plus_section:
-                  # Try to find the section by looking for the Plus heading
-                  for heading in soup.find_all(['h1', 'h2', 'h3']):
-                      if 'Plus' in heading.get_text():
-                          plus_section = heading.find_parent()
-                          break
+              # Find the start of Plus section
+              plus_start = -1
+              secure_core_start = -1
               
-              if plus_section:
-                  # Look for country entries in the Plus section
-                  country_blocks = plus_section.find_all(['div', 'section'], class_=lambda x: x and ('country' in x.lower() or 'server' in x.lower()))
+              for i, line in enumerate(lines):
+                  line = line.strip()
+                  if line == 'Plus' and i > 0:
+                      plus_start = i
+                  elif 'Secure Core' in line and plus_start > -1:
+                      secure_core_start = i
+                      break
+              
+              if plus_start == -1:
+                  print("Could not find Plus section")
+                  return servers
+              
+              # Process lines in the Plus section
+              end_index = secure_core_start if secure_core_start > -1 else len(lines)
+              plus_lines = lines[plus_start:end_index]
+              
+              current_country = None
+              current_features = []
+              
+              for line in plus_lines:
+                  line = line.strip()
+                  if not line:
+                      continue
                   
-                  if not country_blocks:
-                      # Alternative approach: find all text that looks like country entries
-                      text = plus_section.get_text()
-                      lines = text.split('\n')
-                      
-                      current_country = None
+                  # Skip known headers and descriptions
+                  skip_lines = [
+                      'Plus', 'Proton VPN has', 'Only users with', 'Streaming support',
+                      'Access your streaming', 'NetShield Ad-blocker', 'NetShield protects',
+                      'P2P/BitTorrent support', 'Support for file', 'Tor over VPN',
+                      'Route your internet', 'Fastest speed', 'Plus servers give',
+                      'Get Proton VPN Plus'
+                  ]
+                  
+                  if any(skip in line for skip in skip_lines):
+                      continue
+                  
+                  # Check if this line contains server count info
+                  if re.search(r'\d+\s+servers?\s*\|\s*\d+\s+cit(?:y|ies)', line):
+                      if current_country:
+                          server_count, city_count = parse_server_count(line)
+                          if server_count > 0:  # Only add if we found servers
+                              servers.append({
+                                  'country': current_country,
+                                  'server_count': server_count,
+                                  'city_count': city_count,
+                                  'features': current_features.copy(),
+                                  'server_type': 'Plus'
+                              })
                       current_features = []
-                      
-                      for line in lines:
-                          line = line.strip()
-                          if not line:
-                              continue
-                          
-                          # Check if this line contains server count info
-                          if re.search(r'\d+\s+servers?\s*\|\s*\d+\s+cit(?:y|ies)', line):
-                              if current_country:
-                                  server_count, city_count = parse_server_count(line)
-                                  servers.append({
-                                      'country': current_country,
-                                      'server_count': server_count,
-                                      'city_count': city_count,
-                                      'features': current_features.copy(),
-                                      'server_type': 'Plus'
-                                  })
-                              current_features = []
-                              current_country = None
-                          # Check if this line is a feature
-                          elif line.startswith('- ') or line.startswith('•'):
-                              feature = line.lstrip('- •').strip()
-                              if feature and feature not in ['Adblocker (NetShield)', 'Up to 10Gbps connectivity']:
-                                  current_features.append(feature)
-                          # Check if this might be a country name
-                          elif not line.startswith('-') and not line.startswith('•') and len(line) > 2:
-                              # Country names typically don't contain numbers or special chars
-                              if not re.search(r'\d+|[<>{}]', line) and line not in ['Plus', 'Streaming support', 'NetShield Ad-blocker', 'P2P/BitTorrent support', 'Tor over VPN', 'Fastest speed (up to 10 Gbps)']:
-                                  current_country = line
+                      current_country = None
+                  # Check if this line is a feature
+                  elif line.startswith('- ') or line.startswith('•'):
+                      feature = line.lstrip('- •').strip()
+                      if feature and feature not in ['Adblocker (NetShield)', 'Up to 10Gbps connectivity']:
+                          current_features.append(feature)
+                  # Check if this might be a country name
+                  elif (not line.startswith('-') and not line.startswith('•') and 
+                        len(line) > 2 and len(line) < 30 and
+                        not re.search(r'\d+|[<>{}@#$%^&*()+=]', line) and
+                        line not in ['Plus', 'Streaming support', 'NetShield Ad-blocker', 
+                                   'P2P/BitTorrent support', 'Tor over VPN', 'Fastest speed']):
+                      # This looks like a country name
+                      current_country = line
               
               print(f"Found {len(servers)} Plus servers")
               return servers
@@ -153,36 +172,347 @@ jobs:
               soup = BeautifulSoup(html_content, 'html.parser')
               servers = []
               
+              # Get all text content and parse it line by line
+              text = soup.get_text()
+              lines = text.split('\n')
+              
               # Find the Secure Core section
-              secure_core_section = soup.find('div', {'id': 'secure-core'}) or soup.find('h2', string='Secure Core')
-              if secure_core_section:
-                  secure_core_section = secure_core_section.find_parent() if secure_core_section.find_parent() else secure_core_section
+              secure_core_start = -1
               
-              if not secure_core_section:
-                  # Try to find the section by looking for the Secure Core heading
-                  for heading in soup.find_all(['h1', 'h2', 'h3']):
-                      if 'Secure Core' in heading.get_text():
-                          secure_core_section = heading.find_parent()
-                          break
+              for i, line in enumerate(lines):
+                  line = line.strip()
+                  if 'Secure Core' in line and 'Proton VPN operates' in lines[i+1:i+3]:
+                      secure_core_start = i
+                      break
               
-              if secure_core_section:
-                  # Look for country entries in the Secure Core section
-                  text = secure_core_section.get_text()
-                  lines = text.split('\n')
+              if secure_core_start == -1:
+                  print("Could not find Secure Core section")
+                  return servers
+              
+              # Process lines in the Secure Core section
+              secure_core_lines = lines[secure_core_start:]
+              
+              current_country = None
+              current_features = []
+              
+              for line in secure_core_lines:
+                  line = line.strip()
+                  if not line:
+                      continue
                   
-                  current_country = None
-                  current_features = []
+                  # Skip known headers and descriptions
+                  skip_lines = [
+                      'Secure Core', 'Proton VPN operates', 'Secure Core routes',
+                      'Secure Core servers and networks', 'Learn More'
+                  ]
                   
-                  for line in lines:
-                      line = line.strip()
-                      if not line:
-                          continue
+                  if any(skip in line for skip in skip_lines):
+                      continue
+                  
+                  # Check if this line contains server count info for Secure Core (format: "X servers" or "X server")
+                  if re.search(r'\d+\s+servers?
+          
+          def main():
+              print("Starting Proton VPN server data scraping...")
+              
+              # URLs to scrape
+              urls = [
+                  'https://protonvpn.com/vpn-servers#plus',
+                  'https://protonvpn.com/vpn-servers#secure-core'
+              ]
+              
+              all_servers = []
+              
+              for url in urls:
+                  try:
+                      html_content = fetch_page_with_retry(url)
                       
-                      # Check if this line contains server count info
-                      if re.search(r'\d+\s+servers?$', line):
-                          if current_country:
-                              server_match = re.search(r'(\d+)\s+servers?', line)
-                              server_count = int(server_match.group(1)) if server_match else 0
+                      if '#plus' in url:
+                          servers = scrape_plus_servers(html_content)
+                      else:
+                          servers = scrape_secure_core_servers(html_content)
+                      
+                      all_servers.extend(servers)
+                      
+                  except Exception as e:
+                      print(f"Error scraping {url}: {e}")
+                      continue
+              
+              if not all_servers:
+                  print("No server data found. Attempting alternative parsing...")
+                  
+                  # Try scraping the main page without fragments
+                  try:
+                      html_content = fetch_page_with_retry('https://protonvpn.com/vpn-servers')
+                      soup = BeautifulSoup(html_content, 'html.parser')
+                      
+                      # Save HTML for debugging
+                      with open('debug_page.html', 'w', encoding='utf-8') as f:
+                          f.write(html_content)
+                      print("Saved HTML content to debug_page.html for analysis")
+                      
+                      # Extract all text and look for patterns
+                      text = soup.get_text()
+                      
+                      # More aggressive pattern matching
+                      lines = text.split('\n')
+                      
+                      # Look for the pattern: Country name followed by features, then server count
+                      current_country = None
+                      for i, line in enumerate(lines):
+                          line = line.strip()
+                          
+                          # Pattern 1: Country name followed by server count in subsequent lines
+                          if (len(line) > 2 and len(line) < 50 and 
+                              not re.search(r'\d+|[<>{}@#$%^&*()+=]', line) and
+                              not line.startswith('-') and not line.startswith('•')):
+                              
+                              # Look ahead for server count in next few lines
+                              for j in range(1, 5):
+                                  if i + j < len(lines):
+                                      next_line = lines[i + j].strip()
+                                      server_match = re.search(r'(\d+)\s+servers?\s*(?:\|\s*(\d+)\s+cit(?:y|ies))?', next_line)
+                                      if server_match:
+                                          server_count = int(server_match.group(1))
+                                          city_count = int(server_match.group(2)) if server_match.group(2) else 1
+                                          
+                                          # Determine server type based on context
+                                          context_lines = ' '.join(lines[max(0, i-5):i+j+1])
+                                          server_type = 'Secure Core' if 'Secure Core' in context_lines else 'Plus'
+                                          
+                                          all_servers.append({
+                                              'country': line,
+                                              'server_count': server_count,
+                                              'city_count': city_count,
+                                              'features': [],
+                                              'server_type': server_type
+                                          })
+                                          break
+                      
+                      # Remove duplicates
+                      seen = set()
+                      unique_servers = []
+                      for server in all_servers:
+                          key = (server['country'], server['server_type'])
+                          if key not in seen:
+                              seen.add(key)
+                              unique_servers.append(server)
+                      
+                      all_servers = unique_servers
+                      print(f"Found {len(all_servers)} servers using pattern matching")
+                      
+                      # If still no results, try even more aggressive regex patterns
+                      if not all_servers:
+                          print("Trying aggressive regex patterns...")
+                          
+                          # Pattern for "Country\nX servers | Y cities"
+                          country_server_pattern = r'([A-Za-z\s&\-\'()]+)\n(?:[^\n]*\n)*?(\d+)\s+servers?\s*(?:\|\s*(\d+)\s+cit(?:y|ies))?'
+                          matches = re.findall(country_server_pattern, text, re.MULTILINE | re.DOTALL)
+                          
+                          for match in matches:
+                              country, server_count, city_count = match
+                              country = country.strip()
+                              if country and len(country) < 50 and server_count:
+                                  all_servers.append({
+                                      'country': country,
+                                      'server_count': int(server_count),
+                                      'city_count': int(city_count) if city_count else 1,
+                                      'features': [],
+                                      'server_type': 'Plus'
+                                  })
+                          
+                          print(f"Aggressive regex found {len(all_servers)} additional servers")
+                      
+                  except Exception as e:
+                      print(f"Alternative parsing also failed: {e}")
+                      import traceback
+                      traceback.print_exc()
+              
+              # Create the final data structure
+              total_plus_servers = sum(s['server_count'] for s in all_servers if s['server_type'] == 'Plus')
+              total_secure_core_servers = sum(s['server_count'] for s in all_servers if s['server_type'] == 'Secure Core')
+              
+              data = {
+                  'metadata': {
+                      'source': 'Proton VPN Website Scraper',
+                      'scraped_at': datetime.now(timezone.utc).isoformat(),
+                      'total_plus_servers': total_plus_servers,
+                      'total_secure_core_servers': total_secure_core_servers,
+                      'total_countries': len(set(s['country'] for s in all_servers)),
+                      'scraping_method': 'BeautifulSoup HTML parsing'
+                  },
+                  'servers': all_servers
+              }
+              
+              # Save to JSON
+              with open('ExternalData/ProtonVPNServers.json', 'w') as f:
+                  json.dump(data, f, indent=2)
+              
+              # Create CSV
+              import csv
+              with open('ExternalData/ProtonVPNServers.csv', 'w', newline='', encoding='utf-8') as f:
+                  writer = csv.writer(f)
+                  writer.writerow(['Country', 'ServerType', 'ServerCount', 'CityCount', 'Features'])
+                  
+                  for server in all_servers:
+                      writer.writerow([
+                          server['country'],
+                          server['server_type'],
+                          server['server_count'],
+                          server['city_count'],
+                          '; '.join(server['features'])
+                      ])
+              
+              print(f"\n=== Scraping Complete ===")
+              print(f"Total servers found: {len(all_servers)}")
+              print(f"Plus servers: {total_plus_servers} across {len([s for s in all_servers if s['server_type'] == 'Plus'])} countries")
+              print(f"Secure Core servers: {total_secure_core_servers} across {len([s for s in all_servers if s['server_type'] == 'Secure Core'])} countries")
+              print(f"Data saved to ExternalData/ProtonVPNServers.json and .csv")
+          
+          if __name__ == "__main__":
+              main()
+          EOF
+      
+      - name: Generate statistics
+        run: |
+          echo "=== Proton VPN Server Statistics ==="
+          
+          if [ -f "ExternalData/ProtonVPNServers.csv" ]; then
+            echo "Total entries: $(tail -n +2 ExternalData/ProtonVPNServers.csv | wc -l)"
+            
+            echo ""
+            echo "Server type breakdown:"
+            tail -n +2 ExternalData/ProtonVPNServers.csv | cut -d',' -f2 | sort | uniq -c | sort -nr
+            
+            echo ""
+            echo "Top 20 countries by server count:"
+            tail -n +2 ExternalData/ProtonVPNServers.csv | awk -F',' '{print $3 "," $1}' | sort -t',' -k1 -nr | head -20
+            
+            echo ""
+            echo "Countries with Secure Core servers:"
+            grep "Secure Core" ExternalData/ProtonVPNServers.csv | cut -d',' -f1 | sort
+            
+            echo ""
+            echo "Total server count by type:"
+            tail -n +2 ExternalData/ProtonVPNServers.csv | awk -F',' '{
+              if ($2 == "Plus") plus += $3;
+              if ($2 == "Secure Core") secure += $3;
+            } END {
+              print "Plus servers: " plus;
+              print "Secure Core servers: " secure;
+              print "Total: " (plus + secure)
+            }'
+          else
+            echo "No CSV file found - scraping may have failed"
+          fi
+      
+      - name: Debug scraping (if needed)
+        if: failure()
+        run: |
+          echo "=== Debug Information ==="
+          echo "Checking if debug files exist..."
+          
+          if [ -f "debug_page.html" ]; then
+            echo "HTML file size: $(wc -c < debug_page.html) bytes"
+            echo ""
+            echo "First 500 characters of page:"
+            head -c 500 debug_page.html
+            echo ""
+            echo ""
+            echo "Looking for country patterns in HTML:"
+            grep -i -E "(afghanistan|albania|algeria|australia|austria|belgium)" debug_page.html | head -5 || echo "No country patterns found"
+            echo ""
+            echo "Looking for server count patterns:"
+            grep -E "\d+\s+servers?" debug_page.html | head -5 || echo "No server patterns found"
+          else
+            echo "No debug HTML file found"
+          fi
+          
+          echo ""
+          echo "Current directory contents:"
+          ls -la
+          
+          echo ""
+          echo "ExternalData directory:"
+          ls -la ExternalData/ || echo "ExternalData directory not found"
+        run: |
+          python3 << 'EOF'
+          import json
+          import sys
+          
+          try:
+              with open('ExternalData/ProtonVPNServers.json', 'r') as f:
+                  data = json.load(f)
+              
+              servers = data.get('servers', [])
+              metadata = data.get('metadata', {})
+              
+              print(f"Validation Results:")
+              print(f"- Valid JSON: ✓")
+              print(f"- Total entries: {len(servers)}")
+              print(f"- Metadata present: {'✓' if metadata else '✗'}")
+              
+              if len(servers) == 0:
+                  print("❌ No servers found - scraping failed")
+                  sys.exit(1)
+              
+              # Check for required fields
+              required_fields = ['country', 'server_count', 'server_type']
+              for i, server in enumerate(servers[:5]):  # Check first 5
+                  missing = [field for field in required_fields if field not in server]
+                  if missing:
+                      print(f"❌ Missing fields in entry {i}: {missing}")
+                      sys.exit(1)
+              
+              print(f"✓ Data validation passed")
+              print(f"Sample entry: {servers[0] if servers else 'None'}")
+              
+          except Exception as e:
+              print(f"❌ Validation failed: {e}")
+              sys.exit(1)
+          EOF
+      
+      - name: Commit and push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update Proton VPN servers data - $(date -u '+%Y-%m-%d %H:%M UTC')"
+          file_pattern: 'ExternalData/ProtonVPNServers.*'
+          commit_user_name: 'Proton VPN Scraper'
+          commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease'
+      
+      - name: Create summary
+        run: |
+          echo "## Proton VPN Server Scraping Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "ExternalData/ProtonVPNServers.json" ]; then
+            echo "✅ **Scraping Successful**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Get metadata from JSON
+            python3 -c "
+          import json
+          with open('ExternalData/ProtonVPNServers.json', 'r') as f:
+              data = json.load(f)
+          
+          metadata = data['metadata']
+          servers = data['servers']
+          
+          print(f'- **Total Countries:** {metadata.get(\"total_countries\", \"N/A\")}')
+          print(f'- **Plus Servers:** {metadata.get(\"total_plus_servers\", \"N/A\")}')
+          print(f'- **Secure Core Servers:** {metadata.get(\"total_secure_core_servers\", \"N/A\")}')
+          print(f'- **Scraped At:** {metadata.get(\"scraped_at\", \"N/A\")}')
+          print(f'- **Total Entries:** {len(servers)}')
+          " >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Scraping Failed**" >> $GITHUB_STEP_SUMMARY
+            echo "No data files were created." >> $GITHUB_STEP_SUMMARY
+          fi, line):
+                      if current_country:
+                          server_match = re.search(r'(\d+)\s+servers?', line)
+                          server_count = int(server_match.group(1)) if server_match else 0
+                          if server_count > 0:
                               servers.append({
                                   'country': current_country,
                                   'server_count': server_count,
@@ -190,18 +520,20 @@ jobs:
                                   'features': current_features.copy() + ['Secure Core'],
                                   'server_type': 'Secure Core'
                               })
-                          current_features = []
-                          current_country = None
-                      # Check if this line is a feature
-                      elif line.startswith('- ') or line.startswith('•'):
-                          feature = line.lstrip('- •').strip()
-                          if feature and feature not in ['Adblocker (NetShield)']:
-                              current_features.append(feature)
-                      # Check if this might be a country name
-                      elif not line.startswith('-') and not line.startswith('•') and len(line) > 2:
-                          # Country names typically don't contain numbers or special chars
-                          if not re.search(r'\d+|[<>{}]', line) and line not in ['Secure Core', 'Learn More']:
-                              current_country = line
+                      current_features = []
+                      current_country = None
+                  # Check if this line is a feature
+                  elif line.startswith('- ') or line.startswith('•'):
+                      feature = line.lstrip('- •').strip()
+                      if feature and feature not in ['Adblocker (NetShield)']:
+                          current_features.append(feature)
+                  # Check if this might be a country name
+                  elif (not line.startswith('-') and not line.startswith('•') and 
+                        len(line) > 2 and len(line) < 30 and
+                        not re.search(r'\d+|[<>{}@#$%^&*()+=]', line) and
+                        line not in ['Secure Core', 'Learn More']):
+                      # This looks like a country name
+                      current_country = line
               
               print(f"Found {len(servers)} Secure Core servers")
               return servers
