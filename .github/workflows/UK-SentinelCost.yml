@@ -1,4 +1,4 @@
-name: Pull external data source Sentinel UK prices
+name: Pull external data source Sentinel All prices
 
 on:
   workflow_dispatch:
@@ -20,106 +20,149 @@ jobs:
       - name: Create directory if not exists
         run: mkdir -p ExternalData
       
-      - name: Fetch Microsoft Sentinel Prices and create CSV
+      - name: Fetch Microsoft Sentinel Prices in GBP, USD, and EUR
         run: |
-          echo "Fetching Microsoft Sentinel pricing data..."
+          echo "Fetching Microsoft Sentinel pricing data for multiple currencies..."
           
-          # Define the API URL with proper encoding
+          # Define currencies and API details
+          currencies=("GBP" "USD" "EUR")
           api_url="https://prices.azure.com/api/retail/prices"
-          filter_param="productName eq 'Sentinel' and (location eq 'UK South' or location eq 'UK West')"
-          currency="GBP"
+          filter_param="productName eq 'Sentinel'"
           
-          # Add retry logic for rate limiting
-          max_attempts=5
-          attempt=1
+          # Create temporary files for each currency
+          temp_dir=$(mktemp -d)
+          all_items_file="$temp_dir/all_items.json"
+          echo '[]' > "$all_items_file"
           
-          while [ $attempt -le $max_attempts ]; do
-            echo "Attempt $attempt of $max_attempts..."
+          # Function to fetch data for a currency with retry logic
+          fetch_currency_data() {
+            local currency=$1
+            local max_attempts=5
+            local attempt=1
             
-            # Use curl with proper URL encoding
-            response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
-              -H "User-Agent: SentinelPriceMonitor/1.0" \
-              -H "Accept: application/json" \
-              -G \
-              --data-urlencode "currencyCode=$currency" \
-              --data-urlencode "\$filter=$filter_param" \
-              "$api_url" 2>&1)
+            echo "Fetching data for $currency..."
             
-            # Check if curl succeeded
-            if [ $? -ne 0 ]; then
-              echo "Curl failed: $response"
-              if [ $attempt -lt $max_attempts ]; then
-                sleep_time=$((10 * attempt))
-                echo "Waiting ${sleep_time} seconds before retry..."
-                sleep $sleep_time
-                attempt=$((attempt + 1))
-                continue
-              else
-                echo "Failed after $max_attempts attempts"
-                exit 1
+            while [ $attempt -le $max_attempts ]; do
+              echo "  Attempt $attempt of $max_attempts for $currency..."
+              
+              # Use curl with proper URL encoding and rate limiting
+              response=$(curl -s -w "HTTPSTATUS:%{http_code}" \
+                -H "User-Agent: SentinelPriceMonitor/1.0" \
+                -H "Accept: application/json" \
+                -G \
+                --data-urlencode "currencyCode=$currency" \
+                --data-urlencode "\$filter=$filter_param" \
+                "$api_url" 2>&1)
+              
+              # Check if curl succeeded
+              if [ $? -ne 0 ]; then
+                echo "  Curl failed for $currency: $response"
+                if [ $attempt -lt $max_attempts ]; then
+                  sleep_time=$((15 * attempt))
+                  echo "  Waiting ${sleep_time} seconds before retry..."
+                  sleep $sleep_time
+                  attempt=$((attempt + 1))
+                  continue
+                else
+                  echo "  Failed to fetch $currency after $max_attempts attempts"
+                  return 1
+                fi
               fi
-            fi
+              
+              # Extract HTTP status and body
+              if echo "$response" | grep -q "HTTPSTATUS:"; then
+                http_code=$(echo "$response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
+                json_data=$(echo "$response" | sed 's/HTTPSTATUS:[0-9]*$//')
+              else
+                echo "  No HTTP status found in response for $currency"
+                return 1
+              fi
+              
+              echo "  HTTP Status for $currency: $http_code"
+              
+              if [ "$http_code" = "200" ]; then
+                # Validate JSON
+                if echo "$json_data" | jq . > /dev/null 2>&1; then
+                  item_count=$(echo "$json_data" | jq '.Items | length // 0')
+                  echo "  Successfully retrieved $item_count items for $currency"
+                  
+                  # Save to temporary file
+                  echo "$json_data" | jq '.Items' > "$temp_dir/${currency}_items.json"
+                  return 0
+                else
+                  echo "  Invalid JSON response for $currency"
+                  return 1
+                fi
+              elif [ "$http_code" = "429" ]; then
+                if [ $attempt -lt $max_attempts ]; then
+                  # Longer exponential backoff for rate limiting: 60s, 120s, 240s, 480s
+                  sleep_time=$((60 * attempt))
+                  echo "  Rate limited for $currency. Waiting ${sleep_time} seconds before retry..."
+                  sleep $sleep_time
+                else
+                  echo "  Rate limit exceeded for $currency after $max_attempts attempts"
+                  return 1
+                fi
+              else
+                echo "  API error for $currency: HTTP $http_code"
+                if [ $attempt -lt $max_attempts ]; then
+                  sleep_time=$((20 * attempt))
+                  echo "  Waiting ${sleep_time} seconds before retry..."
+                  sleep $sleep_time
+                else
+                  return 1
+                fi
+              fi
+              
+              attempt=$((attempt + 1))
+            done
             
-            # Extract HTTP status and body
-            if echo "$response" | grep -q "HTTPSTATUS:"; then
-              http_code=$(echo "$response" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
-              json_data=$(echo "$response" | sed 's/HTTPSTATUS:[0-9]*$//')
+            return 1
+          }
+          
+          # Fetch data for each currency with delays between requests
+          success_count=0
+          for currency in "${currencies[@]}"; do
+            if fetch_currency_data "$currency"; then
+              success_count=$((success_count + 1))
             else
-              echo "No HTTP status found in response: $response"
-              exit 1
+              echo "Failed to fetch data for $currency"
             fi
             
-            echo "HTTP Status: $http_code"
-            
-            if [ "$http_code" = "200" ]; then
-              echo "Successfully retrieved pricing data"
-              break
-            elif [ "$http_code" = "429" ]; then
-              if [ $attempt -lt $max_attempts ]; then
-                # Exponential backoff: 30s, 60s, 120s, 240s
-                sleep_time=$((30 * attempt))
-                echo "Rate limited. Waiting ${sleep_time} seconds before retry..."
-                sleep $sleep_time
-              else
-                echo "Rate limit exceeded after $max_attempts attempts"
-                exit 1
-              fi
-            else
-              echo "API error: HTTP $http_code"
-              echo "Response sample (first 500 chars): $(echo "$json_data" | head -c 500)"
-              if [ $attempt -lt $max_attempts ]; then
-                sleep_time=$((10 * attempt))
-                echo "Waiting ${sleep_time} seconds before retry..."
-                sleep $sleep_time
-              else
-                exit 1
-              fi
+            # Add delay between currency requests to avoid rate limiting
+            if [ "$currency" != "EUR" ]; then  # Don't sleep after the last currency
+              echo "Waiting 45 seconds before next currency request..."
+              sleep 45
             fi
-            
-            attempt=$((attempt + 1))
           done
           
-          # Validate JSON response
-          if ! echo "$json_data" | jq . > /dev/null 2>&1; then
-            echo "Error: Invalid JSON response"
-            echo "Response sample: $(echo "$json_data" | head -c 1000)"
+          if [ $success_count -eq 0 ]; then
+            echo "Failed to fetch data for any currency"
             exit 1
           fi
           
-          # Check if we have items
-          item_count=$(echo "$json_data" | jq '.Items | length // 0')
-          echo "Found $item_count pricing items"
+          echo "Successfully fetched data for $success_count out of ${#currencies[@]} currencies"
           
-          if [ "$item_count" -eq 0 ]; then
-            echo "Warning: No pricing items found"
-            # Create empty files rather than failing
-            echo "skuName,unitOfMeasure,type,retailPrice,unitPrice,currencyCode,location,effectiveStartDate,meterId,meterName,skuId,productName,serviceFamily" > ExternalData/UKSentinelPrices.csv
-            echo '{"message": "No pricing data available"}' > ExternalData/UKSentinelPrices.json
-          else
-            # Convert to CSV using jq
-            echo "$json_data" | jq -r '
+          # Combine all currency data
+          echo "Combining data from all currencies..."
+          combined_items='[]'
+          
+          for currency in "${currencies[@]}"; do
+            if [ -f "$temp_dir/${currency}_items.json" ]; then
+              echo "Adding $currency data..."
+              combined_items=$(echo "$combined_items" | jq ". + $(cat "$temp_dir/${currency}_items.json")")
+            fi
+          done
+          
+          # Sort and process the combined data
+          total_items=$(echo "$combined_items" | jq 'length')
+          echo "Total combined items: $total_items"
+          
+          if [ "$total_items" -gt 0 ]; then
+            # Create CSV
+            echo "$combined_items" | jq -r '
               ["skuName","unitOfMeasure","type","retailPrice","unitPrice","currencyCode","location","effectiveStartDate","meterId","meterName","skuId","productName","serviceFamily"],
-              (.Items | sort_by(.location, .skuName)[] | 
+              (sort_by(.location, .skuName)[] | 
                 [
                   .skuName // "",
                   .unitOfMeasure // "",
@@ -136,19 +179,27 @@ jobs:
                   .serviceFamily // ""
                 ]
               ) | @csv
-            ' > ExternalData/UKSentinelPrices.csv
+            ' > ExternalData/AllSentinelPrices.csv
             
-            # Save JSON as well
-            echo "$json_data" | jq '.Items | sort_by(.location, .skuName)' > ExternalData/UKSentinelPrices.json
+            # Create JSON
+            echo "$combined_items" | jq 'sort_by(.location, .skuName)' > ExternalData/AllSentinelPrices.json
+            
+            echo "Successfully created AllSentinelPrices.csv and AllSentinelPrices.json"
+          else
+            echo "No data to process - creating empty files"
+            echo "skuName,unitOfMeasure,type,retailPrice,unitPrice,currencyCode,location,effectiveStartDate,meterId,meterName,skuId,productName,serviceFamily" > ExternalData/AllSentinelPrices.csv
+            echo '{"message": "No pricing data available"}' > ExternalData/AllSentinelPrices.json
           fi
           
+          # Cleanup
+          rm -rf "$temp_dir"
           echo "Processing completed successfully"
       
       - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Microsoft Sentinel Prices - $(date -u +%Y-%m-%d)"
-          file_pattern: 'ExternalData/UKSentinelPrices.*'
-          commit_user_name: 'Sentinel Price Updater'
+          commit_message: "Update Microsoft Sentinel All Prices - $(date -u +%Y-%m-%d)"
+          file_pattern: 'ExternalData/AllSentinelPrices.*'
+          commit_user_name: 'Sentinel All Prices Updater'
           commit_user_email: 'actions@github.com'
           push_options: '--force-with-lease'
