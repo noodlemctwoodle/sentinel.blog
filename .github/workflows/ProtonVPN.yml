@@ -1,13 +1,13 @@
-name: Scrape Proton VPN Server Data
+name: Pull Proton VPN Server Data
 
 on:
   workflow_dispatch:
   schedule:
-    # Run daily at 2 AM UTC
-    - cron: "0 2 * * *"
+    # Run daily at midnight UTC
+    - cron: "0 0 * * *"
 
 jobs:
-  scrape-protonvpn-servers:
+  pull-protonvpn-data:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,514 +15,197 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Create directory if not exists
-        run: mkdir -p ExternalData
+        shell: bash
+        run: mkdir -p ${{ github.workspace }}/ExternalData
       
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      - name: Install Python dependencies
+      - name: Fetch and process Proton VPN server data
+        id: fetch-data
+        shell: pwsh
         run: |
-          pip install requests beautifulsoup4 lxml html5lib
-      
-      - name: Scrape Proton VPN server data
-        run: |
-          python3 << 'EOF'
-          import requests
-          import json
-          import re
-          from bs4 import BeautifulSoup
-          from datetime import datetime, timezone
-          import time
-          
-          def fetch_with_retry(url, headers=None, max_retries=3):
-              """Fetch URL with retry logic"""
-              if headers is None:
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                      'Accept-Language': 'en-US,en;q=0.5',
-                      'Accept-Encoding': 'gzip, deflate',
-                      'Connection': 'keep-alive',
-                  }
+          try {
+            # Define variables
+            $apiUrl = "https://api.protonmail.ch/vpn/logicals"
+            $outputCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes.csv"
+            $backupCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes_backup.csv"
+            
+            # Backup existing file if it exists
+            if (Test-Path $outputCsvPath) {
+              Copy-Item -Path $outputCsvPath -Destination $backupCsvPath -Force
+              Write-Output "Backed up previous data file"
+            }
+            
+            # Fetch data with retry logic
+            $maxRetries = 3
+            $retryCount = 0
+            $success = $false
+            
+            while (-not $success -and $retryCount -lt $maxRetries) {
+              try {
+                Write-Output "Fetching data from $apiUrl (Attempt $($retryCount + 1))"
+                $response = Invoke-RestMethod -Uri $apiUrl -ContentType "application/json" -TimeoutSec 30
+                $success = $true
+              } catch {
+                $retryCount++
+                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
+                if ($retryCount -lt $maxRetries) {
+                  $sleepTime = 2 * $retryCount
+                  Write-Output "Waiting $sleepTime seconds before retrying..."
+                  Start-Sleep -Seconds $sleepTime
+                }
+              }
+            }
+            
+            if (-not $success) {
+              throw "Failed to fetch Proton VPN server data after $maxRetries attempts"
+            }
+            
+            # Process the data
+            $csvObjects = @()
+            $totalServers = 0
+            $activeServers = 0
+            $countryCount = @{}
+            $cityCount = @{}
+            
+            foreach ($logicalServer in $response.LogicalServers) {
+              $city = $logicalServer.City
+              $exitCountry = $logicalServer.ExitCountry
               
-              for attempt in range(max_retries):
-                  try:
-                      print(f"Fetching {url} (attempt {attempt + 1}/{max_retries})")
-                      response = requests.get(url, headers=headers, timeout=30)
-                      response.raise_for_status()
-                      return response
-                  except requests.RequestException as e:
-                      print(f"Attempt {attempt + 1} failed: {e}")
-                      if attempt < max_retries - 1:
-                          time.sleep(5)
-                      else:
-                          raise
-          
-          def extract_server_data_from_website():
-              """Extract server data from ProtonVPN website pages"""
-              print("=== Extracting Server Data from Website ===")
-              
-              pages_to_check = [
-                  'https://protonvpn.com/vpn-servers',
-                  'https://protonvpn.com/servers'
-              ]
-              
-              all_servers = []
-              
-              for url in pages_to_check:
-                  try:
-                      response = fetch_with_retry(url)
-                      soup = BeautifulSoup(response.content, 'html.parser')
-                      text = soup.get_text()
-                      
-                      print(f"📄 Processing {url}")
-                      print(f"   Page size: {len(response.content)} bytes")
-                      
-                      servers = extract_servers_from_text(text, url)
-                      if servers:
-                          all_servers.extend(servers)
-                          print(f"   ✅ Extracted {len(servers)} server entries")
-                      else:
-                          print(f"   ❌ No server data found")
-                      
-                      if 'vpn-servers' in url:
-                          with open('debug_page.html', 'w', encoding='utf-8') as f:
-                              f.write(response.text)
-                          print(f"   💾 Saved main server page for debugging")
-                      
-                  except Exception as e:
-                      print(f"❌ Failed to process {url}: {e}")
-              
-              return all_servers
-          
-          def extract_servers_from_text(text, source_url):
-              """Extract server information from text content"""
-              servers = []
-              lines = [line.strip() for line in text.split('\n') if line.strip()]
-              
-              for i, line in enumerate(lines):
-                  server_match = re.search(r'(\d+)\s+servers?\s*(?:\|\s*(\d+)\s+cit(?:y|ies))?', line)
-                  if server_match:
-                      server_count = int(server_match.group(1))
-                      city_count = int(server_match.group(2)) if server_match.group(2) else 1
-                      
-                      country = None
-                      for j in range(1, 6):
-                          if i - j >= 0:
-                              prev_line = lines[i - j].strip()
-                              if is_likely_country_name(prev_line):
-                                  country = prev_line
-                                  break
-                      
-                      if country and server_count > 0:
-                          features = []
-                          for k in range(max(0, i-5), min(len(lines), i+3)):
-                              feature_line = lines[k].strip()
-                              if feature_line.startswith('- ') or feature_line.startswith('•'):
-                                  feature = feature_line.lstrip('- •').strip()
-                                  if is_valid_feature(feature):
-                                      features.append(feature)
-                          
-                          context = ' '.join(lines[max(0, i-10):i+10])
-                          server_type = 'Secure Core' if 'secure core' in context.lower() else 'Plus'
-                          
-                          servers.append({
-                              'country': country,
-                              'server_count': server_count,
-                              'city_count': city_count,
-                              'features': features,
-                              'server_type': server_type,
-                              'source': source_url
-                          })
-              
-              return servers
-          
-          def is_likely_country_name(text):
-              """Check if text looks like a country name"""
-              if not text or len(text) < 3 or len(text) > 50:
-                  return False
-              
-              if not text[0].isupper():
-                  return False
-              
-              if not re.match(r'^[A-Za-z\s&\-\'()]+$', text):
-                  return False
-              
-              excluded = [
-                  'Plus', 'Secure Core', 'Streaming', 'Support', 'P2P', 'TOR',
-                  'NetShield', 'Adblocker', 'Learn More', 'Get Proton',
-                  'Up to', 'Gbps', 'Access', 'Route', 'Fastest'
-              ]
-              
-              return not any(term.lower() in text.lower() for term in excluded)
-          
-          def is_valid_feature(feature):
-              """Check if text is a valid server feature"""
-              if not feature or len(feature) > 30:
-                  return False
-              
-              valid_features = [
-                  'streaming support', 'streaming', 'p2p', 'tor', 'torrent',
-                  'secure core', 'netshield', 'adblocker'
-              ]
-              
-              return any(vf in feature.lower() for vf in valid_features)
-          
-          def create_manual_dataset():
-              """Create comprehensive manual dataset"""
-              print("=== Creating Comprehensive Manual Dataset ===")
-              
-              manual_data = [
-                  {'country': 'United States', 'server_count': 3188, 'city_count': 17, 'plus_servers': 3184, 'secure_core_servers': 4, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['New York', 'Los Angeles', 'Chicago', 'Miami', 'Seattle', 'Dallas', 'Atlanta', 'Phoenix', 'Denver', 'San Francisco', 'Boston', 'Las Vegas', 'Detroit', 'Portland', 'Minneapolis', 'Salt Lake City', 'Kansas City']},
-                  {'country': 'Canada', 'server_count': 849, 'city_count': 3, 'plus_servers': 846, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Toronto', 'Vancouver', 'Montreal']},
-                  {'country': 'Switzerland', 'server_count': 790, 'city_count': 1, 'plus_servers': 790, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Zurich']},
-                  {'country': 'United Kingdom', 'server_count': 553, 'city_count': 5, 'plus_servers': 550, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['London', 'Manchester', 'Edinburgh', 'Belfast', 'Cardiff']},
-                  {'country': 'Germany', 'server_count': 483, 'city_count': 2, 'plus_servers': 480, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Frankfurt', 'Berlin']},
-                  {'country': 'Netherlands', 'server_count': 432, 'city_count': 1, 'plus_servers': 432, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Amsterdam']},
-                  {'country': 'France', 'server_count': 294, 'city_count': 2, 'plus_servers': 291, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Paris', 'Marseille']},
-                  {'country': 'Australia', 'server_count': 268, 'city_count': 5, 'plus_servers': 265, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Sydney', 'Melbourne', 'Perth', 'Brisbane', 'Adelaide']},
-                  {'country': 'Sweden', 'server_count': 267, 'city_count': 1, 'plus_servers': 267, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Stockholm']},
-                  {'country': 'Venezuela', 'server_count': 119, 'city_count': 1, 'plus_servers': 119, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Caracas']},
-                  {'country': 'Spain', 'server_count': 114, 'city_count': 2, 'plus_servers': 112, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Madrid', 'Barcelona']},
-                  {'country': 'Brazil', 'server_count': 108, 'city_count': 1, 'plus_servers': 103, 'secure_core_servers': 5, 'features': ['Streaming', 'P2P'], 'cities': ['São Paulo']},
-                  {'country': 'Romania', 'server_count': 105, 'city_count': 1, 'plus_servers': 102, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Bucharest']},
-                  {'country': 'Austria', 'server_count': 104, 'city_count': 1, 'plus_servers': 103, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Vienna']},
-                  {'country': 'Denmark', 'server_count': 94, 'city_count': 1, 'plus_servers': 92, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Copenhagen']},
-                  {'country': 'Japan', 'server_count': 79, 'city_count': 2, 'plus_servers': 77, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Tokyo', 'Osaka']},
-                  {'country': 'Mexico', 'server_count': 76, 'city_count': 2, 'plus_servers': 75, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Mexico City', 'Guadalajara']},
-                  {'country': 'Italy', 'server_count': 74, 'city_count': 2, 'plus_servers': 73, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Milan', 'Rome']},
-                  {'country': 'Belgium', 'server_count': 70, 'city_count': 1, 'plus_servers': 68, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Brussels']},
-                  {'country': 'Slovenia', 'server_count': 64, 'city_count': 1, 'plus_servers': 63, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Ljubljana']},
-                  {'country': 'Ukraine', 'server_count': 64, 'city_count': 1, 'plus_servers': 63, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Kyiv']},
-                  {'country': 'Greece', 'server_count': 64, 'city_count': 1, 'plus_servers': 63, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Athens']},
-                  {'country': 'Slovakia', 'server_count': 62, 'city_count': 1, 'plus_servers': 61, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Bratislava']},
-                  {'country': 'New Zealand', 'server_count': 57, 'city_count': 1, 'plus_servers': 56, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Auckland']},
-                  {'country': 'Norway', 'server_count': 56, 'city_count': 1, 'plus_servers': 53, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Oslo']},
-                  {'country': 'Lithuania', 'server_count': 56, 'city_count': 2, 'plus_servers': 55, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Vilnius', 'Kaunas']},
-                  {'country': 'Czechia', 'server_count': 55, 'city_count': 1, 'plus_servers': 53, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Prague']},
-                  {'country': 'Russia', 'server_count': 53, 'city_count': 1, 'plus_servers': 49, 'secure_core_servers': 4, 'features': ['Streaming', 'P2P'], 'cities': ['Moscow']},
-                  {'country': 'Singapore', 'server_count': 53, 'city_count': 1, 'plus_servers': 51, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Singapore']},
-                  {'country': 'El Salvador', 'server_count': 53, 'city_count': 1, 'plus_servers': 53, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['San Salvador']},
-                  {'country': 'Azerbaijan', 'server_count': 52, 'city_count': 1, 'plus_servers': 52, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Baku']},
-                  {'country': 'Nepal', 'server_count': 52, 'city_count': 1, 'plus_servers': 52, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Kathmandu']},
-                  {'country': 'Sri Lanka', 'server_count': 52, 'city_count': 1, 'plus_servers': 52, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Colombo']},
-                  {'country': 'Ireland', 'server_count': 49, 'city_count': 1, 'plus_servers': 47, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Dublin']},
-                  {'country': 'Portugal', 'server_count': 48, 'city_count': 1, 'plus_servers': 45, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Lisbon']},
-                  {'country': 'Croatia', 'server_count': 48, 'city_count': 1, 'plus_servers': 47, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Zagreb']},
-                  {'country': 'Serbia', 'server_count': 48, 'city_count': 1, 'plus_servers': 47, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Belgrade']},
-                  {'country': 'Hong Kong SAR China', 'server_count': 42, 'city_count': 1, 'plus_servers': 40, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P', 'TOR'], 'cities': ['Hong Kong']},
-                  {'country': 'Bulgaria', 'server_count': 41, 'city_count': 1, 'plus_servers': 40, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Sofia']},
-                  {'country': 'Poland', 'server_count': 41, 'city_count': 1, 'plus_servers': 39, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Warsaw']},
-                  {'country': 'Finland', 'server_count': 41, 'city_count': 1, 'plus_servers': 39, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Helsinki']},
-                  {'country': 'Nigeria', 'server_count': 40, 'city_count': 2, 'plus_servers': 39, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Lagos', 'Abuja']},
-                  {'country': 'Luxembourg', 'server_count': 40, 'city_count': 1, 'plus_servers': 38, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Luxembourg City']},
-                  {'country': 'Malaysia', 'server_count': 36, 'city_count': 2, 'plus_servers': 35, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Kuala Lumpur', 'Penang']},
-                  {'country': 'Moldova', 'server_count': 36, 'city_count': 1, 'plus_servers': 35, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Chișinău']},
-                  {'country': 'Thailand', 'server_count': 36, 'city_count': 1, 'plus_servers': 34, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Bangkok']},
-                  {'country': 'Türkiye', 'server_count': 36, 'city_count': 1, 'plus_servers': 35, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Istanbul']},
-                  {'country': 'South Africa', 'server_count': 35, 'city_count': 1, 'plus_servers': 34, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Johannesburg']},
-                  {'country': 'Morocco', 'server_count': 33, 'city_count': 1, 'plus_servers': 33, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Casablanca']},
-                  {'country': 'India', 'server_count': 30, 'city_count': 1, 'plus_servers': 27, 'secure_core_servers': 3, 'features': ['Streaming', 'P2P'], 'cities': ['Mumbai']},
-                  {'country': 'Uzbekistan', 'server_count': 30, 'city_count': 1, 'plus_servers': 30, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Tashkent']},
-                  {'country': 'Pakistan', 'server_count': 29, 'city_count': 1, 'plus_servers': 29, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Karachi']},
-                  {'country': 'Algeria', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Algiers']},
-                  {'country': 'Chad', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['N\'Djamena']},
-                  {'country': 'Colombia', 'server_count': 28, 'city_count': 1, 'plus_servers': 26, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Bogotá']},
-                  {'country': 'Mauritania', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Nouakchott']},
-                  {'country': 'Mozambique', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Maputo']},
-                  {'country': 'Qatar', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Doha']},
-                  {'country': 'Senegal', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Dakar']},
-                  {'country': 'South Sudan', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Juba']},
-                  {'country': 'Togo', 'server_count': 28, 'city_count': 1, 'plus_servers': 28, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Lomé']},
-                  {'country': 'Rwanda', 'server_count': 27, 'city_count': 1, 'plus_servers': 27, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Kigali']},
-                  {'country': 'Bangladesh', 'server_count': 24, 'city_count': 1, 'plus_servers': 24, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Dhaka']},
-                  {'country': 'Hungary', 'server_count': 24, 'city_count': 1, 'plus_servers': 23, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Budapest']},
-                  {'country': 'Iceland', 'server_count': 24, 'city_count': 1, 'plus_servers': 24, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Reykjavik']},
-                  {'country': 'Latvia', 'server_count': 20, 'city_count': 1, 'plus_servers': 19, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['Riga']},
-                  {'country': 'Estonia', 'server_count': 20, 'city_count': 1, 'plus_servers': 18, 'secure_core_servers': 2, 'features': ['Streaming', 'P2P'], 'cities': ['Tallinn']},
-                  {'country': 'Taiwan', 'server_count': 20, 'city_count': 2, 'plus_servers': 18, 'secure_core_servers': 2, 'features': ['P2P'], 'cities': ['Taipei', 'Kaohsiung']},
-                  {'country': 'Indonesia', 'server_count': 18, 'city_count': 1, 'plus_servers': 17, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Jakarta']},
-                  {'country': 'Argentina', 'server_count': 16, 'city_count': 1, 'plus_servers': 15, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Buenos Aires']},
-                  {'country': 'Egypt', 'server_count': 16, 'city_count': 1, 'plus_servers': 15, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['Cairo']},
-                  {'country': 'United Arab Emirates', 'server_count': 16, 'city_count': 1, 'plus_servers': 13, 'secure_core_servers': 3, 'features': ['P2P'], 'cities': ['Dubai']},
-                  {'country': 'Albania', 'server_count': 15, 'city_count': 1, 'plus_servers': 15, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Tirana']},
-                  {'country': 'Israel', 'server_count': 14, 'city_count': 2, 'plus_servers': 11, 'secure_core_servers': 3, 'features': ['P2P'], 'cities': ['Tel Aviv', 'Jerusalem']},
-                  {'country': 'Cambodia', 'server_count': 12, 'city_count': 1, 'plus_servers': 11, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['Phnom Penh']},
-                  {'country': 'Philippines', 'server_count': 12, 'city_count': 1, 'plus_servers': 11, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Manila']},
-                  {'country': 'South Korea', 'server_count': 12, 'city_count': 1, 'plus_servers': 11, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Seoul']},
-                  {'country': 'Vietnam', 'server_count': 12, 'city_count': 1, 'plus_servers': 11, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['Ho Chi Minh City']},
-                  {'country': 'Bosnia & Herzegovina', 'server_count': 10, 'city_count': 1, 'plus_servers': 9, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Sarajevo']},
-                  {'country': 'Cyprus', 'server_count': 10, 'city_count': 1, 'plus_servers': 9, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Nicosia']},
-                  {'country': 'Myanmar (Burma)', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': [], 'cities': ['Yangon']},
-                  {'country': 'Bhutan', 'server_count': 8, 'city_count': 1, 'plus_servers': 8, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Thimphu']},
-                  {'country': 'Chile', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Santiago']},
-                  {'country': 'Ecuador', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Quito']},
-                  {'country': 'Malta', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['Valletta']},
-                  {'country': 'Peru', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Lima']},
-                  {'country': 'Puerto Rico', 'server_count': 8, 'city_count': 1, 'plus_servers': 7, 'secure_core_servers': 1, 'features': ['P2P'], 'cities': ['San Juan']},
-                  {'country': 'Angola', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Luanda']},
-                  {'country': 'Bahrain', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Manama']},
-                  {'country': 'Belarus', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Minsk']},
-                  {'country': 'Comoros', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Moroni']},
-                  {'country': 'Côte d\'Ivoire', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Abidjan']},
-                  {'country': 'Eritrea', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Asmara']},
-                  {'country': 'Ethiopia', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Addis Ababa']},
-                  {'country': 'Ghana', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Accra']},
-                  {'country': 'Iraq', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Baghdad']},
-                  {'country': 'Jordan', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Amman']},
-                  {'country': 'Kazakhstan', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Almaty']},
-                  {'country': 'Kenya', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Nairobi']},
-                  {'country': 'Kuwait', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Kuwait City']},
-                  {'country': 'Libya', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Tripoli']},
-                  {'country': 'Mauritius', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Port Louis']},
-                  {'country': 'Montenegro', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Podgorica']},
-                  {'country': 'North Macedonia', 'server_count': 4, 'city_count': 1, 'plus_servers': 3, 'secure_core_servers': 1, 'features': ['Streaming', 'P2P'], 'cities': ['Skopje']},
-                  {'country': 'Oman', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Muscat']},
-                  {'country': 'Saudi Arabia', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Riyadh']},
-                  {'country': 'Somalia', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Mogadishu']},
-                  {'country': 'Sudan', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Khartoum']},
-                  {'country': 'Syria', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Damascus']},
-                  {'country': 'Tajikistan', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Dushanbe']},
-                  {'country': 'Tanzania', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Dar es Salaam']},
-                  {'country': 'Tunisia', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Tunis']},
-                  {'country': 'Turkmenistan', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Ashgabat']},
-                  {'country': 'Yemen', 'server_count': 4, 'city_count': 1, 'plus_servers': 4, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Sana\'a']},
-                  {'country': 'Afghanistan', 'server_count': 2, 'city_count': 1, 'plus_servers': 2, 'secure_core_servers': 0, 'features': ['P2P'], 'cities': ['Kabul']},
-                  {'country': 'Costa Rica', 'server_count': 1, 'city_count': 1, 'plus_servers': 1, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['San José']},
-                  {'country': 'Georgia', 'server_count': 1, 'city_count': 1, 'plus_servers': 1, 'secure_core_servers': 0, 'features': ['Streaming', 'P2P'], 'cities': ['Tbilisi']}
-              ]
-              
-              return manual_data
-          
-          def main():
-              print("Starting Proton VPN server data collection...")
-              print("Note: ProtonVPN does not provide public APIs for server lists")
-              print("Data collection will use website scraping and manual datasets\n")
-              
-              all_servers = []
-              
-              # Extract data from website
-              website_servers = extract_server_data_from_website()
-              if website_servers:
-                  all_servers.extend(website_servers)
-                  print(f"✅ Extracted {len(website_servers)} servers from website")
-              
-              # Use comprehensive manual dataset
-              manual_data = create_manual_dataset()
-              
-              # If we got very little from scraping, use manual data
-              if len(all_servers) < 50:
-                  print("Using comprehensive manual dataset...")
-                  country_summary = manual_data
-              else:
-                  print("Using scraped data with manual fallback...")
-                  country_summary = aggregate_scraped_data(all_servers)
-                  scraped_countries = {s['country'].lower() for s in country_summary}
-                  for manual_country in manual_data:
-                      if manual_country['country'].lower() not in scraped_countries:
-                          country_summary.append(manual_country)
-              
-              # Calculate totals
-              total_servers = sum(c['server_count'] for c in country_summary)
-              total_countries = len(country_summary)
-              total_plus = sum(c['plus_servers'] for c in country_summary)
-              total_secure_core = sum(c['secure_core_servers'] for c in country_summary)
-              
-              print(f"\n=== Final Statistics ===")
-              print(f"Total countries: {total_countries}")
-              print(f"Total servers: {total_servers}")
-              print(f"Plus servers: {total_plus}")
-              print(f"Secure Core servers: {total_secure_core}")
-              
-              # Create output data
-              data = {
-                  'metadata': {
-                      'source': 'ProtonVPN Website + Manual Dataset',
-                      'scraped_at': datetime.now(timezone.utc).isoformat(),
-                      'total_servers': total_servers,
-                      'total_countries': total_countries,
-                      'total_plus_servers': total_plus,
-                      'total_secure_core_servers': total_secure_core,
-                      'data_quality': 'comprehensive_manual',
-                      'note': 'ProtonVPN does not provide public APIs. Data compiled from website and known infrastructure.'
-                  },
-                  'country_summary': country_summary
+              # Track countries and cities
+              if (-not [string]::IsNullOrEmpty($exitCountry)) {
+                if (-not $countryCount.ContainsKey($exitCountry)) {
+                  $countryCount[$exitCountry] = 0
+                }
+                $countryCount[$exitCountry]++
               }
               
-              # Save JSON
-              with open('ExternalData/ProtonVPNServers.json', 'w') as f:
-                  json.dump(data, f, indent=2)
+              if (-not [string]::IsNullOrEmpty($city)) {
+                if (-not $cityCount.ContainsKey($city)) {
+                  $cityCount[$city] = 0
+                }
+                $cityCount[$city]++
+              }
               
-              # Save CSV
-              import csv
-              with open('ExternalData/ProtonVPNServers.csv', 'w', newline='', encoding='utf-8') as f:
-                  writer = csv.writer(f)
-                  writer.writerow(['Country', 'TotalServers', 'CityCount', 'PlusServers', 'SecureCoreServers', 'Features', 'Cities'])
-                  
-                  for country in country_summary:
-                      writer.writerow([
-                          country['country'],
-                          country['server_count'],
-                          country['city_count'],
-                          country['plus_servers'],
-                          country['secure_core_servers'],
-                          '; '.join(country['features']),
-                          '; '.join(country['cities'])
-                      ])
-              
-              print(f"\n=== Export Complete ===")
-              print(f"Country summary: ExternalData/ProtonVPNServers.csv")
-              print(f"Full data: ExternalData/ProtonVPNServers.json")
-              print(f"Total coverage: {total_countries} countries, {total_servers} servers")
-          
-          def aggregate_scraped_data(servers):
-              """Convert scraped server list to country summary format"""
-              country_data = {}
-              
-              for server in servers:
-                  country = server['country']
-                  if country not in country_data:
-                      country_data[country] = {
-                          'country': country,
-                          'server_count': 0,
-                          'city_count': server.get('city_count', 1),
-                          'plus_servers': 0,
-                          'secure_core_servers': 0,
-                          'features': set(),
-                          'cities': []
-                      }
-                  
-                  data = country_data[country]
-                  data['server_count'] += server.get('server_count', 1)
-                  
-                  if server.get('server_type') == 'Secure Core':
-                      data['secure_core_servers'] += server.get('server_count', 1)
-                  else:
-                      data['plus_servers'] += server.get('server_count', 1)
-                  
-                  data['features'].update(server.get('features', []))
-              
-              # Convert to final format
-              result = []
-              for country, data in country_data.items():
-                  result.append({
-                      'country': country,
-                      'server_count': data['server_count'],
-                      'city_count': data['city_count'],
-                      'plus_servers': data['plus_servers'],
-                      'secure_core_servers': data['secure_core_servers'],
-                      'features': list(data['features']),
-                      'cities': data['cities']
-                  })
-              
-              return sorted(result, key=lambda x: x['server_count'], reverse=True)
-          
-          if __name__ == "__main__":
-              main()
-          EOF
-      
-      - name: Generate statistics
-        run: |
-          echo "=== Proton VPN Server Statistics ==="
-          
-          if [ -f "ExternalData/ProtonVPNServers.csv" ]; then
-            echo "Total countries: $(tail -n +2 ExternalData/ProtonVPNServers.csv | wc -l)"
+              foreach ($server in $logicalServer.Servers) {
+                $totalServers++
+                $servicesDown = $server.ServicesDown -eq 1
+                
+                if (-not $servicesDown) {
+                  $activeServers++
+                }
+                
+                # Create a custom object for CSV export
+                $csvObjects += [PSCustomObject]@{
+                  ExitIP = $server.ExitIP
+                  ServicesDown = $servicesDown
+                  City = $city
+                  ExitCountry = $exitCountry
+                  EntryCountry = $server.EntryCountry
+                  Status = if ($servicesDown) { "Down" } else { "Active" }
+                  ServerID = $server.ID
+                  Name = $logicalServer.Name
+                  Features = $logicalServer.Features -join ","
+                }
+              }
+            }
             
-            echo ""
-            echo "Top 10 countries by server count:"
-            tail -n +2 ExternalData/ProtonVPNServers.csv | sort -t',' -k2 -nr | head -10 | awk -F',' '{print $1 ": " $2 " servers"}'
+            # Sort the data by IP address
+            try {
+              $sortedCsvObjects = $csvObjects | Sort-Object { [version]($_.ExitIP -replace ':[0-9]+$', '') }
+            } catch {
+              Write-Output "Warning: Could not sort by IP version, using string sort instead: $($_.Exception.Message)"
+              $sortedCsvObjects = $csvObjects | Sort-Object ExitIP
+            }
             
-            echo ""
-            echo "Total server counts:"
-            tail -n +2 ExternalData/ProtonVPNServers.csv | awk -F',' '{
-              total += $2;
-              plus += $4;
-              secure += $5;
-            } END {
-              print "Total servers: " total;
-              print "Plus servers: " plus;
-              print "Secure Core servers: " secure;
-            }'
-          else
-            echo "No CSV file found - scraping may have failed"
-          fi
+            # Convert to CSV and save
+            if ($sortedCsvObjects.Count -gt 0) {
+              # Export to CSV with proper formatting
+              $sortedCsvObjects | Export-Csv -Path $outputCsvPath -NoTypeInformation -Force
+              
+              # Set outputs for use in later steps
+              "server_count=$totalServers" >> $env:GITHUB_OUTPUT
+              "active_servers=$activeServers" >> $env:GITHUB_OUTPUT
+              "country_count=$($countryCount.Count)" >> $env:GITHUB_OUTPUT
+              "updated=true" >> $env:GITHUB_OUTPUT
+              
+              Write-Output "✅ Successfully updated Proton VPN server data."
+              Write-Output "Found $totalServers servers ($activeServers active) across $($countryCount.Count) countries."
+              Write-Output "Top countries by server count:"
+              $countryCount.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5 | ForEach-Object {
+                Write-Output "- $($_.Key): $($_.Value) servers"
+              }
+            } else {
+              throw "No server data found in the API response"
+            }
+            
+          } catch {
+            # If we have a backup, restore it
+            if (Test-Path $backupCsvPath) {
+              Copy-Item -Path $backupCsvPath -Destination $outputCsvPath -Force
+              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
+            } else {
+              Write-Output "❌ Error: $($_.Exception.Message)"
+            }
+            
+            "updated=false" >> $env:GITHUB_OUTPUT
+            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
+            exit 1
+          }
       
-      - name: Validate scraped data
+      - name: Compare with previous data
+        id: compare
+        if: steps.fetch-data.outputs.updated == 'true'
+        shell: pwsh
         run: |
-          python3 << 'EOF'
-          import json
-          import sys
+          $backupCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes_backup.csv"
+          $currentCsvPath = "${{ github.workspace }}/ExternalData/ProtonVPNExitNodes.csv"
           
-          try:
-              with open('ExternalData/ProtonVPNServers.json', 'r') as f:
-                  data = json.load(f)
-              
-              countries = data.get('country_summary', [])
-              metadata = data.get('metadata', {})
-              
-              print(f"Validation Results:")
-              print(f"- Valid JSON: ✓")
-              print(f"- Countries found: {len(countries)}")
-              print(f"- Metadata present: {'✓' if metadata else '✗'}")
-              print(f"- Data quality: {metadata.get('data_quality', 'unknown')}")
-              
-              if len(countries) == 0:
-                  print("❌ No countries found - scraping failed")
-                  sys.exit(1)
-              
-              total_servers = sum(c.get('server_count', 0) for c in countries)
-              print(f"- Total servers: {total_servers}")
-              
-              if total_servers > 10000:
-                  print(f"✓ Data validation passed - comprehensive dataset")
-              else:
-                  print(f"⚠️  Lower server count than expected")
-              
-          except Exception as e:
-              print(f"❌ Validation failed: {e}")
-              sys.exit(1)
-          EOF
+          if (Test-Path $backupCsvPath) {
+            $oldData = Import-Csv -Path $backupCsvPath
+            $newData = Import-Csv -Path $currentCsvPath
+            
+            $oldIPs = $oldData | ForEach-Object { $_.ExitIP }
+            $newIPs = $newData | ForEach-Object { $_.ExitIP }
+            
+            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
+            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
+            
+            $statusChanged = @()
+            foreach ($ip in $oldIPs) {
+              if ($ip -in $newIPs) {
+                $oldStatus = ($oldData | Where-Object { $_.ExitIP -eq $ip }).Status
+                $newStatus = ($newData | Where-Object { $_.ExitIP -eq $ip }).Status
+                
+                if ($oldStatus -ne $newStatus) {
+                  $statusChanged += $ip
+                }
+              }
+            }
+            
+            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
+            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
+            "status_changed=$($statusChanged.Count)" >> $env:GITHUB_OUTPUT
+            
+            if ($added.Count -gt 0 -or $removed.Count -gt 0 -or $statusChanged.Count -gt 0) {
+              Write-Output "Changes detected:"
+              Write-Output "- $($added.Count) new servers"
+              Write-Output "- $($removed.Count) removed servers"
+              Write-Output "- $($statusChanged.Count) servers with status changes"
+            } else {
+              Write-Output "No server changes detected"
+            }
+          } else {
+            "added_count=${{ steps.fetch-data.outputs.server_count }}" >> $env:GITHUB_OUTPUT
+            "removed_count=0" >> $env:GITHUB_OUTPUT
+            "status_changed=0" >> $env:GITHUB_OUTPUT
+            Write-Output "Initial data import - no previous data to compare with"
+          }
       
-      - name: Commit and push changes
+      - name: Commit updated data to repo
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update Proton VPN servers data - $(date -u '+%Y-%m-%d %H:%M UTC')"
-          file_pattern: 'ExternalData/ProtonVPN*.*'
-          commit_user_name: 'Proton VPN Scraper'
+          commit_message: "Update Proton VPN servers: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }} (±${{ steps.compare.outputs.status_changed || '0' }} status changes)"
+          file_pattern: 'ExternalData/ProtonVPNExitNodes.csv'
+          commit_user_name: 'Proton VPN Data Updater'
           commit_user_email: 'actions@github.com'
-          push_options: '--force-with-lease'
-      
-      - name: Create summary
-        run: |
-          echo "## Proton VPN Server Collection Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "ExternalData/ProtonVPNServers.json" ]; then
-            echo "✅ **Collection Successful**" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            
-            python3 -c "
-          import json
-          with open('ExternalData/ProtonVPNServers.json', 'r') as f:
-              data = json.load(f)
-          
-          metadata = data['metadata']
-          countries = data['country_summary']
-          
-          print(f'- **Data Source:** {metadata.get(\"source\", \"Unknown\")}')
-          print(f'- **Total Countries:** {len(countries)}')
-          print(f'- **Total Servers:** {metadata.get(\"total_servers\", \"N/A\")}')
-          print(f'- **Plus Servers:** {metadata.get(\"total_plus_servers\", \"N/A\")}')
-          print(f'- **Secure Core Servers:** {metadata.get(\"total_secure_core_servers\", \"N/A\")}')
-          print(f'- **Data Quality:** {metadata.get(\"data_quality\", \"Unknown\")}')
-          " >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Collection Failed**" >> $GITHUB_STEP_SUMMARY
-            echo "No data files were created." >> $GITHUB_STEP_SUMMARY
-          fi
