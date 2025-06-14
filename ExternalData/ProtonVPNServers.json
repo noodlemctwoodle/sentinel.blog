@@ -1,213 +1,97 @@
 {
   "metadata": {
-    "source": "Proton VPN Website Scraper + API",
-    "scraped_at": "2025-06-14T15:59:33.087244+00:00",
-    "total_plus_servers": 7674,
-    "total_secure_core_servers": 19,
-    "total_countries": 15,
-    "scraping_method": "Multi-strategy text extraction + API endpoints",
-    "data_quality": "manual_fallback",
-    "ip_addresses_found": 0,
-    "hostnames_found": 0,
-    "api_servers_found": 0
+    "source": "Manual Fallback Data",
+    "scraped_at": "2025-06-14T16:03:47.781092+00:00",
+    "total_servers": 5863,
+    "total_countries": 5,
+    "data_quality": "manual_fallback"
   },
-  "servers": [
+  "country_summary": [
     {
       "country": "United States",
       "server_count": 3188,
       "city_count": 17,
+      "plus_servers": 3184,
+      "secure_core_servers": 4,
+      "free_servers": 0,
       "features": [
-        "Streaming support",
+        "Streaming",
         "P2P",
         "TOR"
       ],
-      "server_type": "Plus"
+      "cities": [
+        "New York",
+        "Los Angeles",
+        "Chicago"
+      ]
     },
     {
       "country": "Canada",
       "server_count": 849,
       "city_count": 3,
+      "plus_servers": 846,
+      "secure_core_servers": 3,
+      "free_servers": 0,
       "features": [
-        "Streaming support",
+        "Streaming",
         "P2P"
       ],
-      "server_type": "Plus"
+      "cities": [
+        "Toronto",
+        "Vancouver",
+        "Montreal"
+      ]
     },
     {
       "country": "Switzerland",
       "server_count": 790,
       "city_count": 1,
+      "plus_servers": 790,
+      "secure_core_servers": 0,
+      "free_servers": 0,
       "features": [
-        "Streaming support",
+        "Streaming",
         "P2P",
         "TOR"
       ],
-      "server_type": "Plus"
+      "cities": [
+        "Zurich"
+      ]
     },
     {
       "country": "United Kingdom",
       "server_count": 553,
       "city_count": 5,
+      "plus_servers": 550,
+      "secure_core_servers": 3,
+      "free_servers": 0,
       "features": [
-        "Streaming support",
+        "Streaming",
         "P2P"
       ],
-      "server_type": "Plus"
+      "cities": [
+        "London",
+        "Manchester"
+      ]
     },
     {
       "country": "Germany",
       "server_count": 483,
       "city_count": 2,
+      "plus_servers": 480,
+      "secure_core_servers": 3,
+      "free_servers": 0,
       "features": [
-        "Streaming support",
+        "Streaming",
         "P2P",
         "TOR"
       ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Netherlands",
-      "server_count": 432,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "France",
-      "server_count": 294,
-      "city_count": 2,
-      "features": [
-        "Streaming support",
-        "P2P",
-        "TOR"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Australia",
-      "server_count": 268,
-      "city_count": 5,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Sweden",
-      "server_count": 267,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P",
-        "TOR"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Venezuela",
-      "server_count": 119,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Spain",
-      "server_count": 114,
-      "city_count": 2,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Brazil",
-      "server_count": 108,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Romania",
-      "server_count": 105,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "Austria",
-      "server_count": 104,
-      "city_count": 1,
-      "features": [
-        "Streaming support",
-        "P2P"
-      ],
-      "server_type": "Plus"
-    },
-    {
-      "country": "United States",
-      "server_count": 4,
-      "city_count": 1,
-      "features": [
-        "Secure Core"
-      ],
-      "server_type": "Secure Core"
-    },
-    {
-      "country": "Russia",
-      "server_count": 4,
-      "city_count": 1,
-      "features": [
-        "Secure Core"
-      ],
-      "server_type": "Secure Core"
-    },
-    {
-      "country": "Brazil",
-      "server_count": 5,
-      "city_count": 1,
-      "features": [
-        "Secure Core"
-      ],
-      "server_type": "Secure Core"
-    },
-    {
-      "country": "Germany",
-      "server_count": 3,
-      "city_count": 1,
-      "features": [
-        "Secure Core"
-      ],
-      "server_type": "Secure Core"
-    },
-    {
-      "country": "France",
-      "server_count": 3,
-      "city_count": 1,
-      "features": [
-        "Secure Core"
-      ],
-      "server_type": "Secure Core"
+      "cities": [
+        "Frankfurt",
+        "Berlin"
+      ]
     }
   ],
-  "ip_data": {
-    "ipv4_addresses": [],
-    "ipv6_addresses": [],
-    "hostnames": [],
-    "server_ids": []
-  },
-  "raw_api_data": []
+  "individual_servers": [],
+  "sample_raw_data": {}
 }
