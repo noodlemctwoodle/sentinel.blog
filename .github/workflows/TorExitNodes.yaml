@@ -138,17 +138,7 @@ jobs:
           "
           
           echo "Top 10 countries by exit node count:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^
-      
-      - name: Cleanup
-        run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
-      
-      - name: Commit changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Update TOR exit nodes"
-          file_pattern: 'ExternalData/TorExitNodes.*'
-          push_options: '--force-with-lease' | sort | uniq -c | sort -nr | head -10
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
       
       - name: Cleanup
         run: rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
