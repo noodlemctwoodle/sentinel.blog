@@ -1,5 +1,4 @@
 name: Pull Proton VPN Server Data
-
 on:
   workflow_dispatch:
   schedule:
@@ -33,25 +32,32 @@ jobs:
           
           print('Country,ServerCount,Cities,Features')
           
-          # Find all country sections
-          countries = re.findall(r'([A-Za-z\s&]+)\n- Adblocker.*?\n.*?(\d+) servers? \| (\d+) cit', html, re.MULTILINE)
+          # Find all country sections with the actual pattern from the website
+          # Pattern: Country name followed by features and server/city count
+          pattern = r'([A-Za-z\s&\(\)\']+?)\n- Adblocker \(NetShield\)\n.*?(\d+) servers? \| (\d+) cit'
+          countries = re.findall(pattern, html, re.MULTILINE | re.DOTALL)
           
           for match in countries:
               country = match[0].strip()
               servers = match[1]
               cities = match[2]
               
-              # Extract features for this country
-              country_section = re.search(rf'{re.escape(country)}.*?(\d+ servers? \| \d+ cit)', html, re.DOTALL)
-              features = []
+              # Extract features for this country by looking at the section
+              # Find the section for this specific country
+              country_pattern = re.escape(country) + r'\n- Adblocker.*?(?=\n[A-Za-z\s&\(\)\']+\n-|\nSecure Core|\nLearn more|\Z)'
+              country_section = re.search(country_pattern, html, re.DOTALL)
               
+              features = []
               if country_section:
                   section_text = country_section.group(0)
-                  if '- P2P' in section_text: features.append('P2P')
-                  if '- Streaming support' in section_text: features.append('Streaming')
-                  if '- TOR' in section_text: features.append('TOR')
+                  if '- P2P' in section_text: 
+                      features.append('P2P')
+                  if '- Streaming support' in section_text: 
+                      features.append('Streaming')
+                  if '- TOR' in section_text: 
+                      features.append('TOR')
               
-              features_str = ','.join(features)
+              features_str = ';'.join(features)  # Use semicolon to avoid CSV issues
               print(f'\"{country}\",{servers},{cities},\"{features_str}\"')
           " > ExternalData/ProtonVPNServers.csv
           
@@ -61,9 +67,18 @@ jobs:
             exit 1
           fi
           
+          # Display first few lines for verification
+          echo "Generated CSV content (first 5 lines):"
+          head -5 ExternalData/ProtonVPNServers.csv
+          
           # Count entries for logging (subtract 1 for header)
           entries=$(($(wc -l < ExternalData/ProtonVPNServers.csv) - 1))
           echo "Processed $entries ProtonVPN server countries"
+          
+          # Verify we got a reasonable number of entries
+          if [ "$entries" -lt 50 ]; then
+            echo "Warning: Only $entries countries found, expected more"
+          fi
       
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
