@@ -23,77 +23,53 @@ jobs:
       
       - name: Fetch and process Proton VPN server data
         run: |
-          echo "Fetching Proton VPN server data..."
+          echo "Fetching Proton VPN server data from public website..."
           
-          # Download the JSON data with better error handling
-          response=$(curl -s -w "HTTP_CODE:%{http_code}" \
-            -H "x-pm-appversion: Other" \
-            -H "User-Agent: ProtonVPN/4.0.0" \
-            "https://api.protonmail.ch/vpn/logicals")
-          http_code=$(echo "$response" | grep -o "HTTP_CODE:[0-9]*" | cut -d: -f2)
-          json_data=$(echo "$response" | sed 's/HTTP_CODE:[0-9]*$//')
+          # Download the server list page and extract server data
+          curl -s "https://protonvpn.com/vpn-servers" | \
+          python3 -c "
+          import sys, re
+          html = sys.stdin.read()
           
-          echo "HTTP Status Code: $http_code"
-          echo "Response length: $(echo "$json_data" | wc -c) characters"
+          print('Country,ServerCount,Cities,Features')
           
-          # Check HTTP status code
-          if [ "$http_code" != "200" ]; then
-            echo "Error: API returned HTTP $http_code"
-            echo "Response: $json_data"
-            exit 1
-          fi
+          # Find all country sections
+          countries = re.findall(r'([A-Za-z\s&]+)\n- Adblocker.*?\n.*?(\d+) servers? \| (\d+) cit', html, re.MULTILINE)
           
-          # Check if we got valid JSON
-          if ! echo "$json_data" | jq . > /dev/null 2>&1; then
-            echo "Error: Invalid JSON response from API"
-            echo "Response: $json_data"
-            exit 1
-          fi
-          
-          # Check if LogicalServers exists and has data
-          logical_count=$(echo "$json_data" | jq '.LogicalServers | length // 0')
-          echo "Found $logical_count logical servers"
-          
-          if [ "$logical_count" -eq 0 ]; then
-            echo "Error: No LogicalServers found in response"
-            echo "Response structure: $(echo "$json_data" | jq 'keys')"
-            exit 1
-          fi
-          
-          # Convert JSON to CSV using jq
-          echo "$json_data" | jq -r '
-            ["ExitIP","ServicesDown","City","ExitCountry","EntryCountry","Status","ServerID","Name","Features"],
-            (.LogicalServers[]? as $logical |
-              $logical.Servers[]? |
-              [
-                .ExitIP // "",
-                (.ServicesDown == 1),
-                $logical.City // "",
-                $logical.ExitCountry // "",
-                .EntryCountry // "",
-                (if .ServicesDown == 1 then "Down" else "Active" end),
-                .ID // "",
-                $logical.Name // "",
-                (($logical.Features // []) | join(","))
-              ]
-            ) | @csv
-          ' > ExternalData/ProtonVPNExitNodes.csv
+          for match in countries:
+              country = match[0].strip()
+              servers = match[1]
+              cities = match[2]
+              
+              # Extract features for this country
+              country_section = re.search(rf'{re.escape(country)}.*?(\d+ servers? \| \d+ cit)', html, re.DOTALL)
+              features = []
+              
+              if country_section:
+                  section_text = country_section.group(0)
+                  if '- P2P' in section_text: features.append('P2P')
+                  if '- Streaming support' in section_text: features.append('Streaming')
+                  if '- TOR' in section_text: features.append('TOR')
+              
+              features_str = ','.join(features)
+              print(f'\"{country}\",{servers},{cities},\"{features_str}\"')
+          " > ExternalData/ProtonVPNServers.csv
           
           # Verify file was created and has content
-          if [ ! -s ExternalData/ProtonVPNExitNodes.csv ]; then
+          if [ ! -s ExternalData/ProtonVPNServers.csv ]; then
             echo "Error: Output file is empty or doesn't exist"
             exit 1
           fi
           
           # Count entries for logging (subtract 1 for header)
-          entries=$(($(wc -l < ExternalData/ProtonVPNExitNodes.csv) - 1))
-          echo "Processed $entries Proton VPN server entries"
+          entries=$(($(wc -l < ExternalData/ProtonVPNServers.csv) - 1))
+          echo "Processed $entries ProtonVPN server countries"
       
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Update Proton VPN servers - $(date -u +%Y-%m-%d)"
-          file_pattern: 'ExternalData/ProtonVPNExitNodes.csv'
+          file_pattern: 'ExternalData/ProtonVPNServers.csv'
           commit_user_name: 'Proton VPN Data Updater'
           commit_user_email: 'actions@github.com'
           push_options: '--force-with-lease'
