@@ -20,47 +20,43 @@ jobs:
       - name: Create directory
         run: mkdir -p ExternalData
       
-      - name: Setup Geolocation Databases
+      - name: Download MaxMind GeoLite2 Database
         run: |
-          echo "Setting up geolocation databases..."
+          echo "Downloading MaxMind GeoLite2 database..."
           
-          # Try to download IP2Location alternative source
-          echo "Attempting to download IP2Location LITE database..."
-          if curl -s -o ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB11.CSV"; then
-            if [ -s ip2location.csv ] && file ip2location.csv | grep -q "ASCII\|UTF"; then
-              echo "Successfully downloaded IP2Location database: $(wc -l < ip2location.csv) records"
-              mv ip2location.csv IP2LOCATION-LITE-DB11.CSV
+          # Method 1: Try direct download from MaxMind (requires free account)
+          if [ -n "${{ secrets.MAXMIND_LICENSE_KEY }}" ]; then
+            echo "Using MaxMind license key..."
+            wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXMIND_LICENSE_KEY }}&suffix=tar.gz"
+            if [ -f GeoLite2-City.tar.gz ] && [ -s GeoLite2-City.tar.gz ]; then
+              tar -xzf GeoLite2-City.tar.gz
+              find . -name "GeoLite2-City.mmdb" -exec mv {} . \;
+              echo "✓ Downloaded official MaxMind GeoLite2 database"
             else
-              echo "IP2Location download failed or returned invalid data"
-              rm -f ip2location.csv
+              echo "Failed to download from MaxMind, trying alternative..."
             fi
-          else
-            echo "Failed to download IP2Location database"
           fi
           
-          # Create a simple country code database as fallback
-          echo "Creating fallback country database..."
-          cat > country_fallback.csv << 'EOF'
-          # Simple country code mappings for common IP ranges
-          # Format: start_ip,end_ip,country_code,country_name
-          1.0.0.0,1.255.255.255,AU,Australia
-          2.0.0.0,2.255.255.255,FR,France
-          3.0.0.0,3.255.255.255,US,United States
-          4.0.0.0,4.255.255.255,US,United States
-          5.0.0.0,5.255.255.255,US,United States
-          8.8.8.8,8.8.8.8,US,United States
-          EOF
+          # Method 2: Alternative source (GitHub mirror)
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Trying alternative MaxMind source..."
+            wget -O GeoLite2-City.mmdb "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb" || true
+          fi
           
-          # Verify what we have
-          if [ -f "IP2LOCATION-LITE-DB11.CSV" ]; then
-            echo "✓ IP2Location database available"
+          # Method 3: Fallback to CSV format
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Downloading IP2Location as fallback..."
+            wget -O ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB5.CSV" || true
+            if [ -f ip2location.csv ] && [ -s ip2location.csv ]; then
+              echo "✓ Downloaded IP2Location CSV database"
+            fi
           else
-            echo "⚠ Will use API-only geolocation"
+            echo "✓ MaxMind database ready: $(ls -lh GeoLite2-City.mmdb)"
           fi
       
       - name: Install Python dependencies
         run: |
-          pip install requests maxminddb geoip2 ipaddress
+          pip install requests maxminddb-geolite2 geoip2 maxminddb ipaddress
       
       - name: Fetch all TOR sources
         run: |
@@ -91,14 +87,13 @@ jobs:
           total_ips=$(wc -l < unique_ips.txt)
           echo "Total unique IPs: $total_ips"
       
-      - name: Enhanced geolocation enrichment
+      - name: Enhanced geolocation with MaxMind
         run: |
           python3 -c "
           import json
           import csv
-          import requests
-          import time
           import ipaddress
+          import os
           from datetime import datetime, timezone
           
           # Helper function to validate IP
@@ -109,49 +104,98 @@ jobs:
               except ValueError:
                   return False
           
-          # Load IP2Location database
-          def load_ip2location_db():
+          # Load MaxMind database
+          def load_maxmind_db():
+              try:
+                  import maxminddb
+                  if os.path.exists('GeoLite2-City.mmdb'):
+                      reader = maxminddb.open_database('GeoLite2-City.mmdb')
+                      print('✓ Loaded MaxMind GeoLite2 database')
+                      return reader
+                  else:
+                      print('MaxMind database not found')
+                      return None
+              except ImportError:
+                  try:
+                      # Try alternative import
+                      import geoip2.database
+                      if os.path.exists('GeoLite2-City.mmdb'):
+                          reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+                          print('✓ Loaded MaxMind database with geoip2')
+                          return reader
+                  except ImportError:
+                      print('MaxMind libraries not available')
+              return None
+          
+          # Lookup IP in MaxMind database
+          def lookup_maxmind(ip, reader):
+              try:
+                  if hasattr(reader, 'get'):  # maxminddb reader
+                      response = reader.get(ip)
+                      if response:
+                          country = response.get('country', {})
+                          city = response.get('city', {})
+                          subdivisions = response.get('subdivisions', [{}])
+                          return {
+                              'cc': country.get('iso_code', ''),
+                              'cn': country.get('names', {}).get('en', ''),
+                              'city': city.get('names', {}).get('en', ''),
+                              'region': subdivisions[0].get('names', {}).get('en', '') if subdivisions else '',
+                              'source': 'MaxMind GeoLite2'
+                          }
+                  else:  # geoip2 reader
+                      response = reader.city(ip)
+                      return {
+                          'cc': response.country.iso_code or '',
+                          'cn': response.country.name or '',
+                          'city': response.city.name or '',
+                          'region': response.subdivisions.most_specific.name or '',
+                          'source': 'MaxMind GeoLite2'
+                      }
+              except Exception as e:
+                  # IP not found in database is normal, not an error
+                  pass
+              return None
+          
+          # Load IP2Location CSV fallback
+          def load_ip2location_csv():
               ip_ranges = []
               try:
-                  with open('IP2LOCATION-LITE-DB11.CSV', 'r') as f:
-                      reader = csv.reader(f)
-                      for row in reader:
-                          # Skip header or invalid rows
-                          if len(row) >= 6 and row[0].isdigit():
-                              try:
-                                  ip_from = int(row[0])
-                                  ip_to = int(row[1])
-                                  country_code = row[2].strip('\"')
-                                  country_name = row[3].strip('\"')
-                                  region = row[4].strip('\"') if len(row) > 4 else ''
-                                  city = row[5].strip('\"') if len(row) > 5 else ''
-                                  if country_code and country_code != '-':
-                                      ip_ranges.append({
-                                          'from': ip_from,
-                                          'to': ip_to,
-                                          'cc': country_code,
-                                          'cn': country_name,
-                                          'region': region,
-                                          'city': city
-                                      })
-                              except (ValueError, IndexError):
-                                  continue
-                  print(f'Loaded {len(ip_ranges)} IP ranges from IP2Location')
-                  return ip_ranges
-              except FileNotFoundError:
-                  print('IP2Location database not found, using API-only mode')
-                  return []
+                  if os.path.exists('ip2location.csv'):
+                      with open('ip2location.csv', 'r') as f:
+                          reader = csv.reader(f)
+                          for row in reader:
+                              if len(row) >= 6 and row[0].isdigit():
+                                  try:
+                                      ip_from = int(row[0])
+                                      ip_to = int(row[1])
+                                      country_code = row[2].strip('\"')
+                                      country_name = row[3].strip('\"')
+                                      region = row[4].strip('\"') if len(row) > 4 else ''
+                                      city = row[5].strip('\"') if len(row) > 5 else ''
+                                      if country_code and country_code != '-':
+                                          ip_ranges.append({
+                                              'from': ip_from,
+                                              'to': ip_to,
+                                              'cc': country_code,
+                                              'cn': country_name,
+                                              'region': region,
+                                              'city': city
+                                          })
+                                  except (ValueError, IndexError):
+                                      continue
+                      print(f'✓ Loaded {len(ip_ranges)} IP ranges from IP2Location CSV')
               except Exception as e:
-                  print(f'Error loading IP2Location database: {e}')
-                  return []
+                  print(f'Could not load IP2Location CSV: {e}')
+              return ip_ranges
           
           # Convert IP to integer for range lookup
           def ip_to_int(ip):
               parts = ip.split('.')
               return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
           
-          # Lookup IP in database
-          def lookup_ip_in_db(ip, ip_ranges):
+          # Lookup IP in CSV database
+          def lookup_ip_in_csv(ip, ip_ranges):
               ip_int = ip_to_int(ip)
               for range_data in ip_ranges:
                   if range_data['from'] <= ip_int <= range_data['to']:
@@ -159,81 +203,9 @@ jobs:
                           'cc': range_data['cc'],
                           'cn': range_data['cn'],
                           'city': range_data['city'],
-                          'region': range_data['region']
+                          'region': range_data['region'],
+                          'source': 'IP2Location CSV'
                       }
-              return None
-          
-          # Free API lookup functions with better error handling
-          def lookup_ip_api(ip):
-              try:
-                  response = requests.get(f'http://ip-api.com/json/{ip}?fields=status,message,country,countryCode,region,regionName,city', timeout=10)
-                  if response.status_code == 200:
-                      data = response.json()
-                      if data.get('status') == 'success':
-                          return {
-                              'cc': data.get('countryCode', ''),
-                              'cn': data.get('country', ''),
-                              'city': data.get('city', ''),
-                              'region': data.get('regionName', ''),
-                              'source': 'ip-api.com'
-                          }
-                      else:
-                          print(f'IP-API failed for {ip}: {data.get(\"message\", \"Unknown error\")}')
-              except Exception as e:
-                  print(f'IP-API error for {ip}: {e}')
-              return None
-          
-          def lookup_ipapi_co(ip):
-              try:
-                  response = requests.get(f'https://ipapi.co/{ip}/json/', timeout=10)
-                  if response.status_code == 200:
-                      data = response.json()
-                      if 'error' not in data and data.get('country_code'):
-                          return {
-                              'cc': data.get('country_code', ''),
-                              'cn': data.get('country_name', ''),
-                              'city': data.get('city', ''),
-                              'region': data.get('region', ''),
-                              'source': 'ipapi.co'
-                          }
-                      else:
-                          print(f'IPAPI.co failed for {ip}: {data.get(\"error\", \"No data\")}')
-              except Exception as e:
-                  print(f'IPAPI.co error for {ip}: {e}')
-              return None
-          
-          def lookup_geojs(ip):
-              try:
-                  response = requests.get(f'https://get.geojs.io/v1/ip/geo/{ip}.json', timeout=10)
-                  if response.status_code == 200:
-                      data = response.json()
-                      if data.get('country_code'):
-                          return {
-                              'cc': data.get('country_code', ''),
-                              'cn': data.get('country', ''),
-                              'city': data.get('city', ''),
-                              'region': data.get('region', ''),
-                              'source': 'geojs.io'
-                          }
-              except Exception as e:
-                  print(f'GeoJS error for {ip}: {e}')
-              return None
-          
-          def lookup_ipinfo_io(ip):
-              try:
-                  response = requests.get(f'https://ipinfo.io/{ip}/json', timeout=10)
-                  if response.status_code == 200:
-                      data = response.json()
-                      if data.get('country'):
-                          return {
-                              'cc': data.get('country', ''),
-                              'cn': data.get('country', ''),  # ipinfo doesn't provide full country name in free tier
-                              'city': data.get('city', ''),
-                              'region': data.get('region', ''),
-                              'source': 'ipinfo.io'
-                          }
-              except Exception as e:
-                  print(f'IPInfo.io error for {ip}: {e}')
               return None
           
           # Load Onionoo data for initial enrichment
@@ -257,17 +229,19 @@ jobs:
                               'source': 'Onionoo API'
                           }
                           onionoo_count += 1
-              print(f'Loaded geo data from Onionoo for {onionoo_count} IPs')
+              print(f'✓ Loaded geo data from Onionoo for {onionoo_count} IPs')
           except Exception as e:
               print(f'Error loading Onionoo data: {e}')
           
-          # Load IP2Location database
-          ip_ranges = load_ip2location_db()
+          # Load databases
+          maxmind_reader = load_maxmind_db()
+          ip2location_ranges = load_ip2location_csv()
           
-          # Process unique IPs and enrich with multiple sources
+          # Process unique IPs
           enriched_nodes = []
-          api_calls = 0
-          max_api_calls = 800  # Conservative limit
+          maxmind_count = 0
+          ip2location_count = 0
+          no_data_count = 0
           
           with open('unique_ips.txt', 'r') as f:
               ips = [line.strip() for line in f if line.strip() and is_valid_ip(line.strip())]
@@ -275,52 +249,26 @@ jobs:
           print(f'Processing {len(ips)} unique IPs...')
           
           for i, ip in enumerate(ips):
-              if i % 100 == 0:
-                  print(f'Processed {i}/{len(ips)} IPs, API calls: {api_calls}')
+              if i % 1000 == 0:
+                  print(f'Processed {i}/{len(ips)} IPs')
               
               geo_data = None
               
-              # Try Onionoo first (already loaded)
+              # Try Onionoo first (most accurate for TOR data)
               if ip in ip_to_geo:
                   geo_data = ip_to_geo[ip]
               
-              # Try IP2Location database (offline lookup)
-              elif ip_ranges:
-                  db_result = lookup_ip_in_db(ip, ip_ranges)
-                  if db_result:
-                      geo_data = {
-                          'cc': db_result['cc'],
-                          'cn': db_result['cn'],
-                          'city': db_result['city'],
-                          'source': 'IP2Location DB'
-                      }
+              # Try MaxMind database (fast local lookup)
+              elif maxmind_reader:
+                  geo_data = lookup_maxmind(ip, maxmind_reader)
+                  if geo_data:
+                      maxmind_count += 1
               
-              # Try free APIs if still no data and under rate limit
-              elif api_calls < max_api_calls:
-                  # Try different APIs based on current call count
-                  if api_calls < 200:  # Use ip-api.com first (best rate limit)
-                      geo_data = lookup_ip_api(ip)
-                      if geo_data:
-                          api_calls += 1
-                          time.sleep(1.5)  # Respect rate limit: 45/minute = 1.33s interval
-                  
-                  elif api_calls < 400:  # Then ipapi.co
-                      geo_data = lookup_ipapi_co(ip)
-                      if geo_data:
-                          api_calls += 1
-                          time.sleep(1)
-                  
-                  elif api_calls < 600:  # Then geojs.io
-                      geo_data = lookup_geojs(ip)
-                      if geo_data:
-                          api_calls += 1
-                          time.sleep(0.5)
-                  
-                  elif api_calls < 800:  # Finally ipinfo.io
-                      geo_data = lookup_ipinfo_io(ip)
-                      if geo_data:
-                          api_calls += 1
-                          time.sleep(1)
+              # Try IP2Location CSV as fallback
+              elif ip2location_ranges:
+                  geo_data = lookup_ip_in_csv(ip, ip2location_ranges)
+                  if geo_data:
+                      ip2location_count += 1
               
               # Create node entry
               if geo_data:
@@ -329,14 +277,17 @@ jobs:
                       'country_code': geo_data.get('cc', ''),
                       'country_name': geo_data.get('cn', ''),
                       'city': geo_data.get('city', ''),
-                      'source': geo_data.get('source', 'Multiple Sources')
+                      'region': geo_data.get('region', ''),
+                      'source': geo_data.get('source', 'Unknown')
                   }
               else:
+                  no_data_count += 1
                   node = {
                       'ip': ip,
                       'country_code': '',
                       'country_name': '',
                       'city': '',
+                      'region': '',
                       'source': 'No geo data'
                   }
               
@@ -352,33 +303,34 @@ jobs:
               source = node['source']
               source_counts[source] = source_counts.get(source, 0) + 1
           
-          print(f'Enrichment summary:')
+          print(f'\\nEnrichment summary:')
           for source, count in source_counts.items():
               print(f'  {source}: {count} IPs')
-          print(f'Total API calls made: {api_calls}')
+          print(f'Total enriched: {enriched_count}/{len(enriched_nodes)} ({enrichment_percentage}%)')
           
           # Create enriched CSV
           with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
               writer = csv.writer(f)
-              writer.writerow(['ExitIP', 'CountryCode', 'CountryName', 'City', 'Source'])
+              writer.writerow(['ExitIP', 'CountryCode', 'CountryName', 'City', 'Region', 'Source'])
               for node in enriched_nodes:
                   writer.writerow([
                       node['ip'],
                       node['country_code'],
                       node['country_name'],
                       node['city'],
+                      node['region'],
                       node['source']
                   ])
           
           # Create enriched JSON
           data = {
               'metadata': {
-                  'source': 'Multiple TOR sources with enhanced geolocation',
+                  'source': 'Multiple TOR sources with MaxMind GeoLite2 enrichment',
                   'updated': datetime.now(timezone.utc).isoformat(),
                   'count': len(enriched_nodes),
                   'enriched_count': enriched_count,
                   'enrichment_percentage': enrichment_percentage,
-                  'api_calls_used': api_calls,
+                  'processing_method': 'Local database lookup (no API calls)',
                   'source_breakdown': source_counts
               },
               'TorExitNodes': enriched_nodes
@@ -387,31 +339,43 @@ jobs:
           with open('ExternalData/TorExitNodes.json', 'w') as f:
               json.dump(data, f, indent=2)
           
-          print(f'Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
+          print(f'\\n✓ Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
+          print(f'Processing completed in seconds (no API rate limits!)')
+          
+          # Close database connection
+          if maxmind_reader:
+              try:
+                  maxmind_reader.close()
+              except:
+                  pass
           "
       
       - name: Generate statistics
         run: |
           echo "=== TOR Exit Node Statistics ==="
-          echo "Top 15 countries by exit node count:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -15
+          echo "Top 20 countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -20
           
           echo ""
           echo "Data sources breakdown:"
-          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f5 | sort | uniq -c | sort -nr
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f6 | sort | uniq -c | sort -nr
           
           echo ""
           echo "Total unique exit nodes: $(tail -n +2 ExternalData/TorExitNodes.csv | wc -l)"
           echo "Nodes with geo data: $(tail -n +2 ExternalData/TorExitNodes.csv | awk -F',' '$2 != \"\"' | wc -l)"
+          
+          echo ""
+          echo "Top 10 cities by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f4 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
       
       - name: Cleanup
         run: |
           rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
-          rm -f IP2LOCATION-LITE-DB11.CSV* *.zip *.csv country_fallback.csv ip2location.csv
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
       
       - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update TOR exit nodes with enhanced geolocation"
+          commit_message: "Update TOR exit nodes with MaxMind geolocation"
           file_pattern: 'ExternalData/TorExitNodes.*'
-          push_options: '--force-with-lease'
+          push_options: '--force-with-leas
