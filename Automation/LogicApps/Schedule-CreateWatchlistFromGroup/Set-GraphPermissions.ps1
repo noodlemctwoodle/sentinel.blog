@@ -2,7 +2,7 @@
 Connect-MgGraph -Scopes "AppRoleAssignment.ReadWrite.All"
 
 # Set your managed identity's object ID
-$miObjectId = "160af8cc-77b7-4d36-b225-14c6772c3341"
+$miObjectId = "LogticApp-Identity-ObjectId"
 
 # Microsoft Graph service principal ID
 $graphId = "00000003-0000-0000-c000-000000000000"

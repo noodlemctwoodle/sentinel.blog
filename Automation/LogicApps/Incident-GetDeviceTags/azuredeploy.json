@@ -1,0 +1,264 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Incident-GetDeviceTags",
+        "description": "Get Device Tags from Log Analytics and update the incident with the tags",
+        "prerequisites": ""
+    },
+    "parameters": {
+        "PlaybookName": {
+            "defaultValue": "Incident-GetDeviceTags",
+            "type": "string"
+        },
+        "subscriptionId": {
+            "type": "string"
+        },
+        "resourceGroup": {
+            "type": "string"
+        },
+        "workspaceName": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "MicrosoftSentinel-ConnectionName": "[concat('Azuresentinel-', parameters('PlaybookName'))]",
+        "AzureMonitorLogs-ConnectionName": "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Entities_-_Get_Hosts": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "path": "/entities/host"
+                            }
+                        },
+                        "Condition": {
+                            "runAfter": {
+                                "Entities_-_Get_Hosts": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "greater": [
+                                            "@length(body('Entities_-_Get_Hosts')?['Hosts'])",
+                                            0
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {},
+                            "else": {
+                                "actions": {
+                                    "Terminate": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "Initialize_String_Tag_Variable": {
+                            "runAfter": {
+                                "Condition": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "Tags",
+                                        "type": "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "For_each": {
+                            "runAfter": {
+                                "Initialize_String_Tag_Variable": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "foreach": "@body('Entities_-_Get_Hosts')?['Hosts']",
+                            "actions": {
+                                "Get_Tag_from_Query": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": "DeviceInfo\n| where TimeGenerated > ago(10d)\n| where isnotempty(DeviceManualTags)\n| where DeviceName contains \"@{item()?['HostName']}\"\n| where isnotempty(DeviceManualTags)\n| mv-expand todynamic(DeviceManualTags)\n| summarize by DeviceName, Tag = tostring(DeviceManualTags)",
+                                        "path": "/queryData",
+                                        "queries": {
+                                            "subscriptions": "[parameters('subscriptionId')]",
+                                            "resourcegroups": "[parameters('resourceGroup')]",
+                                            "resourcetype": "Log Analytics Workspace",
+                                            "resourcename": "[parameters('workspaceName')]",
+                                            "timerange": "Last 7 days"
+                                        }
+                                    }
+                                },
+                                "Parse_Query_Results": {
+                                    "runAfter": {
+                                        "Get_Tag_from_Query": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_Tag_from_Query')?['value']",
+                                        "schema": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "DeviceName": {
+                                                        "type": "string"
+                                                    },
+                                                    "Tag": {
+                                                        "type": "string"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                "Append_to_Tags_variable": {
+                                    "runAfter": {
+                                        "Parse_Query_Results": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "Tags",
+                                        "value": "@body('Parse_Query_Results')[0]?['Tag']"
+                                    }
+                                }
+                            },
+                            "type": "Foreach"
+                        },
+                        "Update_incident": {
+                            "runAfter": {
+                                "For_each": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method": "put",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "tagsToAdd": {
+                                        "TagsToAdd": [
+                                            {
+                                                "Tag": "@variables('Tags')"
+                                            }
+                                        ]
+                                    }
+                                },
+                                "path": "/Incidents"
+                            }
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinel-ConnectionName'))]",
+                                "connectionName": "[variables('MicrosoftSentinel-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                            },
+                            "azuremonitorlogs": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureMonitorLogs-ConnectionName'))]",
+                                "connectionName": "[variables('AzureMonitorLogs-ConnectionName')]",
+                                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('MicrosoftSentinel-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                },
+                "displayName": "Azure Sentinel Connection",
+                "parameterValues": {}
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureMonitorLogs-ConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "api": {
+                    "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuremonitorlogs')]"
+                },
+                "displayName": "Azure Monitor Logs Connection",
+                "parameterValues": {}
+            }
+        }
+    ]
+}

@@ -1,0 +1,21 @@
+let timeFrame = ago(1d);
+let Categories =
+    union *
+    | summarize Size = count() by Category = Type
+    | order by Size desc
+    ;
+let knownTables = Usage
+    | where TimeGenerated > timeFrame
+    | where IsBillable == true 
+    | join kind=leftouter Categories on $left.DataType == $right.Category
+    | summarize
+        size =sumif(Quantity, isnotempty(Category)) / round(1024, -3),
+        sizeOther= sumif(Quantity, (isempty(Category))) / round(1024, -3)
+        by Category   
+    | project
+        ['Log Type'] = iif(isnotempty(Category), Category, "Other"),
+        ['Table Size'] = iif(isnotempty(Category), size, sizeOther),
+        ['Estimated cost'] = iif(isnotempty(Category), size * round(4, 1), sizeOther * round(4, 1))
+    ;
+knownTables
+| order by ['Table Size'] desc

@@ -1,0 +1,413 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "",
+        "description":  "",
+        "prerequisites":  "",
+        "postDeployment":  [
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  ""
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Incident-IPGeoLocationInfo",
+            "type":  "string"
+        },
+        "ipgeolocation.io API Key":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for ipgeolocation.io API Key"
+            }
+        }
+    },
+    "variables":  {
+        "MicrosoftSentinelConnectionName":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "ipgeolocation.io API Key":  {
+                            "defaultValue":  "[parameters('ipgeolocation.io API Key')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Microsoft_Sentinel_incident":  {
+                            "type":  "ApiConnectionWebhook",
+                            "inputs":  {
+                                "body":  {
+                                    "callback_url":  "@{listCallbackUrl()}"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "path":  "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Entities_-_Get_IPs":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/entities/ip"
+                            }
+                        },
+                        "For_each":  {
+                            "foreach":  "@body('Entities_-_Get_IPs')?['IPs']",
+                            "actions":  {
+                                "Condition":  {
+                                    "actions":  {
+                                        "HTTP":  {
+                                            "runAfter":  {
+                                            },
+                                            "type":  "Http",
+                                            "inputs":  {
+                                                "method":  "GET",
+                                                "uri":  "https://api.ipgeolocation.io/ipgeo?apiKey=@{parameters('ipgeolocation.io API Key')}\u0026ip=@{items('For_each')?['Address']}"
+                                            }
+                                        },
+                                        "Switch":  {
+                                            "runAfter":  {
+                                                "HTTP":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "cases":  {
+                                                "Case":  {
+                                                    "case":  200,
+                                                    "actions":  {
+                                                        "Add_comment_to_incident_(V3)":  {
+                                                            "runAfter":  {
+                                                                "Compose_HTML_Table":  [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type":  "ApiConnection",
+                                                            "inputs":  {
+                                                                "body":  {
+                                                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                                    "message":  "\u003cp\u003e@{outputs('Compose_HTML_Table')}\u003c/p\u003e"
+                                                                },
+                                                                "host":  {
+                                                                    "connection":  {
+                                                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method":  "post",
+                                                                "path":  "/Incidents/Comment"
+                                                            }
+                                                        },
+                                                        "Compose_HTML_Table":  {
+                                                            "runAfter":  {
+                                                                "Parse_HTTP_Response":  [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type":  "Compose",
+                                                            "inputs":  "\u003ctable\u003e\n    \u003cthead\u003e\n        \u003ctr\u003e\n            \u003cth colspan=\"2\"\u003e IP Information from  ipgeolocation.io for: @{body('Parse_HTTP_Response')?['ip']}\u003c/th\u003e\n        \u003c/tr\u003e\n    \u003c/thead\u003e\n    \u003ctbody\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eContinent Code\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['continent_code']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eContinent Name\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['continent_name']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eCountry Code\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['country_code2']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eCountry Name\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['country_name']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eLatitude\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['latitude']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eLongitude\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['longitude']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eISP\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['isp']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eConnection Type\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['connection_type']}\u003c/td\u003e\n        \u003c/tr\u003e\n        \u003ctr\u003e\n            \u003ctd\u003eOrganization\u003c/td\u003e\n            \u003ctd\u003e@{body('Parse_HTTP_Response')?['organization']}\u003c/td\u003e\n        \u003c/tr\u003e\n    \u003c/tbody\u003e\n\u003c/table\u003e"
+                                                        },
+                                                        "Parse_HTTP_Response":  {
+                                                            "runAfter":  {
+                                                            },
+                                                            "type":  "ParseJson",
+                                                            "inputs":  {
+                                                                "content":  "@body('HTTP')",
+                                                                "schema":  {
+                                                                    "properties":  {
+                                                                        "calling_code":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "city":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "connection_type":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "continent_code":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "continent_name":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_capital":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_code2":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_code3":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_flag":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_name":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "country_tld":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "currency":  {
+                                                                            "properties":  {
+                                                                                "code":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "name":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "symbol":  {
+                                                                                    "type":  "string"
+                                                                                }
+                                                                            },
+                                                                            "type":  "object"
+                                                                        },
+                                                                        "district":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "geoname_id":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "ip":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "is_eu":  {
+                                                                            "type":  "boolean"
+                                                                        },
+                                                                        "isp":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "languages":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "latitude":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "longitude":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "organization":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "state_prov":  {
+                                                                            "type":  "string"
+                                                                        },
+                                                                        "time_zone":  {
+                                                                            "properties":  {
+                                                                                "current_time":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "current_time_unix":  {
+                                                                                    "type":  "number"
+                                                                                },
+                                                                                "dst_savings":  {
+                                                                                    "type":  "integer"
+                                                                                },
+                                                                                "is_dst":  {
+                                                                                    "type":  "boolean"
+                                                                                },
+                                                                                "name":  {
+                                                                                    "type":  "string"
+                                                                                },
+                                                                                "offset":  {
+                                                                                    "type":  "integer"
+                                                                                }
+                                                                            },
+                                                                            "type":  "object"
+                                                                        },
+                                                                        "zipcode":  {
+                                                                            "type":  "string"
+                                                                        }
+                                                                    },
+                                                                    "type":  "object"
+                                                                }
+                                                            }
+                                                        },
+                                                        "Update_incident":  {
+                                                            "runAfter":  {
+                                                                "Add_comment_to_incident_(V3)":  [
+                                                                    "Succeeded"
+                                                                ]
+                                                            },
+                                                            "type":  "ApiConnection",
+                                                            "inputs":  {
+                                                                "body":  {
+                                                                    "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                                    "tagsToAdd":  {
+                                                                        "TagsToAdd":  [
+                                                                            {
+                                                                                "Tag":  "@{items('For_each')?['Address']} - @{body('Parse_HTTP_Response')?['country_code2']}"
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                },
+                                                                "host":  {
+                                                                    "connection":  {
+                                                                        "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                                    }
+                                                                },
+                                                                "method":  "put",
+                                                                "path":  "/Incidents"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            "default":  {
+                                                "actions":  {
+                                                }
+                                            },
+                                            "expression":  "@outputs('HTTP')['statusCode']",
+                                            "type":  "Switch"
+                                        }
+                                    },
+                                    "runAfter":  {
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "Add_comment_to_incident_(V3)_2":  {
+                                                "runAfter":  {
+                                                },
+                                                "type":  "ApiConnection",
+                                                "inputs":  {
+                                                    "body":  {
+                                                        "incidentArmId":  "@triggerBody()?['object']?['id']",
+                                                        "message":  "\u003cp\u003eThe IP: @{items('For_each')?['Address']} is part of RFC1918 - Address Allocation for Private Internets\u003c/p\u003e"
+                                                    },
+                                                    "host":  {
+                                                        "connection":  {
+                                                            "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                                        }
+                                                    },
+                                                    "method":  "post",
+                                                    "path":  "/Incidents/Comment"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "not":  {
+                                                    "startsWith":  [
+                                                        "@items('For_each')?['Address']",
+                                                        "10."
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not":  {
+                                                    "startsWith":  [
+                                                        "@items('For_each')?['Address']",
+                                                        "172.16."
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not":  {
+                                                    "startsWith":  [
+                                                        "@items('For_each')?['Address']",
+                                                        "192.168."
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                }
+                            },
+                            "runAfter":  {
+                                "Entities_-_Get_IPs":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Foreach"
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuresentinel":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]",
+                                "connectionName":  "[variables('MicrosoftSentinelConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "tags":  {
+                "hidden-SentinelTemplateName":  "Incident-IPGeoLocationInfo",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('MicrosoftSentinelConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuresentinel')]"
+                }
+            }
+        }
+    ]
+}
