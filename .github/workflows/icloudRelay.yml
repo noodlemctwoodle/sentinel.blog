@@ -15,155 +15,32 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Create directory if not exists
-        shell: bash
-        run: mkdir -p ${{ github.workspace }}/ExternalData
+        run: mkdir -p ExternalData
       
-      - name: Pull and process iCloud Private Relay IP Ranges
-        id: fetch-data
-        shell: pwsh
+      - name: Download and save iCloud Private Relay IP Ranges
         run: |
-          try {
-            # Define variables
-            $sourceUrl = "https://mask-api.icloud.com/egress-ip-ranges.csv"
-            $outputCsvPath = "${{ github.workspace }}/ExternalData/iCloudPrivateRelayIPRanges.csv"
-            $backupCsvPath = "${{ github.workspace }}/ExternalData/iCloudPrivateRelayIPRanges_backup.csv"
-            
-            # Backup existing file if it exists
-            if (Test-Path $outputCsvPath) {
-              Copy-Item -Path $outputCsvPath -Destination $backupCsvPath -Force
-              Write-Output "Backed up previous data file"
-            }
-            
-            # Fetch data with retry logic
-            $maxRetries = 3
-            $retryCount = 0
-            $success = $false
-            
-            while (-not $success -and $retryCount -lt $maxRetries) {
-              try {
-                Write-Output "Fetching data from $sourceUrl (Attempt $($retryCount + 1))"
-                $response = Invoke-WebRequest -Uri $sourceUrl -TimeoutSec 30
-                $success = $true
-              } catch {
-                $retryCount++
-                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
-                if ($retryCount -lt $maxRetries) {
-                  $sleepTime = 2 * $retryCount
-                  Write-Output "Waiting $sleepTime seconds before retrying..."
-                  Start-Sleep -Seconds $sleepTime
-                }
-              }
-            }
-            
-            if (-not $success) {
-              throw "Failed to fetch iCloud Private Relay IP ranges after $maxRetries attempts"
-            }
-            
-            if ($response.StatusCode -eq 200) {
-              # Parse CSV data
-              $IPRanges = $response.Content | ConvertFrom-Csv -Header @('IPRange', 'Country', 'LanguageCode', 'City')
-              
-              # Process IP ranges and add address family
-              $ipv4Count = 0
-              $ipv6Count = 0
-              $processedRows = 0
-              $errorCount = 0
-              
-              foreach ($IPRange in $IPRanges) {
-                try {
-                  $ipAddress = $IPRange.IPRange -replace '/.*'
-                  $AddressFamily = [System.Net.IPAddress]::Parse($ipAddress).AddressFamily.ToString()
-                  
-                  $IPRange | Add-Member -MemberType NoteProperty -Name 'AddressFamily' -Value $AddressFamily -Force
-                  
-                  # Count by address family
-                  if ($AddressFamily -eq 'InterNetwork') {
-                    $ipv4Count++
-                  } elseif ($AddressFamily -eq 'InterNetworkV6') {
-                    $ipv6Count++
-                  }
-                  
-                  $processedRows++
-                } catch {
-                  $errorCount++
-                  Write-Output "Warning: Could not process IP range $($IPRange.IPRange): $($_.Exception.Message)"
-                }
-              }
-              
-              # Only save if we have data
-              if ($processedRows -gt 0) {
-                # Save CSV output
-                $IPRanges | Export-Csv -Path $outputCsvPath -Force -NoTypeInformation
-                
-                # Set outputs for use in later steps
-                "ip_count=$processedRows" >> $env:GITHUB_OUTPUT
-                "ipv4_count=$ipv4Count" >> $env:GITHUB_OUTPUT
-                "ipv6_count=$ipv6Count" >> $env:GITHUB_OUTPUT
-                "updated=true" >> $env:GITHUB_OUTPUT
-                
-                Write-Output "✅ Successfully updated iCloud Private Relay IP ranges."
-                Write-Output "Found $processedRows IP ranges ($ipv4Count IPv4, $ipv6Count IPv6)"
-                if ($errorCount -gt 0) {
-                  Write-Output "⚠️ There were $errorCount errors while processing IP ranges"
-                }
-              } else {
-                throw "No valid IP ranges found in the response"
-              }
-            } else {
-              throw "Failed to fetch iCloud Private Relay IP ranges. Status code: $($response.StatusCode)"
-            }
-          } catch {
-            # If we have a backup, restore it
-            if (Test-Path $backupCsvPath) {
-              Copy-Item -Path $backupCsvPath -Destination $outputCsvPath -Force
-              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
-            } else {
-              Write-Output "❌ Error: $($_.Exception.Message)"
-            }
-            
-            "updated=false" >> $env:GITHUB_OUTPUT
-            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
-            exit 1
-          }
-      
-      - name: Compare with previous data
-        id: compare
-        if: steps.fetch-data.outputs.updated == 'true'
-        shell: pwsh
-        run: |
-          $backupCsvPath = "${{ github.workspace }}/ExternalData/iCloudPrivateRelayIPRanges_backup.csv"
-          $currentCsvPath = "${{ github.workspace }}/ExternalData/iCloudPrivateRelayIPRanges.csv"
+          echo "Downloading iCloud Private Relay IP ranges..."
+          curl -s "https://mask-api.icloud.com/egress-ip-ranges.csv" > ExternalData/iCloudPrivateRelayIPRanges.csv
           
-          if (Test-Path $backupCsvPath) {
-            $oldData = Import-Csv -Path $backupCsvPath
-            $newData = Import-Csv -Path $currentCsvPath
-            
-            $oldIPs = $oldData | ForEach-Object { $_.IPRange }
-            $newIPs = $newData | ForEach-Object { $_.IPRange }
-            
-            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
-            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
-            
-            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
-            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
-            
-            if ($added.Count -gt 0 -or $removed.Count -gt 0) {
-              Write-Output "Changes detected: $($added.Count) new IPs, $($removed.Count) removed IPs"
-            } else {
-              Write-Output "No IP range changes detected"
-            }
-          } else {
-            "added_count=${{ steps.fetch-data.outputs.ip_count }}" >> $env:GITHUB_OUTPUT
-            "removed_count=0" >> $env:GITHUB_OUTPUT
-            Write-Output "Initial data import - no previous data to compare with"
-          }
+          # Verify file was downloaded and has content
+          if [ ! -s ExternalData/iCloudPrivateRelayIPRanges.csv ]; then
+            echo "Error: Downloaded file is empty or doesn't exist"
+            exit 1
+          fi
+          
+          # Count lines for logging
+          lines=$(wc -l < ExternalData/iCloudPrivateRelayIPRanges.csv)
+          echo "Downloaded $lines IP ranges"
       
-      - name: Commit updated data to repo
+      - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update iCloud Private Relay IP ranges: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }}"
+          commit_message: "Update iCloud Private Relay IP ranges - $(date -u +%Y-%m-%d)"
           file_pattern: 'ExternalData/iCloudPrivateRelayIPRanges.csv'
           commit_user_name: 'iCloud Relay Data Updater'
           commit_user_email: 'actions@github.com'
+          push_options: '--force-with-lease'

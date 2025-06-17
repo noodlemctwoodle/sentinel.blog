@@ -3,7 +3,6 @@ name: Pull TOR Exit Nodes Data
 on:
   workflow_dispatch:
   schedule:
-    # Run daily at midnight UTC
     - cron: "0 0 * * *"
 
 jobs:
@@ -15,147 +14,375 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
-      # Ubuntu runners already have PowerShell Core installed
-      - name: Check PowerShell version
-        shell: pwsh
+      - name: Create directory
+        run: mkdir -p ExternalData
+      
+      - name: Download MaxMind GeoLite2 Database
         run: |
-          Write-Output "Using PowerShell version: $($PSVersionTable.PSVersion)"
-      
-      - name: Create directory if not exists
-        shell: bash
-        run: mkdir -p ${{ github.workspace }}/ExternalData
-      
-      - name: Pull TOR exit nodes and process data
-        id: fetch-data
-        shell: pwsh
-        run: |
-          try {
-            # Define variables
-            $torExitNodesUrl = "https://check.torproject.org/torbulkexitlist"
-            $outputJsonPath = "${{ github.workspace }}/ExternalData/TorExitNodes.json"
-            $backupPath = "${{ github.workspace }}/ExternalData/TorExitNodes_backup.json"
-            
-            # Backup existing file if it exists
-            if (Test-Path $outputJsonPath) {
-              Copy-Item -Path $outputJsonPath -Destination $backupPath -Force
-              Write-Output "Backed up previous data file"
-            }
-            
-            # Fetch data with retry logic
-            $maxRetries = 3
-            $retryCount = 0
-            $success = $false
-            
-            while (-not $success -and $retryCount -lt $maxRetries) {
-              try {
-                $response = Invoke-WebRequest -Uri $torExitNodesUrl -TimeoutSec 30
-                $success = $true
-              } catch {
-                $retryCount++
-                Write-Output "Attempt $retryCount failed: $($_.Exception.Message)"
-                if ($retryCount -lt $maxRetries) {
-                  Start-Sleep -Seconds (2 * $retryCount)
-                }
-              }
-            }
-            
-            if (-not $success) {
-              throw "Failed to fetch TOR exit nodes after $maxRetries attempts"
-            }
-            
-            if ($response.StatusCode -eq 200) {
-              $content = [System.Text.Encoding]::UTF8.GetString($response.Content)
-              $exitNodeIPs = @()
-              
-              foreach ($line in $content -split "`n") {
-                if ($line.Trim() -ne "") {
-                  $exitNodeIPs += $line.Trim()
-                }
-              }
-              
-              # Add metadata to the JSON
-              $customObject = [PSCustomObject]@{
-                metadata = [PSCustomObject]@{
-                  source = $torExitNodesUrl
-                  updated = (Get-Date).ToUniversalTime().ToString("o")
-                  count = $exitNodeIPs.Count
-                }
-                TorExitNodes = $exitNodeIPs
-              }
-              
-              $jsonContent = $customObject | ConvertTo-Json -Depth 4
-              Set-Content -Path $outputJsonPath -Value $jsonContent -Force -Encoding UTF8
-              
-              # Set outputs for use in later steps
-              "updated=true" >> $env:GITHUB_OUTPUT
-              "ip_count=$($exitNodeIPs.Count)" >> $env:GITHUB_OUTPUT
-              
-              Write-Output "✅ Successfully updated TOR exit nodes. Found $($exitNodeIPs.Count) IPs."
-            } else {
-              throw "Failed to fetch the TOR exit nodes. Status code: $($response.StatusCode)"
-            }
-          } catch {
-            # If we have a backup, restore it
-            if (Test-Path $backupPath) {
-              Copy-Item -Path $backupPath -Destination $outputJsonPath -Force
-              Write-Output "⚠️ Error occurred, restored from backup: $($_.Exception.Message)"
-            } else {
-              Write-Output "❌ Error: $($_.Exception.Message)"
-            }
-            
-            "updated=false" >> $env:GITHUB_OUTPUT
-            "error_message=$($_.Exception.Message)" >> $env:GITHUB_OUTPUT
-            exit 1
-          }
-      
-      - name: Compare with previous data
-        id: compare
-        if: steps.fetch-data.outputs.updated == 'true'
-        shell: pwsh
-        run: |
-          $backupPath = "${{ github.workspace }}/ExternalData/TorExitNodes_backup.json"
-          $currentPath = "${{ github.workspace }}/ExternalData/TorExitNodes.json"
+          echo "Downloading MaxMind GeoLite2 database..."
           
-          if (Test-Path $backupPath) {
-            $oldData = Get-Content -Path $backupPath -Raw | ConvertFrom-Json
-            $newData = Get-Content -Path $currentPath -Raw | ConvertFrom-Json
-            
-            $oldIPs = $oldData.TorExitNodes
-            $newIPs = $newData.TorExitNodes
-            
-            $added = @($newIPs | Where-Object { $_ -notin $oldIPs })
-            $removed = @($oldIPs | Where-Object { $_ -notin $newIPs })
-            
-            "added_count=$($added.Count)" >> $env:GITHUB_OUTPUT
-            "removed_count=$($removed.Count)" >> $env:GITHUB_OUTPUT
-            
-            Write-Output "Changes detected: $($added.Count) new IPs, $($removed.Count) removed IPs"
-          } else {
-            "added_count=${{ steps.fetch-data.outputs.ip_count }}" >> $env:GITHUB_OUTPUT
-            "removed_count=0" >> $env:GITHUB_OUTPUT
-            Write-Output "No previous data to compare with"
-          }
+          # Method 1: Try direct download from MaxMind (requires free account)
+          if [ -n "${{ secrets.MAXMIND_LICENSE_KEY }}" ]; then
+            echo "Using MaxMind license key..."
+            wget -O GeoLite2-City.tar.gz "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXMIND_LICENSE_KEY }}&suffix=tar.gz"
+            if [ -f GeoLite2-City.tar.gz ] && [ -s GeoLite2-City.tar.gz ]; then
+              tar -xzf GeoLite2-City.tar.gz
+              find . -name "GeoLite2-City.mmdb" -exec mv {} . \;
+              echo "✓ Downloaded official MaxMind GeoLite2 database"
+            else
+              echo "Failed to download from MaxMind, trying alternative..."
+            fi
+          fi
+          
+          # Method 2: Alternative source (GitHub mirror)
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Trying alternative MaxMind source..."
+            wget -O GeoLite2-City.mmdb "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb" || true
+          fi
+          
+          # Method 3: Fallback to CSV format
+          if [ ! -f GeoLite2-City.mmdb ]; then
+            echo "Downloading IP2Location as fallback..."
+            wget -O ip2location.csv "https://download.ip2location.com/lite/IP2LOCATION-LITE-DB5.CSV" || true
+            if [ -f ip2location.csv ] && [ -s ip2location.csv ]; then
+              echo "✓ Downloaded IP2Location CSV database"
+            fi
+          else
+            echo "✓ MaxMind database ready: $(ls -lh GeoLite2-City.mmdb)"
+          fi
       
-      - name: Commit updated data to repo
+      - name: Install Python dependencies
+        run: |
+          pip install requests maxminddb-geolite2 geoip2 maxminddb ipaddress
+      
+      - name: Fetch all TOR sources
+        run: |
+          echo "Fetching TOR exit nodes from multiple sources..."
+          
+          # Configure curl with better SSL handling
+          export CURL_OPTS="--tlsv1.2 --max-time 30 --retry 3 --retry-delay 2 -k"
+          
+          # Fetch from torproject.org (primary source)
+          echo "Fetching from torproject.org..."
+          curl -s $CURL_OPTS "https://check.torproject.org/torbulkexitlist" > tor_bulk.txt || echo "Failed to fetch bulk list"
+          echo "Bulk list: $(wc -l < tor_bulk.txt) lines"
+          
+          # Fetch Onionoo data
+          echo "Fetching Onionoo data..."
+          curl -s $CURL_OPTS "https://onionoo.torproject.org/details?flag=Exit" > tor_onionoo.json || echo "Failed to fetch Onionoo data"
+          echo "Onionoo API: $(wc -c < tor_onionoo.json) bytes"
+          
+          # Fetch from alternative sources (with error handling)
+          echo "Fetching from rueckgr.at..."
+          curl -s $CURL_OPTS "https://torstatus.rueckgr.at/query_export.php/Tor_ip_list_EXIT.csv" > tor_rueckgr.csv || echo "Failed to fetch rueckgr data"
+          echo "Rueckgr CSV: $(wc -l < tor_rueckgr.csv) lines"
+          
+          echo "Fetching from dan.me.uk..."
+          curl -s $CURL_OPTS "https://www.dan.me.uk/torlist/" > tor_dan.txt || echo "Failed to fetch dan.me.uk data"
+          echo "Dan.me.uk: $(wc -l < tor_dan.txt) lines"
+          
+          echo "Fetching from hackertarget..."
+          curl -s $CURL_OPTS "https://api.hackertarget.com/torexit/?q=list" > tor_hackertarget.txt || echo "Failed to fetch hackertarget data"
+          echo "HackerTarget: $(wc -l < tor_hackertarget.txt) lines"
+          
+          # Check which sources succeeded
+          echo ""
+          echo "=== Source Status ==="
+          for file in tor_bulk.txt tor_onionoo.json tor_rueckgr.csv tor_dan.txt tor_hackertarget.txt; do
+            if [ -f "$file" ] && [ -s "$file" ]; then
+              echo "✓ $file: $(wc -l < "$file" 2>/dev/null || echo "N/A") lines"
+            else
+              echo "✗ $file: Failed or empty"
+            fi
+          done
+      
+      - name: Process data
+        run: |
+          echo "Processing and combining data..."
+          touch all_ips.txt
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_bulk.txt >> all_ips.txt || true
+          if command -v jq >/dev/null; then
+            jq -r '.relays[]?.exit_addresses[]? // .relays[]?.or_addresses[]?' tor_onionoo.json 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed 's/:[0-9]*$//' >> all_ips.txt || true
+          fi
+          tail -n +2 tor_rueckgr.csv | cut -d',' -f1 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_dan.txt >> all_ips.txt || true
+          grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' tor_hackertarget.txt >> all_ips.txt || true
+          sort all_ips.txt | uniq > unique_ips.txt
+          total_ips=$(wc -l < unique_ips.txt)
+          echo "Total unique IPs: $total_ips"
+      
+      - name: Enhanced geolocation with MaxMind
+        run: |
+          python3 -c "
+          import json
+          import csv
+          import ipaddress
+          import os
+          from datetime import datetime, timezone
+          
+          # Helper function to validate IP
+          def is_valid_ip(ip):
+              try:
+                  ipaddress.ip_address(ip)
+                  return True
+              except ValueError:
+                  return False
+          
+          # Load MaxMind database
+          def load_maxmind_db():
+              try:
+                  import maxminddb
+                  if os.path.exists('GeoLite2-City.mmdb'):
+                      reader = maxminddb.open_database('GeoLite2-City.mmdb')
+                      print('✓ Loaded MaxMind GeoLite2 database')
+                      return reader
+                  else:
+                      print('MaxMind database not found')
+                      return None
+              except ImportError:
+                  try:
+                      # Try alternative import
+                      import geoip2.database
+                      if os.path.exists('GeoLite2-City.mmdb'):
+                          reader = geoip2.database.Reader('GeoLite2-City.mmdb')
+                          print('✓ Loaded MaxMind database with geoip2')
+                          return reader
+                  except ImportError:
+                      print('MaxMind libraries not available')
+              return None
+          
+          # Lookup IP in MaxMind database
+          def lookup_maxmind(ip, reader):
+              try:
+                  if hasattr(reader, 'get'):  # maxminddb reader
+                      response = reader.get(ip)
+                      if response:
+                          country = response.get('country', {})
+                          city = response.get('city', {})
+                          subdivisions = response.get('subdivisions', [{}])
+                          return {
+                              'cc': country.get('iso_code', ''),
+                              'cn': country.get('names', {}).get('en', ''),
+                              'city': city.get('names', {}).get('en', ''),
+                              'region': subdivisions[0].get('names', {}).get('en', '') if subdivisions else '',
+                              'source': 'MaxMind GeoLite2'
+                          }
+                  else:  # geoip2 reader
+                      response = reader.city(ip)
+                      return {
+                          'cc': response.country.iso_code or '',
+                          'cn': response.country.name or '',
+                          'city': response.city.name or '',
+                          'region': response.subdivisions.most_specific.name or '',
+                          'source': 'MaxMind GeoLite2'
+                      }
+              except Exception as e:
+                  # IP not found in database is normal, not an error
+                  pass
+              return None
+          
+          # Load IP2Location CSV fallback
+          def load_ip2location_csv():
+              ip_ranges = []
+              try:
+                  if os.path.exists('ip2location.csv'):
+                      with open('ip2location.csv', 'r') as f:
+                          reader = csv.reader(f)
+                          for row in reader:
+                              if len(row) >= 6 and row[0].isdigit():
+                                  try:
+                                      ip_from = int(row[0])
+                                      ip_to = int(row[1])
+                                      country_code = row[2].strip('\\\"')
+                                      country_name = row[3].strip('\\\"')
+                                      region = row[4].strip('\\\"') if len(row) > 4 else ''
+                                      city = row[5].strip('\\\"') if len(row) > 5 else ''
+                                      if country_code and country_code != '-':
+                                          ip_ranges.append({
+                                              'from': ip_from,
+                                              'to': ip_to,
+                                              'cc': country_code,
+                                              'cn': country_name,
+                                              'region': region,
+                                              'city': city
+                                          })
+                                  except (ValueError, IndexError):
+                                      continue
+                      print(f'✓ Loaded {len(ip_ranges)} IP ranges from IP2Location CSV')
+              except Exception as e:
+                  print(f'Could not load IP2Location CSV: {e}')
+              return ip_ranges
+          
+          # Convert IP to integer for range lookup
+          def ip_to_int(ip):
+              parts = ip.split('.')
+              return (int(parts[0]) << 24) + (int(parts[1]) << 16) + (int(parts[2]) << 8) + int(parts[3])
+          
+          # Lookup IP in CSV database
+          def lookup_ip_in_csv(ip, ip_ranges):
+              ip_int = ip_to_int(ip)
+              for range_data in ip_ranges:
+                  if range_data['from'] <= ip_int <= range_data['to']:
+                      return {
+                          'cc': range_data['cc'],
+                          'cn': range_data['cn'],
+                          'city': range_data['city'],
+                          'region': range_data['region'],
+                          'source': 'IP2Location CSV'
+                      }
+              return None
+          
+          # Skip Onionoo geolocation data - using only MaxMind for enrichment
+          print('Using only MaxMind GeoLite2 for geolocation enrichment')
+          
+          # Load databases
+          maxmind_reader = load_maxmind_db()
+          ip2location_ranges = load_ip2location_csv()
+          
+          # Process unique IPs
+          enriched_nodes = []
+          maxmind_count = 0
+          ip2location_count = 0
+          no_data_count = 0
+          
+          with open('unique_ips.txt', 'r') as f:
+              ips = [line.strip() for line in f if line.strip() and is_valid_ip(line.strip())]
+          
+          print(f'Processing {len(ips)} unique IPs...')
+          
+          for i, ip in enumerate(ips):
+              if i % 1000 == 0:
+                  print(f'Processed {i}/{len(ips)} IPs')
+              
+              geo_data = None
+              
+              # Try MaxMind database first (primary source)
+              if maxmind_reader:
+                  geo_data = lookup_maxmind(ip, maxmind_reader)
+                  if geo_data:
+                      maxmind_count += 1
+              
+              # Try IP2Location CSV as fallback only if MaxMind fails
+              if not geo_data and ip2location_ranges:
+                  geo_data = lookup_ip_in_csv(ip, ip2location_ranges)
+                  if geo_data:
+                      ip2location_count += 1
+              
+              # Create node entry
+              if geo_data:
+                  node = {
+                      'ip': ip,
+                      'country_code': geo_data.get('cc', ''),
+                      'country_name': geo_data.get('cn', ''),
+                      'city': geo_data.get('city', ''),
+                      'region': geo_data.get('region', ''),
+                      'source': geo_data.get('source', 'Unknown')
+                  }
+              else:
+                  no_data_count += 1
+                  node = {
+                      'ip': ip,
+                      'country_code': '',
+                      'country_name': '',
+                      'city': '',
+                      'region': '',
+                      'source': 'No geo data'
+                  }
+              
+              enriched_nodes.append(node)
+          
+          # Calculate enrichment statistics
+          enriched_count = sum(1 for node in enriched_nodes if node['country_code'])
+          enrichment_percentage = round(enriched_count / len(enriched_nodes) * 100, 1) if enriched_nodes else 0
+          
+          # Count by source
+          source_counts = {}
+          for node in enriched_nodes:
+              source = node['source']
+              source_counts[source] = source_counts.get(source, 0) + 1
+          
+          print(f'')
+          print('Enrichment summary:')
+          for source, count in source_counts.items():
+              print(f'  {source}: {count} IPs')
+          print(f'Total enriched: {enriched_count}/{len(enriched_nodes)} ({enrichment_percentage}%)')
+          
+          # Create enriched CSV
+          with open('ExternalData/TorExitNodes.csv', 'w', newline='') as f:
+              writer = csv.writer(f)
+              writer.writerow(['ExitIP', 'CountryCode', 'CountryName', 'City', 'Region', 'Source'])
+              for node in enriched_nodes:
+                  writer.writerow([
+                      node['ip'],
+                      node['country_code'],
+                      node['country_name'],
+                      node['city'],
+                      node['region'],
+                      node['source']
+                  ])
+          
+          # Create enriched JSON
+          data = {
+              'metadata': {
+                  'source': 'Multiple TOR sources with MaxMind GeoLite2 enrichment only',
+                  'updated': datetime.now(timezone.utc).isoformat(),
+                  'count': len(enriched_nodes),
+                  'enriched_count': enriched_count,
+                  'enrichment_percentage': enrichment_percentage,
+                  'processing_method': 'Local database lookup (no API calls)',
+                  'source_breakdown': source_counts
+              },
+              'TorExitNodes': enriched_nodes
+          }
+          
+          with open('ExternalData/TorExitNodes.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          
+          print('')
+          print(f'Created enriched data: {len(enriched_nodes)} IPs ({enriched_count} with geo data, {enrichment_percentage}% enriched)')
+          print('Processing completed in seconds (no API rate limits!)')
+          
+          # Close database connection
+          if maxmind_reader:
+              try:
+                  maxmind_reader.close()
+              except:
+                  pass
+          "
+      
+      - name: Generate statistics
+        run: |
+          echo "=== TOR Exit Node Statistics ==="
+          echo "Top 20 countries by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f3 | grep -v '^$' | sort | uniq -c | sort -nr | head -20
+          
+          echo ""
+          echo "Data sources breakdown:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f6 | sort | uniq -c | sort -nr
+          
+          echo ""
+          echo "Total unique exit nodes: $(tail -n +2 ExternalData/TorExitNodes.csv | wc -l)"
+          echo "Nodes with geo data: $(tail -n +2 ExternalData/TorExitNodes.csv | awk -F',' '$2 != \"\"' | wc -l)"
+          
+          echo ""
+          echo "Top 10 cities by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f4 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+          
+          echo ""
+          echo "Top 10 regions by exit node count:"
+          tail -n +2 ExternalData/TorExitNodes.csv | cut -d',' -f5 | grep -v '^$' | sort | uniq -c | sort -nr | head -10
+      
+      - name: Cleanup
+        run: |
+          rm -f tor_*.txt tor_*.json tor_*.csv all_ips.txt unique_ips.txt
+          rm -f GeoLite2-City.* *.tar.gz ip2location.csv
+      
+      - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update TOR exit nodes: +${{ steps.compare.outputs.added_count || '0' }} -${{ steps.compare.outputs.removed_count || '0' }}"
-          file_pattern: 'ExternalData/TorExitNodes.json'
-          commit_user_name: 'TOR Exit Node Updater'
-          commit_user_email: 'actions@github.com'
-          commit_options: '--no-verify'
-          push_options: '--no-verify'
-      
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const issue = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '⚠️ TOR Exit Node update failed',
-              body: `The workflow run failed on ${new Date().toISOString()}.\n\nError: ${{ steps.fetch-data.outputs.error_message || 'Unknown error' }}\n\n[View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`
-            });
-            console.log(`Created issue #${issue.data.number}`);
+          commit_message: "Update TOR exit nodes with MaxMind geolocation"
+          file_pattern: 'ExternalData/TorExitNodes.*'
+          push_options: '--force-with-lease'
