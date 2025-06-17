@@ -1,6 +1,7 @@
 # Ignore System Files
 .DS_Store
 .vscode
+.dev
 
 # Exclude WIP
 MicrosoftSentinel/Health/Analytic Rules/Logic App cost spike.yaml
@@ -8,3 +9,6 @@ MicrosoftSentinel/Health/Analytic Rules/Logic App Failed Run.yaml
 MicrosoftSentinel/Health/Analytic Rules/New data received from current data connector.yaml
 MicrosoftSentinel/Health/Parsers/ParseMonitoringData.yaml
 MicrosoftSentinel/Health/Workbooks/MicrosoftSentinelMonitoring.json
+
+# Exclude Sentinel Exports
+MicrosoftSentinel/Detections/Yaml/Health
