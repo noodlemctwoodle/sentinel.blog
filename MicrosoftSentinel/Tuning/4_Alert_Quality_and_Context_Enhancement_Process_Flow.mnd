@@ -1,0 +1,70 @@
+flowchart TD
+    A[Start: Alert Quality Review] --> B[Analyse Current Alert Format]
+    
+    B --> C{Alert Title Assessment}
+    C -->|Generic/Unclear| D[Enhance Alert Titles]
+    D --> D1[Make titles descriptive]
+    D1 --> D2[Include key context]
+    D2 --> D3[Specify threat nature]
+    D3 --> D4[Add affected entities]
+    D4 --> C
+    C -->|Clear & Descriptive| E[Review Alert Descriptions]
+    
+    E --> F{Description Quality Check}
+    F -->|Insufficient Detail| G[Improve Descriptions]
+    G --> G1[Explain what happened]
+    G1 --> G2[Detail business impact]
+    G2 --> G3[Provide initial context]
+    G3 --> G4[Add investigation starting points]
+    G4 --> F
+    F -->|Comprehensive| H[Evaluate Entity Mapping]
+    
+    H --> I{Entity Mapping Complete?}
+    I -->|Incomplete| J[Configure Entity Mapping]
+    J --> J1[Map user entities]
+    J1 --> J2[Map host entities]
+    J2 --> J3[Map IP entities]
+    J3 --> J4[Map file entities]
+    J4 --> J5[Map process entities]
+    J5 --> I
+    I -->|Complete| K[Assess Severity Assignment]
+    
+    K --> L{Severity Appropriate?}
+    L -->|Static/Incorrect| M[Implement Dynamic Severity]
+    M --> M1[Analyse context factors]
+    M1 --> M2[Create severity logic]
+    M2 --> M3[Account Type Assessment]
+    M3 --> M4[System Type Assessment]
+    M4 --> M5[Time/Location Context]
+    M5 --> M6[Business Impact Analysis]
+    M6 --> N[Test Severity Assignment]
+    N --> L
+    L -->|Appropriate| O[Add Enrichment Data]
+    
+    O --> P{Enrichment Sufficient?}
+    P -->|Needs Enhancement| Q[Implement Enrichment]
+    Q --> Q1[Add threat intelligence]
+    Q1 --> Q2[Include user context]
+    Q2 --> Q3[Add asset information]
+    Q3 --> Q4[Include historical patterns]
+    Q4 --> P
+    P -->|Sufficient| R[Validate Alert Quality]
+    
+    R --> S[Test Alert Samples]
+    S --> T[Analyst Feedback Review]
+    T --> U{Quality Standards Met?}
+    U -->|No| V[Refine Based on Feedback]
+    V --> R
+    U -->|Yes| W[Document Enhancements]
+    W --> END[End: Alert Quality Optimised]
+    
+    style A fill:#e8f5e8
+    style END fill:#e8f5e8
+    style C fill:#fff3e0
+    style F fill:#fff3e0
+    style I fill:#fff3e0
+    style L fill:#fff3e0
+    style P fill:#fff3e0
+    style U fill:#fff3e0
+    style M3 fill:#f3e5f5
+    style M4 fill:#f3e5f5

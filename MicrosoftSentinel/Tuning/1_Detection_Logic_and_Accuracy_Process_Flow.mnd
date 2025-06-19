@@ -1,0 +1,59 @@
+flowchart TD
+    A[Start: Query Analysis] --> B[Review Current KQL Query]
+    
+    B --> C{Syntax Check}
+    C -->|Errors Found| D[Fix Syntax Issues]
+    D --> D1[Correct operators and functions]
+    D1 --> D2[Fix table references]
+    D2 --> D3[Resolve data type mismatches]
+    D3 --> C
+    C -->|Syntax Valid| E[Test Against Historical Data]
+    
+    E --> F{Logic Validation}
+    F -->|Logic Issues| G[Address Logic Problems]
+    G --> G1[Refine conditions and filters]
+    G1 --> G2[Fix overly broad queries]
+    G2 --> G3[Correct edge case handling]
+    G3 --> E
+    F -->|Logic Sound| H[Evaluate Data Sources]
+    
+    H --> I{Data Source Assessment}
+    I -->|Inadequate Sources| J[Update Data Sources]
+    J --> J1[Add missing log sources]
+    J1 --> J2[Improve data quality checks]
+    J2 --> J3[Ensure reliable ingestion]
+    J3 --> H
+    I -->|Sources Appropriate| K[Analyse False Positives]
+    
+    K --> L{False Positive Analysis}
+    L -->|High FP Rate| M[Implement FP Reduction]
+    M --> M1[Add legitimate activity exclusions]
+    M1 --> M2[Include contextual filters]
+    M2 --> M3[Implement threshold logic]
+    M3 --> M4[Add statistical analysis]
+    M4 --> N[Test with Known Scenarios]
+    N --> N1[Validate against true positives]
+    N1 --> N2[Confirm false positive reduction]
+    N2 --> L
+    L -->|Acceptable FP Rate| O[Handle Edge Cases]
+    
+    O --> P{Edge Case Review}
+    P -->|Cases Identified| Q[Address Edge Cases]
+    Q --> Q1[Handle missing/null values]
+    Q1 --> Q2[Account for format variations]
+    Q2 --> Q3[Standardise timestamps]
+    Q3 --> Q4[Build resilient queries]
+    Q4 --> P
+    P -->|Cases Handled| R[Final Validation]
+    
+    R --> S[Document Query Changes]
+    S --> T[Performance Baseline Test]
+    T --> END[End: Logic Optimised]
+    
+    style A fill:#e3f2fd
+    style END fill:#e8f5e8
+    style C fill:#fff3e0
+    style F fill:#fff3e0
+    style I fill:#fff3e0
+    style L fill:#fff3e0
+    style P fill:#fff3e0

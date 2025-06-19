@@ -1,0 +1,75 @@
+flowchart TD
+    A[Start: Lifecycle Management] --> B[Establish Governance Structure]
+    
+    B --> C{Ownership Defined?}
+    C -->|No| D[Define Ownership]
+    D --> D1[Assign primary owners]
+    D1 --> D2[Designate backup personnel]
+    D2 --> D3[Identify domain experts]
+    D3 --> D4[Establish review authorities]
+    D4 --> C
+    C -->|Yes| E[Implement Performance Monitoring]
+    
+    E --> F{Monitoring Active?}
+    F -->|No| G[Set Up Monitoring]
+    G --> G1[Configure TP/FP tracking]
+    G1 --> G2[Implement MTTD/MTTR metrics]
+    G2 --> G3[Set up coverage analysis]
+    G3 --> G4[Create performance dashboards]
+    G4 --> F
+    F -->|Yes| H[Establish Review Schedule]
+    
+    H --> I[Regular Review Cycle]
+    I --> J{Review Due?}
+    J -->|Yes| K[Conduct Rule Review]
+    K --> K1[Analyse performance metrics]
+    K1 --> K2[Review threat landscape changes]
+    K2 --> K3[Assess environmental changes]
+    K3 --> K4[Collect analyst feedback]
+    K4 --> L{Changes Required?}
+    L -->|Yes| M[Implement Updates]
+    M --> M1[Update detection logic]
+    M1 --> M2[Adjust thresholds]
+    M2 --> M3[Modify exclusions]
+    M3 --> M4[Enhance context]
+    M4 --> N[Test Changes]
+    N --> O[Deploy Updates]
+    O --> P[Monitor Impact]
+    P --> Q[Document Changes]
+    Q --> J
+    L -->|No| R[Document Review Results]
+    R --> J
+    J -->|No| S[Monitor Health Status]
+    
+    S --> T{Health Check}
+    T -->|Issues Detected| U[Address Health Issues]
+    U --> U1{Issue Type}
+    U1 -->|Rule Failure| U2[Fix rule execution]
+    U1 -->|Data Source Issues| U3[Resolve data problems]
+    U1 -->|Performance Degradation| U4[Optimise performance]
+    U1 -->|Coverage Gaps| U5[Address detection gaps]
+    U2 --> V[Validate Fix]
+    U3 --> V
+    U4 --> V
+    U5 --> V
+    V --> T
+    T -->|Healthy| W[Continuous Improvement]
+    
+    W --> X[Analyse Trends]
+    X --> Y{Improvement Opportunities?}
+    Y -->|Yes| Z[Plan Enhancements]
+    Z --> Z1[Prioritise improvements]
+    Z1 --> Z2[Resource allocation]
+    Z2 --> Z3[Implementation timeline]
+    Z3 --> M
+    Y -->|No| AA[Maintain Current State]
+    AA --> S
+    
+    style A fill:#f1f8e9
+    style C fill:#fff3e0
+    style F fill:#fff3e0
+    style J fill:#e1f5fe
+    style L fill:#fff3e0
+    style T fill:#fff3e0
+    style Y fill:#fff3e0
+    style U1 fill:#f3e5f5

@@ -1,0 +1,71 @@
+flowchart TD
+    A[Start: Operational Assessment] --> B[Analyse Analyst Capabilities]
+    
+    B --> C{Tier 1 Analyst Readiness?}
+    C -->|Not Ready| D[Analyst Enablement]
+    D --> D1[Define clear action items]
+    D1 --> D2[Create decision trees]
+    D2 --> D3[Establish escalation criteria]
+    D3 --> D4[Develop reference materials]
+    D4 --> C
+    C -->|Ready| E[Review Playbook Requirements]
+    
+    E --> F{Playbooks Exist & Current?}
+    F -->|No/Outdated| G[Develop/Update Playbooks]
+    G --> G1[Create investigation procedures]
+    G1 --> G2[Define containment actions]
+    G2 --> G3[Document eradication steps]
+    G3 --> G4[Establish recovery processes]
+    G4 --> F
+    F -->|Current| H[Evaluate Automation Needs]
+    
+    H --> I{Automation Configured?}
+    I -->|No| J[Implement Automation]
+    J --> J1{Automation Type Assessment}
+    J1 -->|High Confidence Detection| J2[Configure Auto-Containment]
+    J1 -->|Enrichment Needed| J3[Set Up Auto-Enrichment]
+    J1 -->|Stakeholder Notification| J4[Configure Auto-Notification]
+    J1 -->|False Positive Pattern| J5[Implement Auto-Closure]
+    J2 --> K[Test Automation]
+    J3 --> K
+    J4 --> K
+    J5 --> K
+    K --> I
+    I -->|Configured| L[MITRE ATT&CK Mapping]
+    
+    L --> M{MITRE Mapping Complete?}
+    M -->|Incomplete| N[Complete MITRE Mapping]
+    N --> N1[Identify attack tactics]
+    N1 --> N2[Map specific techniques]
+    N2 --> N3[Add sub-technique details]
+    N3 --> N4[Position in kill chain]
+    N4 --> M
+    M -->|Complete| O[Integration Testing]
+    
+    O --> P[Test End-to-End Workflow]
+    P --> Q{Workflow Functions Correctly?}
+    Q -->|Issues Found| R[Address Integration Issues]
+    R --> R1[Fix automation triggers]
+    R1 --> R2[Adjust playbook logic]
+    R2 --> R3[Refine escalation paths]
+    R3 --> P
+    Q -->|Working| S[Training & Documentation]
+    
+    S --> T[Conduct Analyst Training]
+    T --> U[Update SOC Procedures]
+    U --> V[Validate Operational Readiness]
+    V --> W{Ready for Production?}
+    W -->|Not Ready| X[Address Remaining Gaps]
+    X --> V
+    W -->|Ready| Y[Document Final Configuration]
+    Y --> END[End: Operationally Ready]
+    
+    style A fill:#fce4ec
+    style END fill:#e8f5e8
+    style C fill:#fff3e0
+    style F fill:#fff3e0
+    style I fill:#fff3e0
+    style M fill:#fff3e0
+    style Q fill:#fff3e0
+    style W fill:#fff3e0
+    style J1 fill:#e1f5fe

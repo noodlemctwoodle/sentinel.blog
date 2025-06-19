@@ -1,0 +1,57 @@
+flowchart TD
+    A[Start: Performance Analysis] --> B[Measure Current Performance]
+    
+    B --> C[Query Execution Time Analysis]
+    C --> D{Execution Time Acceptable?}
+    D -->|No| E[Query Optimisation]
+    E --> E1[Replace expensive operators]
+    E1 --> E2[Use efficient string matching]
+    E2 --> E3[Optimise filter order]
+    E3 --> E4[Eliminate wildcards]
+    E4 --> E5[Leverage summarisation]
+    E5 --> F[Test Optimised Query]
+    F --> D
+    D -->|Yes| G[Analyse Resource Consumption]
+    
+    G --> H{Resource Usage Sustainable?}
+    H -->|No| I[Resource Optimisation]
+    I --> I1[Implement data sampling]
+    I1 --> I2[Reduce query complexity]
+    I2 --> I3[Adjust execution frequency]
+    I3 --> I4[Minimise cross-workspace queries]
+    I4 --> J[Test Resource Impact]
+    J --> H
+    H -->|Yes| K[Evaluate Lookback Period]
+    
+    K --> L{Lookback Period Appropriate?}
+    L -->|No| M[Adjust Time Windows]
+    M --> M1{Threat Type Assessment}
+    M1 -->|Real-time Threats| M2[Short Window: 1-6 hours]
+    M1 -->|Campaign Detection| M3[Medium Window: 24-48 hours]
+    M1 -->|Slow Threats/Baselines| M4[Long Window: 7-30 days]
+    M2 --> N[Validate Detection Coverage]
+    M3 --> N
+    M4 --> N
+    N --> L
+    L -->|Yes| O[Monitor Overall Impact]
+    
+    O --> P{Cost vs Effectiveness Balance?}
+    P -->|Needs Adjustment| Q[Fine-tune Balance]
+    Q --> Q1[Adjust sampling rates]
+    Q1 --> Q2[Optimise data retention]
+    Q2 --> Q3[Review rule frequency]
+    Q3 --> P
+    P -->|Balanced| R[Establish Monitoring]
+    
+    R --> S[Set Performance Baselines]
+    S --> T[Configure Alerting Thresholds]
+    T --> U[Document Optimisations]
+    U --> END[End: Performance Optimised]
+    
+    style A fill:#fff8e1
+    style END fill:#e8f5e8
+    style D fill:#fff3e0
+    style H fill:#fff3e0
+    style L fill:#fff3e0
+    style P fill:#fff3e0
+    style M1 fill:#e1f5fe

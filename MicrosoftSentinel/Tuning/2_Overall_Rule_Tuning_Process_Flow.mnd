@@ -1,0 +1,89 @@
+flowchart TD
+    A[Start: Rule Review Initiative] --> B{Business Justification}
+    
+    B --> B1{Does rule address real threat<br/>relevant to environment?}
+    B1 -->|No| B2[Document decision and<br/>retire or disable rule]
+    B2 --> END1[End: Rule Retired]
+    B1 -->|Yes| B3{Is detection duplicate<br/>of existing coverage?}
+    B3 -->|Yes| B4[Consolidate rules or<br/>retire redundant detection]
+    B4 --> END1
+    B3 -->|No| B5{Does rule align with<br/>threat model & priorities?}
+    B5 -->|No| B6[Adjust priority or<br/>defer tuning effort]
+    B6 --> END2[End: Rule Deprioritised]
+    B5 -->|Yes| C{Detection Logic & Accuracy}
+    
+    C --> C1{Is KQL query syntactically<br/>correct and logical?}
+    C1 -->|No| C2[Fix syntax errors and<br/>logic flaws]
+    C2 --> C3[Test query against<br/>historical data]
+    C3 --> C1
+    C1 -->|Yes| C4{Are data sources<br/>appropriate and reliable?}
+    C4 -->|No| C5[Update data source<br/>selection and references]
+    C5 --> C1
+    C4 -->|Yes| C6{Does detection minimise<br/>false positives effectively?}
+    C6 -->|No| C7[Add exclusions, context<br/>filters, and thresholds]
+    C7 --> C8[Test against known<br/>good/bad scenarios]
+    C8 --> C6
+    C6 -->|Yes| D{Performance & Resource Impact}
+    
+    D --> D1{Is query execution time<br/>within acceptable limits?}
+    D1 -->|No| D2[Optimise KQL operators<br/>and query structure]
+    D2 --> D3[Test performance<br/>improvements]
+    D3 --> D1
+    D1 -->|Yes| D4{Is lookback period<br/>appropriate for threat?}
+    D4 -->|No| D5[Adjust time window<br/>for detection scenario]
+    D5 --> D1
+    D4 -->|Yes| D6{Are resource consumption<br/>levels sustainable?}
+    D6 -->|No| D7[Implement sampling or<br/>reduce query complexity]
+    D7 --> D1
+    D6 -->|Yes| E{Alert Quality & Context}
+    
+    E --> E1{Is alert title clear<br/>and descriptive?}
+    E1 -->|No| E2[Update alert title<br/>and description format]
+    E2 --> E3[Add relevant context<br/>and enrichment data]
+    E3 --> E1
+    E1 -->|Yes| E4{Do we have proper<br/>entity mapping configured?}
+    E4 -->|No| E5[Configure entity mapping<br/>for investigation workflows]
+    E5 --> E1
+    E4 -->|Yes| E6{Is severity level<br/>appropriate and dynamic?}
+    E6 -->|No| E7[Implement dynamic severity<br/>based on context]
+    E7 --> E1
+    E6 -->|Yes| F{Operational Readiness}
+    
+    F --> F1{Can Tier 1 analysts understand<br/>required response actions?}
+    F1 -->|No| F2[Create playbooks and<br/>response procedures]
+    F2 --> F3[Document investigation<br/>steps and escalation paths]
+    F3 --> F1
+    F1 -->|Yes| F4{Is automation configured<br/>appropriately for rule?}
+    F4 -->|No| F5[Configure auto-enrichment,<br/>containment, or notifications]
+    F5 --> F1
+    F4 -->|Yes| F6{Are MITRE ATT&CK<br/>techniques properly mapped?}
+    F6 -->|No| F7[Map to relevant tactics<br/>and techniques]
+    F7 --> F1
+    F6 -->|Yes| G{Maintenance & Lifecycle}
+    
+    G --> G1{Is rule ownership<br/>clearly defined?}
+    G1 -->|No| G2[Assign rule owner<br/>and backup personnel]
+    G2 --> G1
+    G1 -->|Yes| G3{Are performance metrics<br/>being monitored?}
+    G3 -->|No| G4[Implement monitoring for<br/>TP/FP rates and efficiency]
+    G4 --> G1
+    G3 -->|Yes| G5{Is failure monitoring<br/>and alerting configured?}
+    G5 -->|No| G6[Set up rule and data<br/>source health monitoring]
+    G6 --> G1
+    G5 -->|Yes| H[Document All Changes<br/>and Rationale]
+    
+    H --> I[Deploy Updated Rule<br/>to Production]
+    I --> J[Monitor Performance<br/>& Effectiveness]
+    J --> K[Schedule Regular<br/>Review Cycle]
+    K --> END3[End: Rule Optimised<br/>and Maintained]
+    
+    style A fill:#e1f5fe
+    style END1 fill:#ffebee
+    style END2 fill:#fff3e0
+    style END3 fill:#e8f5e8
+    style B fill:#f3e5f5
+    style C fill:#e3f2fd
+    style D fill:#fff8e1
+    style E fill:#e8f5e8
+    style F fill:#fce4ec
+    style G fill:#f1f8e9
