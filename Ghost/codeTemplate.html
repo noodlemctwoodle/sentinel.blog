@@ -4,11 +4,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 <script>
-// Unified Code Embed for Ghost
 (function() {
-    // Add CSS styles
     const style = document.createElement('style');
     style.textContent = `
+        /* OUTER container - handles border-radius and clipping */
         .code-embed-container {
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 14px;
@@ -16,49 +15,54 @@
             border-radius: 8px;
             max-height: 600px;
             margin: 20px 0;
-            border: 1px solid;
-            background-color: #f6f8fa !important;
-            color: #24292f !important;
-            border-color: #d1d9e0 !important;
+            border: 1px solid #d1d9e0;
+            background: #f6f8fa;
+            color: #24292f;
             display: flex;
             flex-direction: column;
+            overflow: hidden; /* This clips the inner scrollbar to border-radius */
         }
 
-        .code-embed-header {
+        .code-embed-container .code-embed-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 8px 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            background: #f6f8fa;
+            border-bottom: 1px solid #d1d9e0;
+            background-color: #e1e8ed !important; /* Different property and more specific selector */
+            background: #e1e8ed !important;
             flex-shrink: 0;
         }
 
+        /* INNER container - handles the actual scrolling */
         .code-embed-content {
             padding: 0;
-            overflow-x: auto;
-            overflow-y: auto;
+            overflow-x: scroll; /* Always show horizontal scrollbar */
+            overflow-y: auto;   /* Show vertical scrollbar when needed */
             flex: 1;
+            min-height: 0; /* Critical for Firefox/Edge */
+            padding-bottom: 12px; /* Reserve space for horizontal scrollbar */
         }
 
         .code-embed-content pre {
             margin: 0;
             padding: 20px;
-            background: transparent !important;
+            padding-bottom: 8px; /* Reduce bottom padding to account for scrollbar space */
+            background: transparent;
             font-family: inherit;
-            font-size: inherit;
-            line-height: inherit;
+            color: inherit;
+            border: none;
             white-space: pre;
-            overflow: visible;
-            color: #24292f !important;
+            min-width: calc(100% + 1px); /* Force horizontal scrollbar to always appear */
+            width: max-content; /* Ensure content width is respected */
         }
 
         .code-embed-content code {
-            background: transparent !important;
+            background: transparent;
             padding: 0;
             font-family: inherit;
-            font-size: inherit;
             color: inherit;
+            border: none;
         }
 
         .code-embed-indicator {
@@ -67,6 +71,7 @@
             opacity: 0.6;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; /* System font instead of monospace */
         }
 
         .code-embed-copy {
@@ -79,27 +84,13 @@
             cursor: pointer;
             opacity: 0.7;
             transition: all 0.2s ease;
-            font-family: inherit;
         }
 
-        .code-embed-copy:hover {
-            opacity: 1;
-            background: rgba(255, 255, 255, 0.2);
-        }
+        .code-embed-copy:hover { opacity: 1; background: rgba(255, 255, 255, 0.2); }
+        .code-embed-copy.success { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .code-embed-loading { padding: 20px; text-align: center; font-style: italic; opacity: 0.7; }
 
-        .code-embed-copy.success {
-            background: rgba(34, 197, 94, 0.2);
-            border-color: rgba(34, 197, 94, 0.4);
-            color: #22c55e;
-        }
-
-        .code-embed-loading {
-            padding: 20px;
-            text-align: center;
-            font-style: italic;
-            opacity: 0.7;
-        }
-
+        /* Enhanced scrollbar styling - now properly contained */
         .code-embed-content::-webkit-scrollbar {
             width: 12px;
             height: 12px;
@@ -126,131 +117,114 @@
         }
 
         .code-embed-content::-webkit-scrollbar-corner {
-            background: transparent;
+            background: #f6f8fa; /* Match container background */
+            border-radius: 0; /* Square corner where scrollbars meet */
         }
 
+        /* Firefox scrollbar */
         .code-embed-content {
             scrollbar-width: auto;
             scrollbar-color: #cbd5e0 transparent;
         }
 
+        /* Remove all artifacts */
+        .code-embed-container *, .code-embed-container .token { 
+            border: none !important; 
+            box-shadow: none !important; 
+            text-shadow: none !important; 
+            background: transparent !important;
+        }
+
+        /* Dark mode */
         @media (prefers-color-scheme: dark) {
             .code-embed-container {
-                background-color: #161b22 !important;
-                color: #e6edf3 !important;
-                border-color: #30363d !important;
+                background: #0d1117;
+                color: #f0f6fc;
+                border-color: #30363d;
             }
-            .code-embed-header {
-                background: #161b22;
+            .code-embed-container .code-embed-header {
+                background: #30363d !important; /* Much more noticeable difference in dark mode */
+                background-color: #30363d !important;
+                border-bottom-color: #30363d;
             }
+            
             .code-embed-content::-webkit-scrollbar-thumb {
-                background: linear-gradient(180deg, #4a5568, #2d3748);
-                border: 2px solid #161b22;
+                background: linear-gradient(180deg, #6e7681, #484f58);
+                border: 2px solid #0d1117;
                 box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1);
             }
             .code-embed-content::-webkit-scrollbar-thumb:hover {
-                background: linear-gradient(180deg, #2d3748, #1a202c);
+                background: linear-gradient(180deg, #484f58, #30363d);
                 box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.2);
             }
             .code-embed-content::-webkit-scrollbar-thumb:active {
-                background: linear-gradient(180deg, #1a202c, #171923);
+                background: linear-gradient(180deg, #30363d, #21262d);
             }
-            .code-embed-content pre {
-                color: #e6edf3 !important;
+            .code-embed-content::-webkit-scrollbar-corner {
+                background: #0d1117; /* Match dark container background */
             }
-        }
-
-        .dark .code-embed-container,
-        [data-theme="dark"] .code-embed-container,
-        body.dark .code-embed-container {
-            background-color: #161b22 !important;
-            color: #e6edf3 !important;
-            border-color: #30363d !important;
-        }
-
-        .dark .code-embed-header,
-        [data-theme="dark"] .code-embed-header,
-        body.dark .code-embed-header {
-            background: #161b22;
-        }
-
-        .dark .code-embed-content::-webkit-scrollbar-thumb,
-        [data-theme="dark"] .code-embed-content::-webkit-scrollbar-thumb,
-        body.dark .code-embed-content::-webkit-scrollbar-thumb {
-            background: linear-gradient(180deg, #4a5568, #2d3748);
-            border: 2px solid #161b22;
-        }
-
-        .dark .code-embed-content,
-        [data-theme="dark"] .code-embed-content,
-        body.dark .code-embed-content {
-            scrollbar-color: #4a5568 transparent;
-        }
-
-        .dark .code-embed-content pre,
-        [data-theme="dark"] .code-embed-content pre,
-        body.dark .code-embed-content pre {
-            color: #e6edf3 !important;
+            .code-embed-content {
+                scrollbar-color: #6e7681 transparent;
+            }
         }
     `;
     document.head.appendChild(style);
 
-    // Initialize code embeds when DOM is ready
     function initCodeEmbeds() {
-        const containers = document.querySelectorAll('.code-embed-container[data-url]:not(.initialized)');
-        
-        containers.forEach(container => {
+        document.querySelectorAll('.code-embed-container[data-url]:not(.initialized)').forEach(container => {
             container.classList.add('initialized');
             
             const githubUrl = container.getAttribute('data-url');
             const codeType = container.getAttribute('data-type') || 'auto';
             
             if (!githubUrl) {
-                container.innerHTML = '<div style="color: red; padding: 20px;">Error: No URL specified. Add data-url attribute.</div>';
+                container.innerHTML = '<div style="color: red; padding: 20px;">Error: No URL specified</div>';
                 return;
             }
 
             let rawCodeContent = '';
 
-            function detectCodeType(url) {
+            const detectCodeType = (url) => {
                 if (codeType !== 'auto') return codeType;
-                
-                const extension = url.split('.').pop().toLowerCase();
-                switch (extension) {
-                    case 'ps1':
-                    case 'psm1':
-                        return 'powershell';
-                    case 'json':
-                        return 'json';
-                    case 'kql':
-                    case 'kusto':
-                        return 'kql';
-                    case 'yaml':
-                    case 'yml':
-                        return 'yaml';
-                    case 'bicep':
-                        return 'bicep';
-                    case 'arm':
-                    case 'template':
-                        return 'json';
-                    default:
-                        return 'text';
-                }
-            }
-
-            function getLanguageInfo(type) {
-                const languages = {
-                    'powershell': { display: 'PowerShell', prism: 'language-powershell' },
-                    'json': { display: 'JSON', prism: 'language-json' },
-                    'kql': { display: 'KQL', prism: 'language-kusto' },
-                    'yaml': { display: 'YAML', prism: 'language-yaml' },
-                    'bicep': { display: 'Bicep', prism: 'language-bicep' },
-                    'text': { display: 'Text', prism: 'language-text' }
+                const ext = url.split('.').pop().toLowerCase();
+                const types = { 
+                    ps1: 'powershell', 
+                    psm1: 'powershell', 
+                    json: 'json', 
+                    kql: 'kql', 
+                    kusto: 'kql', 
+                    yaml: 'yaml', 
+                    yml: 'yaml', 
+                    bicep: 'bicep',
+                    js: 'javascript',
+                    ts: 'typescript',
+                    py: 'python',
+                    css: 'css',
+                    html: 'html',
+                    xml: 'xml'
                 };
-                return languages[type] || languages['text'];
-            }
+                return types[ext] || 'text';
+            };
 
-            function copyCode() {
+            const getLanguageInfo = (type) => {
+                const languages = {
+                    powershell: { display: 'PowerShell', prism: 'language-powershell' },
+                    json: { display: 'JSON', prism: 'language-json' },
+                    kql: { display: 'KQL', prism: 'language-kusto' },
+                    yaml: { display: 'YAML', prism: 'language-yaml' },
+                    bicep: { display: 'Bicep', prism: 'language-bicep' },
+                    javascript: { display: 'JavaScript', prism: 'language-javascript' },
+                    typescript: { display: 'TypeScript', prism: 'language-typescript' },
+                    python: { display: 'Python', prism: 'language-python' },
+                    css: { display: 'CSS', prism: 'language-css' },
+                    html: { display: 'HTML', prism: 'language-html' },
+                    xml: { display: 'XML', prism: 'language-xml' },
+                    text: { display: 'Text', prism: 'language-text' }
+                };
+                return languages[type] || languages.text;
+            };
+
+            const copyCode = () => {
                 const copyBtn = container.querySelector('.code-embed-copy');
                 navigator.clipboard.writeText(rawCodeContent).then(() => {
                     copyBtn.textContent = 'Copied!';
@@ -263,18 +237,7 @@
                     copyBtn.textContent = 'Error';
                     setTimeout(() => copyBtn.textContent = 'Copy', 2000);
                 });
-            }
-
-            function formatContent(data, type) {
-                if (type === 'json') {
-                    try {
-                        return JSON.stringify(JSON.parse(data), null, 2);
-                    } catch (e) {
-                        return data;
-                    }
-                }
-                return data;
-            }
+            };
 
             container.innerHTML = '<div class="code-embed-loading">Loading code...</div>';
 
@@ -288,7 +251,11 @@
                 })
                 .then(data => {
                     rawCodeContent = data;
-                    const formattedContent = formatContent(data, detectedType);
+                    let formattedContent = data;
+                    
+                    if (detectedType === 'json') {
+                        try { formattedContent = JSON.stringify(JSON.parse(data), null, 2); } catch (e) {}
+                    }
                     
                     container.innerHTML = `
                         <div class="code-embed-header">
@@ -296,31 +263,27 @@
                             <button class="code-embed-copy">Copy</button>
                         </div>
                         <div class="code-embed-content">
-                            <pre><code class="${langInfo.prism}">${formattedContent.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&/g, '&amp;')}</code></pre>
+                            <pre><code class="${langInfo.prism}">${formattedContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
                         </div>
                     `;
                     container.querySelector('.code-embed-copy').addEventListener('click', copyCode);
                     
-                    // Trigger Prism.js highlighting if available
                     if (typeof Prism !== 'undefined') {
                         Prism.highlightAllUnder(container);
                     }
                 })
                 .catch(error => {
-                    container.innerHTML = `<div style="color: red; padding: 20px;">Error loading ${githubUrl}: ${error.message}</div>`;
+                    container.innerHTML = `<div style="color: red; padding: 20px;">Error: ${error.message}</div>`;
                 });
         });
     }
 
-    // Initialize on page load
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initCodeEmbeds);
     } else {
         initCodeEmbeds();
     }
 
-    // Also initialize when new content is added (for dynamic content)
-    const observer = new MutationObserver(initCodeEmbeds);
-    observer.observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(initCodeEmbeds).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
