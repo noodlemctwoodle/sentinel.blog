@@ -1,0 +1,25 @@
+// SOC efficiency metrics before and after rule tuning
+let BeforeTuning = datetime("2025-01-01");
+let AfterTuning = datetime("2025-06-01");
+//
+let AlertMetrics = SecurityAlert
+    | where TimeGenerated >= BeforeTuning  // Add time filter
+    | extend Period = case(TimeGenerated < AfterTuning, "Before", "After")
+    | summarize TotalAlerts = count(),
+               HighSeverity = countif(AlertSeverity == "High")
+               by Period
+    | extend AlertsPerDay = TotalAlerts / 180.0;  // 6-month periods
+//
+let IncidentMetrics = SecurityIncident  
+    | where TimeGenerated >= BeforeTuning  // Add time filter
+    | extend Period = case(TimeGenerated < AfterTuning, "Before", "After")
+    | summarize TotalIncidents = count(),
+               TruePositives = countif(Classification == "TruePositive"),
+               MTTR = avg(datetime_diff('hour', ClosedTime, CreatedTime))
+               by Period
+    | extend TPRate = round(100.0 * TruePositives / TotalIncidents, 1);
+//
+AlertMetrics
+| join kind=inner (IncidentMetrics) on Period
+| project Period, AlertsPerDay, HighSeverity, TPRate, MTTR
+| order by Period asc
