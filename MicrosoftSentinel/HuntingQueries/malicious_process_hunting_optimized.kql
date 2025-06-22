@@ -1,0 +1,15 @@
+// Optimised approach - use this pattern instead
+let SuspiciousProcesses = dynamic(["malicious.exe", "bad.dll", "threat.ps1"]);
+let TimeRange = ago(24h);  // Reduced time window
+//
+SecurityEvent
+| where TimeGenerated > TimeRange  // Filter time first
+| where EventID in (4688, 4689)   // Specific event types only
+| where Process has_any (SuspiciousProcesses)  // Efficient string matching
+| project TimeGenerated, Computer, Account, Process, CommandLine
+| summarize FirstSeen = min(TimeGenerated),
+           LastSeen = max(TimeGenerated),
+           ExecutionCount = count(),
+           UniqueHosts = dcount(Computer)
+           by Process, Account
+| where ExecutionCount >= 3 or UniqueHosts >= 2  // Focus on significant activity
