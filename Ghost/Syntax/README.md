@@ -1,12 +1,13 @@
 # Code Embed Widget for Ghost Blog
 
-A beautiful, responsive code embed widget that loads and displays code files directly from GitHub with syntax highlighting, copy functionality
+A beautiful, responsive code embed widget that loads and displays code files directly from GitHub with syntax highlighting, copy functionality, and source linking.
 
 ## ✨ Features
 
 - Clean, modern interface with light/dark mode support
 - Automatically detects code language from file extension
 - Copy entire code content to clipboard with visual feedback
+- Direct link to view the original file on GitHub
 - Automatic dark mode support based on system preferences
 - Efficient caching and minimal overhead
 - Simple installation with minimal configuration
@@ -16,7 +17,9 @@ A beautiful, responsive code embed widget that loads and displays code files dir
 ### Step 1: Add Footer Code
 
 1. Go to your Ghost Admin → **Settings** → **Code Injection**
-2. Paste the code from syntaxTemplate.html into the **Site Footer** section:
+2. Paste the following code into the **Site Footer** section:
+
+[syntaxTemplate](/Ghost/Syntax/syntaxTemplate.html)
 
 ### Step 2: Use in Posts
 
@@ -27,6 +30,12 @@ To embed a code file in any post or page, simply add this HTML:
 📄 Loading [FileName].ext...
 </div>
 ```
+
+**The widget will automatically:**
+
+- ✅ Detect the language from file extension  
+- ✅ Add a "View Source" button linking to GitHub
+- ✅ Show syntax highlighting and copy functionality
 
 ## 📖 Usage Examples
 
@@ -80,6 +89,16 @@ The widget automatically detects and highlights the following languages:
 <div class="code-embed-container" 
      data-url="YOUR_URL" 
      data-type="javascript">
+📄 Loading...
+</div>
+```
+
+### Custom Source Link
+
+```html
+<div class="code-embed-container" 
+     data-url="YOUR_RAW_URL"
+     data-href="https://github.com/user/repo/blob/main/file.js">
 📄 Loading...
 </div>
 ```
@@ -144,6 +163,12 @@ Modify the CSS variables in the footer code:
 
 ## 🌟 Advanced Features
 
+### Automatic GitHub Integration
+
+- **Auto-detects GitHub URLs** and creates proper source links
+- **Converts raw URLs** to GitHub blob URLs automatically  
+- **Custom source links** supported with `data-href` attribute
+
 ### Multiple Embeds Per Page
 
 The widget supports unlimited code embeds on a single page:
@@ -158,6 +183,8 @@ The widget supports unlimited code embeds on a single page:
 
 In the Ghost editor, you'll see a placeholder showing the filename. When published, this transforms into the full syntax-highlighted code block.
 
+![CodeBlock](/Ghost/Syntax/.images/ghost_code_syn.png)
+
 ### Performance
 
 - Code is fetched once and cached
@@ -166,11 +193,10 @@ In the Ghost editor, you'll see a placeholder showing the filename. When publish
 
 ## 📱 Browser Support
 
-- ✅ **Chrome**
-- ✅ **Safari**
-- ✅ **Orion**
-- ✅ **Firefox**
-- ✅ **Edge**
+- ✅ **Chrome** (Full support including custom scrollbars)
+- ✅ **Safari** (Full support including custom scrollbars)
+- ✅ **Firefox** (Full support with standard scrollbars)
+- ✅ **Edge** (Full support including custom scrollbars)
 
 ## 🔄 Updates
 
