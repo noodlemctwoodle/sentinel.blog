@@ -1,0 +1,38 @@
+// Analytical Rule performance analysis
+let AnalysisWindow = 30d;
+let RulePerformance = SecurityIncident
+    | where TimeGenerated > ago(AnalysisWindow)
+    | summarize TotalIncidents = count(),
+               ClosedAsTP = countif(Classification == "TruePositive"),
+               ClosedAsFP = countif(Classification == "FalsePositive"), 
+               ClosedAsBP = countif(Classification == "BenignPositive"),
+               AvgTimeToClose = avg(datetime_diff('hour', ClosedTime, CreatedTime))
+               by Title
+    | extend TPRate = round(100.0 * ClosedAsTP / TotalIncidents, 2),
+             FPRate = round(100.0 * ClosedAsFP / TotalIncidents, 2)
+    | extend EfficiencyScore = case(
+                 TPRate >= 80 and FPRate <= 10, "Excellent",
+                 TPRate >= 60 and FPRate <= 25, "Good", 
+                 TPRate >= 40 and FPRate <= 40, "NeedsTuning",
+                 "RequiresReview"
+             );
+//
+let AlertVelocity = SecurityAlert
+    | where TimeGenerated > ago(AnalysisWindow)
+    | summarize AlertsPerDay = count() / 30.0,
+               HourlyAlerts = count() by AlertName, bin(TimeGenerated, 1h)
+    | summarize AlertsPerDay = avg(AlertsPerDay),
+               PeakAlertsPerHour = max(HourlyAlerts)
+               by AlertName
+    | extend AlertVolume = case(
+        AlertsPerDay > 100, "High",
+        AlertsPerDay > 20, "Medium",
+        "Low"
+    );
+//
+RulePerformance
+| join kind=inner (AlertVelocity) on $left.Title == $right.AlertName
+| project RuleName = Title, TotalIncidents, TPRate, FPRate, 
+         EfficiencyScore, AlertsPerDay, AlertVolume, AvgTimeToClose
+| order by case(EfficiencyScore == "RequiresReview", 1, 
+               EfficiencyScore == "NeedsTuning", 2, 3) asc, FPRate desc
