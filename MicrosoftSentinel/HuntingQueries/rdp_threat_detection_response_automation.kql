@@ -1,0 +1,30 @@
+// Detection with built-in automation decision logic
+SecurityEvent
+| where TimeGenerated > ago(30m)
+| where EventID == 4624  // Successful logon
+| where LogonType == 10  // RDP logon
+| extend SourceCountry = geo_info_from_ip_address(IpAddress).country,
+         IsInternalIP = ipv4_is_private(IpAddress)
+// Risk-based automation triggers
+| extend AutomationAction = case(
+    not(IsInternalIP) and SourceCountry !in ("United Kingdom", "United States"), "IsolateUser",
+    not(IsInternalIP) and hourofday(TimeGenerated) !between (8 .. 18), "RequireApproval", 
+    Account has_any ("admin", "service") and not(IsInternalIP), "AlertSecurityTeam",
+    "MonitorOnly"
+)
+| extend ConfidenceLevel = case(
+    not(IsInternalIP) and SourceCountry in ("China", "Russia", "North Korea"), 95,
+    not(IsInternalIP) and Account has "admin", 85,
+    not(IsInternalIP), 70,
+    50
+)
+// Investigation playbook selection
+| extend PlaybookRequired = case(
+    AutomationAction == "IsolateUser", "User-Isolation-Playbook",
+    AutomationAction == "RequireApproval", "Manager-Approval-Playbook",
+    AutomationAction == "AlertSecurityTeam", "Security-Escalation-Playbook", 
+    "Standard-Investigation-Playbook"
+)
+| where ConfidenceLevel >= 70  // Only trigger for high-confidence detections
+| project TimeGenerated, Account, Computer, IpAddress, SourceCountry,
+         AutomationAction, ConfidenceLevel, PlaybookRequired
