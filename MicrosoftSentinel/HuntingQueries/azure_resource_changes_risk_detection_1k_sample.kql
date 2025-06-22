@@ -1,0 +1,16 @@
+// Sample large datasets while maintaining detection accuracy
+AzureActivity
+| where TimeGenerated > ago(1h)
+| sample 1000  // Sample for initial analysis
+| where OperationName has_any ("delete", "create", "modify")
+| where ActivityStatus == "Succeeded"
+| extend Risk = case(
+    OperationName has "delete" and ResourceGroup has "prod", "High",
+    OperationName has "create" and Caller !has "@company.com", "Medium",
+    "Low"
+)
+| where Risk in ("High", "Medium")  // Focus on significant changes only
+| summarize Operations = count(), 
+           Callers = make_set(Caller, 10),
+           Resources = make_set(Resource, 20)
+           by ResourceGroup, Risk, bin(TimeGenerated, 10m)
