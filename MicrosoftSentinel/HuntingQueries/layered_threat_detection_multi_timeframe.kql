@@ -1,0 +1,27 @@
+// Short-term detection for immediate threats (real-time)
+union (
+    SecurityAlert
+    | where TimeGenerated > ago(15m)  // Last 15 minutes
+    | where AlertSeverity == "High"
+    | extend DetectionType = "Immediate"
+),
+(
+    // Medium-term detection for campaign activity (hourly)
+    SecurityEvent  
+    | where TimeGenerated > ago(4h)   // Last 4 hours
+    | where EventID == 4625
+    | summarize FailedCount = count() by Account, bin(TimeGenerated, 1h)
+    | where FailedCount >= 10
+    | extend DetectionType = "Campaign"
+),
+(
+    // Long-term detection for APT behaviour (daily)
+    DeviceNetworkEvents
+    | where TimeGenerated > ago(7d)   // Last 7 days
+    | summarize Connections = count(), 
+               UniqueDestinations = dcount(RemoteIP) 
+               by DeviceName, bin(TimeGenerated, 1d)
+    | where UniqueDestinations >= 100  // Potential C2 beaconing
+    | extend DetectionType = "Persistent"
+)
+| project TimeGenerated, DetectionType, AlertDetails = pack_all()
