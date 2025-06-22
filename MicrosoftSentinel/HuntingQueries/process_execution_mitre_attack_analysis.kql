@@ -1,0 +1,35 @@
+// Process execution analysis with MITRE ATT&CK context
+DeviceProcessEvents
+| where TimeGenerated > ago(4h)
+| extend MITRETactic = case(
+    ProcessCommandLine has_any ("whoami", "net user", "net group"), "Discovery",
+    ProcessCommandLine has_any ("rundll32", "regsvr32", "mshta"), "DefenseEvasion", 
+    ProcessCommandLine has_any ("powershell", "cmd") and 
+    ProcessCommandLine has_any ("DownloadString", "WebClient"), "CommandAndControl",
+    ProcessCommandLine has_any ("net use", "copy", "xcopy", "robocopy"), "LateralMovement",
+    ProcessCommandLine has_any ("reg add", "schtasks", "sc create"), "Persistence",
+    "Execution"
+)
+| extend MITRETechnique = case(
+    ProcessCommandLine has "whoami", "T1033 - System Owner/User Discovery",
+    ProcessCommandLine has "net user", "T1087 - Account Discovery", 
+    ProcessCommandLine has "rundll32", "T1218.011 - Rundll32",
+    ProcessCommandLine has "powershell" and ProcessCommandLine has "DownloadString", 
+        "T1059.001 - PowerShell",
+    ProcessCommandLine has "net use", "T1021.002 - SMB/Windows Admin Shares",
+    ProcessCommandLine has "schtasks", "T1053.005 - Scheduled Task",
+    "T1059 - Command and Scripting Interpreter"
+)
+| extend ThreatScore = case(
+    MITRETactic in ("DefenseEvasion", "CommandAndControl"), 80,
+    MITRETactic in ("LateralMovement", "Persistence"), 70,
+    MITRETactic == "Discovery", 50,
+    30
+)
+| where ThreatScore >= 50  // Focus on significant techniques
+| summarize TechniqueCount = count(),
+           UniqueTechniques = dcount(MITRETechnique),
+           TacticsCovered = make_set(MITRETactic, 10),
+           MaxThreatScore = max(ThreatScore)
+           by DeviceName, AccountName, bin(TimeGenerated, 1h)
+| where UniqueTechniques >= 3  // Multiple techniques suggest sophisticated attack
