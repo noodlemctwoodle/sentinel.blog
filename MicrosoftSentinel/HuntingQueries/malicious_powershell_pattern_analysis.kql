@@ -1,0 +1,21 @@
+// PowerShell detection with comprehensive exclusions
+DeviceProcessEvents
+| where TimeGenerated > ago(24h)
+| where FileName =~ "powershell.exe" or FileName =~ "pwsh.exe"
+| where ProcessCommandLine has_any ("DownloadString", "IEX", "Invoke-Expression", "EncodedCommand")
+// Exclude known legitimate automation
+| where not(InitiatingProcessAccountName has_any ("SYSTEM", "NETWORK SERVICE"))
+| where not(InitiatingProcessFileName in~ ("winrm.exe", "wsmprovhost.exe"))
+| where not(ProcessCommandLine has_any ("Microsoft.PowerShell.Core", "Import-Module"))
+// Add business-specific exclusions
+| where not(ProcessCommandLine has "Company-ApprovedScript.ps1")
+| where not(InitiatingProcessCommandLine has "ScheduledTasks")
+// Enrich with additional context
+| extend CommandLength = strlen(ProcessCommandLine),
+         HasObfuscation = ProcessCommandLine matches regex @"[A-Za-z0-9+/=]{50,}",
+         SuspiciousPatterns = countof(ProcessCommandLine, "char") + 
+                            countof(ProcessCommandLine, "IEX") +
+                            countof(ProcessCommandLine, "invoke")
+| where CommandLength > 100 or HasObfuscation or SuspiciousPatterns >= 2
+| project TimeGenerated, DeviceName, Account = AccountName, 
+         ProcessCommandLine, CommandLength, SuspiciousPatterns
