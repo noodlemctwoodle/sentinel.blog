@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KQL Display</title>
+    <style>
+        .kql-embed-container {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            border-radius: 8px;
+            max-height: 600px;
+            margin: 0;
+            border: 1px solid;
+            background-color: #f6f8fa !important;
+            color: #24292f !important;
+            border-color: #d1d9e0 !important;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kql-embed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: #f6f8fa;
+            flex-shrink: 0;
+        }
+
+        .kql-embed-content {
+            padding: 20px;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .kql-embed-indicator {
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0.6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kql-embed-copy {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: inherit;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .kql-embed-copy:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .kql-embed-copy.success {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.4);
+            color: #22c55e;
+        }
+
+        .kql-embed-loading {
+            padding: 20px;
+            text-align: center;
+            font-style: italic;
+            opacity: 0.7;
+        }
+
+        /* Custom scrollbar styling */
+        .kql-embed-content::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+
+        .kql-embed-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .kql-embed-content::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #cbd5e0, #a0aec0);
+            border-radius: 6px;
+            border: 2px solid #f6f8fa;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .kql-embed-content::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #a0aec0, #718096);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .kql-embed-content::-webkit-scrollbar-thumb:active {
+            background: linear-gradient(180deg, #718096, #4a5568);
+        }
+
+        .kql-embed-content::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        .kql-embed-content {
+            scrollbar-width: auto;
+            scrollbar-color: #cbd5e0 transparent;
+        }
+
+        /* KQL syntax highlighting - matching GitHub colors */
+        .kql-keyword { color: #d73a49 !important; font-weight: normal; }
+        .kql-string { color: #032f62 !important; font-weight: normal; }
+        .kql-comment { color: #6a737d !important; font-weight: normal; }
+        .kql-table { color: #24292e !important; font-weight: normal; }
+
+        /* Dark mode - GitHub dark colors */
+        @media (prefers-color-scheme: dark) {
+            .kql-embed-container {
+                background-color: #161b22 !important;
+                color: #e6edf3 !important;
+                border-color: #30363d !important;
+                scrollbar-color: #4a5568 transparent;
+            }
+            .kql-embed-container::-webkit-scrollbar-thumb {
+                background: linear-gradient(180deg, #4a5568, #2d3748);
+                border: 2px solid #161b22;
+                box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1);
+            }
+            .kql-embed-container::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(180deg, #2d3748, #1a202c);
+                box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.2);
+            }
+            .kql-embed-container::-webkit-scrollbar-thumb:active {
+                background: linear-gradient(180deg, #1a202c, #171923);
+            }
+            .kql-keyword { color: #ff7b72 !important; font-weight: normal; }
+            .kql-string { color: #a5d6ff !important; font-weight: normal; }
+            .kql-comment { color: #8b949e !important; font-weight: normal; }
+            .kql-table { color: #f0f6fc !important; font-weight: normal; }
+        }
+
+        .dark .kql-embed-container,
+        [data-theme="dark"] .kql-embed-container,
+        body.dark .kql-embed-container {
+            background-color: #161b22 !important;
+            color: #e6edf3 !important;
+            border-color: #30363d !important;
+            scrollbar-color: #4a5568 transparent !important;
+        }
+
+        .dark .kql-embed-container::-webkit-scrollbar-thumb,
+        [data-theme="dark"] .kql-embed-container::-webkit-scrollbar-thumb,
+        body.dark .kql-embed-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #4a5568, #2d3748);
+            border: 2px solid #161b22;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1);
+        }
+
+        .dark .kql-embed-container::-webkit-scrollbar-thumb:hover,
+        [data-theme="dark"] .kql-embed-container::-webkit-scrollbar-thumb:hover,
+        body.dark .kql-embed-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #2d3748, #1a202c);
+            box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.2);
+        }
+
+        .dark .kql-embed-container::-webkit-scrollbar-thumb:active,
+        [data-theme="dark"] .kql-embed-container::-webkit-scrollbar-thumb:active,
+        body.dark .kql-embed-container::-webkit-scrollbar-thumb:active {
+            background: linear-gradient(180deg, #1a202c, #171923);
+        }
+
+        .dark .kql-keyword, [data-theme="dark"] .kql-keyword, body.dark .kql-keyword { color: #ff7b72 !important; font-weight: normal; }
+        .dark .kql-string, [data-theme="dark"] .kql-string, body.dark .kql-string { color: #a5d6ff !important; font-weight: normal; }
+        .dark .kql-comment, [data-theme="dark"] .kql-comment, body.dark .kql-comment { color: #8b949e !important; font-weight: normal; }
+        .dark .kql-table, [data-theme="dark"] .kql-table, body.dark .kql-table { color: #f0f6fc !important; font-weight: normal; }
+    </style>
+</head>
+<body>
+    <div class="kql-embed-container">
+        <div class="kql-embed-loading">Loading KQL...</div>
+    </div>
+
+    <script>
+        (function() {
+            // CONFIGURATION: Change this URL to your GitHub raw file
+            const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/refs/heads/main/MicrosoftSentinel/HuntingQueries/M365CommunityConf/Interactive-Followed-by-Device.kql';
+
+            const currentScript = document.currentScript;
+            const container = currentScript.previousElementSibling;
+            let rawCodeContent = '';
+
+            function copyCode() {
+                const copyBtn = container.querySelector('.kql-embed-copy');
+                navigator.clipboard.writeText(rawCodeContent).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    copyBtn.classList.add('success');
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                        copyBtn.classList.remove('success');
+                    }, 2000);
+                }).catch(() => {
+                    copyBtn.textContent = 'Error';
+                    setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                });
+            }
+
+            function highlightKQL(kqlText) {
+                // Apply highlighting in very specific order to avoid conflicts
+                let result = kqlText;
+                
+                // 1. Comments first - protect them from other highlighting
+                result = result.replace(/\/\/(.*)$/gm, '<span class="kql-comment">//$1</span>');
+                
+                // 2. Only highlight other elements if not inside comment spans
+                const parts = result.split(/(<span class="kql-comment">.*?<\/span>)/);
+                
+                for (let i = 0; i < parts.length; i++) {
+                    // Only process parts that aren't comment spans
+                    if (!parts[i].includes('kql-comment')) {
+                        parts[i] = parts[i]
+                            // Strings
+                            .replace(/"([^"]*)"/g, '<span class="kql-string">"$1"</span>')
+                            // Keywords
+                            .replace(/\b(where|extend|project|join|kind|on|let)\b/g, '<span class="kql-keyword">$1</span>')
+                            // Table names at start of line
+                            .replace(/^([A-Za-z]\w*)/gm, '<span class="kql-table">$1</span>');
+                    }
+                }
+                
+                return parts.join('');
+            }
+
+            fetch(GITHUB_RAW_URL)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.text();
+                })
+                .then(data => {
+                    rawCodeContent = data; // Store raw content for copying
+                    const highlightedCode = highlightKQL(data);
+                    
+                    container.innerHTML = `
+                        <div class="kql-embed-header">
+                            <div class="kql-embed-indicator">KQL</div>
+                            <button class="kql-embed-copy">Copy</button>
+                        </div>
+                        <div class="kql-embed-content">${highlightedCode}</div>
+                    `;
+                    container.querySelector('.kql-embed-copy').addEventListener('click', copyCode);
+                })
+                .catch(error => {
+                    container.innerHTML = `<div style="color: red; padding: 20px;">Error: ${error.message}</div>`;
+                });
+        })();
+    </script>
+</body>
+</html>
