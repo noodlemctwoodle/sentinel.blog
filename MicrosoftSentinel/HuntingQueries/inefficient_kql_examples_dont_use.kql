@@ -1,0 +1,4 @@
+// Inefficient approach - avoid this pattern
+SecurityEvent
+| where * has "malicious.exe"  // Expensive full-text search
+| where TimeGenerated > ago(30d)  // Large time window processed last
