@@ -1,0 +1,4 @@
+// Problematic query - too broad and missing context
+SecurityEvent
+| where EventID == 4625
+| where TimeGenerated > ago(1h)

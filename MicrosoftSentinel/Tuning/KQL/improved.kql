@@ -1,0 +1,12 @@
+// Query with proper filtering and context
+SecurityEvent
+| where TimeGenerated > ago(1h)
+| where EventID == 4625  // Failed logon attempts
+| where Account !startswith "DWM-"  // Exclude desktop window manager
+| where Account !startswith "UMFD-"  // Exclude font driver host
+| where SubStatus !in ("0xC000006A", "0xC0000064")  // Exclude expired passwords
+| summarize FailedAttempts = count(), 
+           UniqueAccounts = dcount(Account),
+           SourceIPs = make_set(IpAddress, 100)
+           by Computer, bin(TimeGenerated, 10m)
+| where FailedAttempts >= 5  // Threshold for suspicious activity
