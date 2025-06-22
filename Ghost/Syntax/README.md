@@ -4,13 +4,12 @@ A beautiful, responsive code embed widget that loads and displays code files dir
 
 ## ✨ Features
 
-- 🎨 **Beautiful Design** - Clean, modern interface with light/dark mode support
-- 📁 **Auto Language Detection** - Automatically detects code language from file extension
-- 📋 **One-Click Copy** - Copy entire code content to clipboard with visual feedback
-- 📱 **Responsive Scrollbars** - Custom-styled scrollbars that respect rounded corners
-- 🌙 **Dark Mode** - Automatic dark mode support based on system preferences
-- ⚡ **Fast Loading** - Efficient caching and minimal overhead
-- 🔧 **Easy Setup** - Simple installation with minimal configuration
+- Clean, modern interface with light/dark mode support
+- Automatically detects code language from file extension
+- Copy entire code content to clipboard with visual feedback
+- Automatic dark mode support based on system preferences
+- Efficient caching and minimal overhead
+- Simple installation with minimal configuration
 
 ## 🚀 Installation
 
@@ -167,10 +166,11 @@ In the Ghost editor, you'll see a placeholder showing the filename. When publish
 
 ## 📱 Browser Support
 
-- ✅ **Chrome** (Full support including custom scrollbars)
-- ✅ **Safari** (Full support including custom scrollbars)
-- ✅ **Firefox** (Full support with standard scrollbars)
-- ✅ **Edge** (Full support including custom scrollbars)
+- ✅ **Chrome**
+- ✅ **Safari**
+- ✅ **Orion**
+- ✅ **Firefox**
+- ✅ **Edge**
 
 ## 🔄 Updates
 
