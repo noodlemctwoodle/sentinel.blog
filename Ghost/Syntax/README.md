@@ -17,11 +17,7 @@ A beautiful, responsive code embed widget that loads and displays code files dir
 ### Step 1: Add Footer Code
 
 1. Go to your Ghost Admin → **Settings** → **Code Injection**
-2. Paste the following code into the **Site Footer** section:
-
-```html
-Ghost/Syntax/syntaxTemplate.html
-```
+2. Paste the code from syntaxTemplate.html into the **Site Footer** section:
 
 ### Step 2: Use in Posts
 
