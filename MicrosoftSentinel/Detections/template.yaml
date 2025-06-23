@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=./sentinel-rule-schema.json
+
+id: "43dd2730-b8e1-4d63-89a1-de6e81402d6d"                                						     # Required: Unique GUID (generate using New-Guid or online tools)
+name: "Detection Rule Name"                                               								 # Required: <50 chars, sentence case, descriptive
+description: |                                                            								 # Required: Max 5 sentences, start with "Identifies" or "This query searches for"
+  'Brief description of what this rule detects and why it matters.'
+severity: "High"                                                          								 # Required: Informational|Low|Medium|High (based on business impact)
+requiredDataConnectors:                                                   								 # Required: List connectors needed, use [] if none
+  - connectorId: "AzureActiveDirectory"                                   								 # Must match official connector IDs
+    dataTypes:                                                            								 # List all required data types
+      - "SigninLogs"
+queryFrequency: "PT5M"                                                    								 # Required: How often to run (PT5M=5min, PT1H=1hour, P1D=1day)
+queryPeriod: "P1D"                                                        								 # Required: Time window to analyze (must be >= queryFrequency)
+triggerOperator: "gt"                                                     								 # Required: Comparison operator (gt=greater than, lt=less than, eq=equals)
+triggerThreshold: 5                                                       								 # Required: Threshold value (0-10000)
+status: "Available"                                                       								 # Optional: Available|Disabled (controls rule state)
+tactics:                                                                  								 # Required: MITRE ATT&CK v16 tactics (no spaces in names)
+  - "InitialAccess"                                                       								 # Must be valid MITRE tactics
+  - "LateralMovement"
+techniques:                                                               								 # Required: MITRE ATT&CK technique IDs
+  - "T1078"                                                               								 # Valid Accounts
+  - "T1078.001"                                                           								 # Sub-techniques supported (Default Accounts)
+tags:                                                                     								 # Required for custom rules (helps categorize)
+  - "SecurityOps"
+query: |                                                                  								 # Required: KQL query (10,000 char limit)
+  SigninLogs                                                              								 # Must return columns referenced in entityMappings
+  | where TimeGenerated >= ago(1d)                                        								 # Include time filters for performance
+  | where ResultType != 0                                                 								 # Filter failed logins
+  | summarize FailedAttempts = count() by UserPrincipalName, IPAddress
+  | where FailedAttempts > 5                                              								 # Apply thresholds
+entityMappings:                                                           								 # MANDATORY: Map query results to entities (up to 10 mappings)
+  - entityType: "Account"                                                 								 # Must be valid entity type
+    fieldMappings:                                                         									# Up to 3 identifiers per entity
+      - identifier: "FullName"                                             									# Must match entity type identifiers
+        columnName: "UserPrincipalName"                                   							   # Must match query output column
+      - identifier: "Name"
+        columnName: "AccountName"
+  - entityType: "IP"
+    fieldMappings:
+      - identifier: "Address"
+        columnName: "IPAddress"
+incidentConfiguration:                                                     								 # Optional: Controls incident creation and grouping
+  createIncident: true                                                    								# Whether to create incidents from alerts
+  groupingConfiguration:
+    enabled: true                                                         								# Enable alert grouping
+    reopenClosedIncident: false                                           								# Reopen closed incidents for related alerts
+    lookbackDuration: "PT5H"                                              								# How far back to look for grouping
+    matchingMethod: "AllEntities"                                         								# AllEntities|AnyAlert|Selected
+    groupByEntities: ["Account", "IP"]                                    								# Group by specific entity types
+    groupByAlertDetails: []                                               								# Group by alert properties
+    groupByCustomDetails: []                                              								# Group by custom detail fields
+eventGroupingSettings:                                                    								# Optional: Controls alert generation
+  aggregationKind: "SingleAlert"                                          								# SingleAlert=one per query, AlertPerResult=one per row
+suppressionDuration: "PT5H"                                               								# Optional: Prevent duplicate alerts (ISO 8601 format)
+suppressionEnabled: false                                                  								# Optional: Enable/disable suppression
+alertDetailsOverride:                                                      								# Optional: Dynamic alert customization
+  alertDisplayNameFormat: "Failed login from {{IPAddress}} for {{UserPrincipalName}}"   	# Max 3 params, 256 chars
+  alertDescriptionFormat: "{{FailedAttempts}} failed attempts detected"                 	# Max 3 params, 5000 chars
+  alertSeverityColumnName: "DynamicSeverity"                                            	# Column name for dynamic severity
+  alertTacticsColumnName: "DynamicTactics"                                              	# Column name for dynamic tactics
+customDetails:                                                                          	# Optional: Surface event data in alerts (up to 20 pairs)
+  FailedAttemptCount: "FailedAttempts"                                                  	# Key: column name mapping
+  SourceLocation: "Location"                                                            	# Improves analyst efficiency
+  TimeWindow: "TimeWindowAnalyzed"
+version: "1.0.0"                                                                        	# Required: Template version (increment for updates)
+kind: "Scheduled"                                                                       	# Required: Rule type determines execution method

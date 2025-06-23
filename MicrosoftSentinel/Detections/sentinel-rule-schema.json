@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Microsoft Sentinel Analytics Rule",
+  "description": "JSON Schema for Microsoft Sentinel Analytics Rule YAML files",
+  "type": "object",
+  "required": ["id", "name", "description", "severity", "status", "requiredDataConnectors", "queryFrequency", "queryPeriod", "triggerOperator", "triggerThreshold", "tactics", "techniques", "query"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique GUID for the rule",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of the detection rule",
+      "maxLength": 50
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of what this rule detects and why it matters"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["Informational", "Low", "Medium", "High"],
+      "description": "Severity level based on business impact"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["Available", "Disabled"],
+      "description": "Controls rule state"
+    },
+    "requiredDataConnectors": {
+      "type": "array",
+      "description": "List of required data connectors",
+      "items": {
+        "type": "object",
+        "required": ["connectorId"],
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "description": "Data connector identifier"
+          },
+          "dataTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Required data types from the connector"
+          }
+        }
+      }
+    },
+    "queryFrequency": {
+      "type": "string",
+      "pattern": "^PT?([0-9]+H)?([0-9]+M)?$|^P([0-9]+D)$",
+      "description": "How often to run (PT5M=5min, PT1H=1hour, P1D=1day)"
+    },
+    "queryPeriod": {
+      "type": "string",
+      "pattern": "^PT?([0-9]+H)?([0-9]+M)?$|^P([0-9]+D)$",
+      "description": "Time window to analyze (must be >= queryFrequency)"
+    },
+    "triggerOperator": {
+      "type": "string",
+      "enum": ["gt", "lt", "eq"],
+      "description": "Comparison operator (gt=greater than, lt=less than, eq=equals)"
+    },
+    "triggerThreshold": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "Threshold value (0-10000)"
+    },
+    "tactics": {
+      "type": "array",
+      "description": "MITRE ATT&CK v16 tactics",
+      "items": {
+        "type": "string",
+        "enum": [
+          "InitialAccess",
+          "Execution",
+          "Persistence",
+          "PrivilegeEscalation",
+          "DefenseEvasion",
+          "CredentialAccess",
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "CommandAndControl",
+          "Exfiltration",
+          "Impact",
+          "ResourceDevelopment",
+          "Reconnaissance"
+        ]
+      }
+    },
+    "techniques": {
+      "type": "array",
+      "description": "MITRE ATT&CK technique IDs",
+      "items": {
+        "type": "string",
+        "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+        "examples": ["T1078", "T1078.001"]
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "Custom tags for categorization",
+      "items": {
+        "type": "string"
+      }
+    },
+    "query": {
+      "type": "string",
+      "description": "KQL query (10,000 char limit)",
+      "maxLength": 10000
+    },
+    "entityMappings": {
+      "type": "array",
+      "description": "Map query results to entities (up to 10 mappings)",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["entityType", "fieldMappings"],
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "enum": ["Account", "AzureResource", "CloudApplication", "DNS", "File", "FileHash", "Host", "IP", "Malware", "Process", "RegistryKey", "RegistryValue", "SecurityGroup", "SubmittedFile", "URL"],
+            "description": "Valid entity type"
+          },
+          "fieldMappings": {
+            "type": "array",
+            "description": "Up to 3 identifiers per entity",
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "required": ["identifier", "columnName"],
+              "properties": {
+                "identifier": {
+                  "type": "string",
+                  "description": "Entity type identifier"
+                },
+                "columnName": {
+                  "type": "string",
+                  "description": "Query output column name"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "incidentConfiguration": {
+      "type": "object",
+      "description": "Controls incident creation and grouping",
+      "properties": {
+        "createIncident": {
+          "type": "boolean",
+          "description": "Whether to create incidents from alerts"
+        },
+        "groupingConfiguration": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable alert grouping"
+            },
+            "reopenClosedIncident": {
+              "type": "boolean",
+              "description": "Reopen closed incidents for related alerts"
+            },
+            "lookbackDuration": {
+              "type": "string",
+              "pattern": "^PT?([0-9]+H)?([0-9]+M)?$|^P([0-9]+D)$",
+              "description": "How far back to look for grouping"
+            }
+          }
+        }
+      }
+    }
+  }
+}
