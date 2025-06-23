@@ -1,0 +1,20 @@
+{
+  "yaml.schemas": {
+    "./sentinel-rule-schema.json": [
+      "**/analytics-rules/**/*.yaml",
+      "**/analytics-rules/**/*.yml",
+      "**/detections/**/*.yaml",
+      "**/detections/**/*.yml",
+      "**/*sentinel*.yaml",
+      "**/*sentinel*.yml"
+    ]
+  },
+  "yaml.validate": true,
+  "yaml.completion": true,
+  "yaml.hover": true,
+  "yaml.format.enable": true,
+  "files.associations": {
+    "*.sentinel.yaml": "yaml",
+    "*.sentinel.yml": "yaml"
+  }
+}
