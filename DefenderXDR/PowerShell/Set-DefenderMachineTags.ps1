@@ -7,36 +7,45 @@
     in Microsoft Defender for Endpoint using the Microsoft Graph Security API.
     
     The CSV file must contain 'MachineName' and 'Tag' columns.
+    Client secrets are securely retrieved from Azure Key Vault.
 
 .PARAMETER CsvPath
     Path to the CSV file containing machine names and tags.
 
 .PARAMETER TenantId
-    Entra ID  tenant ID where the Defender for Endpoint instance is located.
+    Microsoft Entra ID tenant ID where the Defender for Endpoint instance is located.
 
 .PARAMETER ClientId
-    Application (client) ID of the Entra ID app registration with appropriate permissions.
+    Application (client) ID of the Microsoft Entra ID app registration with appropriate permissions.
 
-.PARAMETER ClientSecret
-    Client secret for the Entra ID app registration.
+.PARAMETER KeyVaultName
+    Name of the Azure Key Vault containing the client secret.
+
+.PARAMETER SecretName
+    Name of the secret in Azure Key Vault containing the client secret.
 
 .EXAMPLE
-    .\Set-DefenderMachineTags.ps1 -CsvPath "machines.csv" -TenantId "12345678-1234-1234-1234-123456789012" -ClientId "87654321-4321-4321-4321-210987654321" -ClientSecret "your-secret"
+    .\Set-DefenderMachineTags.ps1 -CsvPath "machines.csv" -TenantId "12345678-1234-1234-1234-123456789012" -ClientId "87654321-4321-4321-4321-210987654321" -KeyVaultName "my-keyvault" -SecretName "defender-client-secret"
 
 .NOTES
     File Name      : Set-DefenderMachineTags.ps1
     Author         : Toby G
-    Prerequisite   : Entra ID app registration with Machine.ReadWrite.All (Application) permissions
+    Prerequisite   : Microsoft Entra ID app registration with Machine.ReadWrite.All permissions
     
     Required CSV Format:
     MachineName,Tag
     DESKTOP-ABC123,Development
     SERVER-XYZ789,Production
     
-    Entra ID  App Registration Requirements:
+    Microsoft Entra ID App Registration Requirements:
     - Application permissions: Machine.ReadWrite.All for Microsoft Defender for Endpoint
     - Admin consent granted
-    - Client secret configured
+    - Client secret configured and stored in Azure Key Vault
+    
+    Key Vault Requirements:
+    - Az.KeyVault PowerShell module installed
+    - Authentication to Azure (Connect-AzAccount or managed identity)
+    - 'Key Vault Secrets User' role assignment on the Key Vault
 
 .LINK
     https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/api-hello-world
@@ -48,17 +57,21 @@ param(
     [ValidateScript({Test-Path $_ -PathType Leaf})]
     [string]$CsvPath,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Entra ID tenant ID")]
+    [Parameter(Mandatory = $true, HelpMessage = "Microsoft Entra ID tenant ID")]
     [ValidatePattern('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]
     [string]$TenantId,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Entra ID application client ID")]
+    [Parameter(Mandatory = $true, HelpMessage = "Microsoft Entra ID application client ID")]
     [ValidatePattern('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')]
     [string]$ClientId,
     
-    [Parameter(Mandatory = $true, HelpMessage = "Entra ID application client secret")]
+    [Parameter(Mandatory = $true, HelpMessage = "Azure Key Vault name containing the client secret")]
     [ValidateNotNullOrEmpty()]
-    [string]$ClientSecret
+    [string]$KeyVaultName,
+    
+    [Parameter(Mandatory = $true, HelpMessage = "Name of the secret in Azure Key Vault")]
+    [ValidateNotNullOrEmpty()]
+    [string]$SecretName
 )
 
 #Requires -Version 5.1
@@ -97,6 +110,50 @@ function Write-LogMessage {
         'Error'   { Write-Error $logMessage }
         'Success' { Write-Host $logMessage -ForegroundColor Green }
         'Debug'   { Write-Host $logMessage -ForegroundColor Gray }
+    }
+}
+
+function Get-ClientSecretFromKeyVault {
+    <#
+    .SYNOPSIS
+        Retrieves a client secret from Azure Key Vault using managed identity or user authentication.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$KeyVaultName,
+        
+        [Parameter(Mandatory = $true)]
+        [string]$SecretName
+    )
+    
+    try {
+        Write-LogMessage "Retrieving client secret from Key Vault: $KeyVaultName" -Level Info
+        
+        # Check if Az.KeyVault module is available
+        if (-not (Get-Module -ListAvailable -Name "Az.KeyVault")) {
+            throw "Az.KeyVault PowerShell module is required. Install with: Install-Module Az.KeyVault"
+        }
+        
+        # Import the module if not already loaded
+        if (-not (Get-Module -Name "Az.KeyVault")) {
+            Import-Module Az.KeyVault -Force
+        }
+        
+        # Try to get the secret using current authentication context
+        $secret = Get-AzKeyVaultSecret -VaultName $KeyVaultName -Name $SecretName -AsPlainText -ErrorAction Stop
+        
+        if ([string]::IsNullOrEmpty($secret)) {
+            throw "Secret '$SecretName' is empty or not found in Key Vault '$KeyVaultName'"
+        }
+        
+        Write-LogMessage "Successfully retrieved client secret from Key Vault" -Level Success
+        return $secret
+    }
+    catch {
+        Write-LogMessage "Failed to retrieve secret from Key Vault: $($_.Exception.Message)" -Level Error
+        Write-LogMessage "Ensure you have 'Key Vault Secrets User' role on the Key Vault and are authenticated with Azure" -Level Error
+        throw
     }
 }
 
@@ -268,6 +325,9 @@ function Test-CsvFormat {
 try {
     Write-LogMessage "Starting Microsoft Defender XDR machine tagging process" -Level Info
     Write-LogMessage "Script version: 1.0" -Level Debug
+    
+    # Get client secret from Key Vault
+    $ClientSecret = Get-ClientSecretFromKeyVault -KeyVaultName $KeyVaultName -SecretName $SecretName
     
     # Import and validate CSV data
     Write-LogMessage "Loading CSV file: $CsvPath" -Level Info
