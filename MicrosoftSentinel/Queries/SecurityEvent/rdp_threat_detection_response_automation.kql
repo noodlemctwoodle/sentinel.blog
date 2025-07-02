@@ -1,3 +1,6 @@
+// Analyzes RDP logons with automated risk scoring and response recommendations,
+// triggering different playbooks based on source country, account type, and confidence levels
+
 // Detection with built-in automation decision logic
 SecurityEvent
 | where TimeGenerated > ago(30m)

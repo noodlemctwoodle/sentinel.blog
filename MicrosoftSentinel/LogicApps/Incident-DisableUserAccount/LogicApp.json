@@ -1,0 +1,778 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Microsoft_Sentinel_incident": {
+                "type": "ApiConnectionWebhook",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                        }
+                    },
+                    "body": {
+                        "callback_url": "@{listCallbackUrl()}"
+                    },
+                    "path": "/incident-creation"
+                }
+            }
+        },
+        "actions": {
+            "Entities_-_Get_Accounts": {
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azuresentinel-2']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                    "path": "/entities/account"
+                },
+                "runAfter": {}
+            },
+            "Condition_disable_onPrem_or_Entra": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "equals": [
+                                "@body('Parse_JSON_GET_User_detail')?['onPremisesSyncEnabled']",
+                                true
+                            ]
+                        }
+                    ]
+                },
+                "actions": {
+                    "HTTP_PATCH_disable_user_account_(Entra_ID)1": {
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "https://graph.microsoft.com/v1.0/users/@{outputs('Compose_account_UPN')}",
+                            "method": "PATCH",
+                            "body": {
+                                "accountEnabled": false
+                            },
+                            "authentication": {
+                                "type": "ManagedServiceIdentity",
+                                "audience": "https://graph.microsoft.com"
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "HTTP_POST_disable_user_account_(on-prem_AD)": {
+                        "type": "Http",
+                        "inputs": {
+                            "uri": "https://graph.microsoft.com/v1.0/servicePrincipals/{PrincipalId}/synchronization/jobs/{Secret}/bulkUpload",
+                            "method": "POST",
+                            "headers": {
+                                "Content-Type": "application/scim+json"
+                            },
+                            "body": {
+                                "schemas": [
+                                    "urn:ietf:params:scim:api:messages:2.0:BulkRequest"
+                                ],
+                                "Operations": [
+                                    {
+                                        "method": "POST",
+                                        "bulkId": "00aa00aa-bb11-cc22-dd33-44ee44ee44ee",
+                                        "path": "/Users",
+                                        "data": {
+                                            "schemas": [
+                                                "urn:ietf:params:scim:schemas:core:2.0:User",
+                                                "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
+                                            ],
+                                            "externalId": "@{body('Parse_JSON_GET_User_detail')?['employeeId']}",
+                                            "active": false
+                                        }
+                                    }
+                                ],
+                                "failOnErrors": null
+                            },
+                            "authentication": {
+                                "type": "ManagedServiceIdentity",
+                                "audience": "https://graph.microsoft.com"
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "Condition_disable_user_account_(on-prem_AD)": {
+                        "type": "If",
+                        "expression": {
+                            "or": [
+                                {
+                                    "equals": [
+                                        "@outputs('HTTP_POST_disable_user_account_(on-prem_AD)')?['statusCode']",
+                                        200
+                                    ]
+                                },
+                                {
+                                    "equals": [
+                                        "@outputs('HTTP_PATCH_disable_user_account_(Entra_ID)1')?['statusCode']",
+                                        204
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Append_to_disable_on-prem_AD_Success": {
+                                "type": "AppendToStringVariable",
+                                "inputs": {
+                                    "name": "DisableUserStatus",
+                                    "value": "Success"
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {
+                                "Append_to_disable_on-prem_AD_Failed": {
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "DisableUserStatus",
+                                        "value": "Failed"
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "HTTP_PATCH_disable_user_account_(Entra_ID)1": [
+                                "Succeeded",
+                                "Failed"
+                            ],
+                            "HTTP_POST_disable_user_account_(on-prem_AD)": [
+                                "Succeeded",
+                                "Failed"
+                            ]
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "HTTP_PATCH_disable_user_account_(Entra_ID)": {
+                            "type": "Http",
+                            "inputs": {
+                                "uri": "https://graph.microsoft.com/v1.0/users/@{outputs('Compose_account_UPN')}",
+                                "method": "PATCH",
+                                "body": {
+                                    "accountEnabled": false
+                                },
+                                "authentication": {
+                                    "type": "ManagedServiceIdentity",
+                                    "audience": "https://graph.microsoft.com"
+                                }
+                            },
+                            "runtimeConfiguration": {
+                                "contentTransfer": {
+                                    "transferMode": "Chunked"
+                                }
+                            }
+                        },
+                        "Condition_disable_user_account_(Entra_ID)": {
+                            "type": "If",
+                            "expression": {
+                                "and": [
+                                    {
+                                        "equals": [
+                                            "@outputs('HTTP_PATCH_disable_user_account_(Entra_ID)')?['statusCode']",
+                                            204
+                                        ]
+                                    }
+                                ]
+                            },
+                            "actions": {
+                                "Append_to_disable_Entra_ID_User_Success": {
+                                    "type": "AppendToStringVariable",
+                                    "inputs": {
+                                        "name": "DisableUserStatus",
+                                        "value": "Success"
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Append_to_disable_Entra_ID_User_Failed": {
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                            "name": "DisableUserStatus",
+                                            "value": "Failed"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "HTTP_PATCH_disable_user_account_(Entra_ID)": [
+                                    "Succeeded",
+                                    "Failed"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Parse_JSON_GET_User_detail": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialise_disableUserStatus": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "disableUserStatus",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Compose_account_UPN": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_DisableUserStatus": {
+                "type": "Compose",
+                "inputs": "@variables('DisableUserStatus')",
+                "runAfter": {
+                    "Condition_disable_onPrem_or_Entra": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Condition_disable_account_status_code": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "not": {
+                                "contains": [
+                                    "@outputs('Compose_DisableUserStatus')",
+                                    "Failed"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": {
+                    "Add_comment_to_incident_user_account_disabled": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel-2']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "message": "<p class=\"editor-paragraph\">User Account @{outputs('Compose_DisableUserStatus')} was disabled</p>"
+                            },
+                            "path": "/Incidents/Comment"
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Add_comment_to_incident_user_account_disabled_failed": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel-2']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p class=\"editor-paragraph\">User account @{outputs('Compose_DisableUserStatus')} failed to disable</p>"
+                                },
+                                "path": "/Incidents/Comment"
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Compose_DisableUserStatus": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_account_UPN": {
+                "type": "Compose",
+                "inputs": "@concat(first(body('Filter_domainJoined')).accountName, '@', first(body('Filter_domainJoined')).upnSuffix)",
+                "runAfter": {
+                    "Filter_domainJoined": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Filter_domainJoined": {
+                "type": "Query",
+                "inputs": {
+                    "from": "@body('Entities_-_Get_Accounts')?['Accounts']",
+                    "where": "@equals(item()?['IsDomainJoined'],true)"
+                },
+                "runAfter": {
+                    "Entities_-_Get_Accounts": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "HTTP_GET_User_details": {
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://graph.microsoft.com/v1.0/users/@{outputs('Compose_account_UPN')}?$select=id,userPrincipalName,displayName,givenName,surname,employeeId,onPremisesSyncEnabled",
+                    "method": "GET",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://graph.microsoft.com"
+                    }
+                },
+                "runAfter": {
+                    "Initialise_deleteAuthMethods": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Parse_JSON_GET_User_detail": {
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('HTTP_GET_User_details')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "@@odata.context": {
+                                "type": "string"
+                            },
+                            "id": {
+                                "type": "string"
+                            },
+                            "userPrincipalName": {
+                                "type": "string"
+                            },
+                            "displayName": {
+                                "type": "string"
+                            },
+                            "givenName": {
+                                "type": "string"
+                            },
+                            "surname": {
+                                "type": "string"
+                            },
+                            "employeeId": {
+                                "type": "string"
+                            },
+                            "onPremisesSyncEnabled": {
+                                "type": [
+                                    "boolean",
+                                    "null"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "HTTP_GET_User_details": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "HTTP_GET_authentication_methods": {
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://graph.microsoft.com/v1.0/users/@{outputs('Compose_account_UPN')}/authentication/methods/?$select=id",
+                    "method": "GET",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://graph.microsoft.com"
+                    }
+                },
+                "runAfter": {
+                    "Initialise_deleteAuthMethods": [
+                        "Succeeded"
+                    ]
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Parse_GET_authentication_methods": {
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('HTTP_GET_authentication_methods')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "@@odata.context": {
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "@@odata.type": {
+                                            "type": "string"
+                                        },
+                                        "id": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "@@odata.type",
+                                        "id"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "HTTP_GET_authentication_methods": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Select_authentication_methods": {
+                "type": "Select",
+                "inputs": {
+                    "from": "@body('Parse_GET_authentication_methods')?['value']",
+                    "select": {
+                        "odataType": "@{item()?['@odata.type']}",
+                        "Id": "@{item()?['id']}"
+                    }
+                },
+                "runAfter": {
+                    "Parse_GET_authentication_methods": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialise_deleteAuthMethods": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "deleteAuthMethods",
+                            "type": "string"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialise_disableUserStatus": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_deleteAuthMethods_Status": {
+                "type": "Compose",
+                "inputs": "@variables('deleteAuthMethods')",
+                "runAfter": {
+                    "For_each_authentication_method": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Condition_deleteAuthMethods": {
+                "type": "If",
+                "expression": {
+                    "and": [
+                        {
+                            "not": {
+                                "contains": [
+                                    "@outputs('Compose_deleteAuthMethods_Status')",
+                                    "Failed"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "actions": {
+                    "Add_comment_auth_methods_deleted_success": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "incidentArmId": "@triggerBody()?['object']?['id']",
+                                "message": "<p class=\"editor-paragraph\">Authentication methods for @{outputs('Compose_account_UPN')} have been deleted</p>"
+                            },
+                            "path": "/Incidents/Comment"
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {
+                        "Add_comment__auth_methods_deleted_failed": {
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel-1']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "body": {
+                                    "incidentArmId": "@triggerBody()?['object']?['id']",
+                                    "message": "<p class=\"editor-paragraph\">Authentication methods for @{outputs('Compose_account_UPN')} have not been deleted</p>"
+                                },
+                                "path": "/Incidents/Comment"
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Compose_deleteAuthMethods_Status": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Parse_authentication_methods": {
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('Select_authentication_methods')",
+                    "schema": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "odataType": {
+                                    "type": "string"
+                                },
+                                "Id": {
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "odataType",
+                                "Id"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Select_authentication_methods": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "For_each_authentication_method": {
+                "type": "Foreach",
+                "foreach": "@body('Parse_authentication_methods')",
+                "actions": {
+                    "Switch": {
+                        "type": "Switch",
+                        "expression": "@item()?['odataType']",
+                        "default": {
+                            "actions": {}
+                        },
+                        "cases": {
+                            "Case_windowsHelloForBusinessAuthenticationMethod": {
+                                "actions": {
+                                    "Until_Delete_windowsHelloForBusinessAuthenticationMethod": {
+                                        "type": "Until",
+                                        "expression": "@equals(outputs('HTTP_Delete_windowsHelloForBusinessAuthenticationMethod')?['statusCode'],204)",
+                                        "limit": {
+                                            "count": 60,
+                                            "timeout": "PT1H"
+                                        },
+                                        "actions": {
+                                            "Delay_Delete_windowsHelloForBusinessAuthenticationMethod": {
+                                                "type": "Wait",
+                                                "inputs": {
+                                                    "interval": {
+                                                        "count": 5,
+                                                        "unit": "Second"
+                                                    }
+                                                }
+                                            },
+                                            "HTTP_Delete_windowsHelloForBusinessAuthenticationMethod": {
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "uri": "https://graph.microsoft.com/v1.0/users/@{triggerBody()?['UserPrincipalName']}/authentication/windowsHelloForBusinessMethods/@{item()['Id']}",
+                                                    "method": "DELETE",
+                                                    "authentication": {
+                                                        "type": "ManagedServiceIdentity",
+                                                        "audience": "https://graph.microsoft.com"
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Delay_Delete_windowsHelloForBusinessAuthenticationMethod": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "runtimeConfiguration": {
+                                                    "contentTransfer": {
+                                                        "transferMode": "Chunked"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "Condition_Delete_windowsHelloForBusinessAuthenticationMethod_status_code": {
+                                        "type": "If",
+                                        "expression": {
+                                            "and": [
+                                                {
+                                                    "equals": [
+                                                        "@outputs('HTTP_Delete_windowsHelloForBusinessAuthenticationMethod')?['statusCode']",
+                                                        204
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "actions": {
+                                            "Append_deleteAuthMethods_windowsHelloForBusinessAuthenticationMethod_Success": {
+                                                "type": "AppendToStringVariable",
+                                                "inputs": {
+                                                    "name": "deleteAuthMethods",
+                                                    "value": "Success"
+                                                }
+                                            }
+                                        },
+                                        "else": {
+                                            "actions": {
+                                                "Append_deleteAuthMethods_windowsHelloForBusinessAuthenticationMethod_Failed": {
+                                                    "type": "AppendToStringVariable",
+                                                    "inputs": {
+                                                        "name": "deleteAuthMethods",
+                                                        "value": "Failed"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "Until_Delete_windowsHelloForBusinessAuthenticationMethod": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "case": "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod"
+                            },
+                            "Case_microsoftAuthenticatorAuthenticationMethod": {
+                                "actions": {
+                                    "Until_DELETE_microsoftAuthenticatorAuthenticationMethod": {
+                                        "type": "Until",
+                                        "expression": "@equals(outputs('HTTP_DELETE_microsoftAuthenticatorAuthenticationMethod')?['statusCode'],200)",
+                                        "limit": {
+                                            "count": 60,
+                                            "timeout": "PT1H"
+                                        },
+                                        "actions": {
+                                            "Delay_Delete_microsoftAuthenticatorAuthenticationMethod": {
+                                                "type": "Wait",
+                                                "inputs": {
+                                                    "interval": {
+                                                        "count": 5,
+                                                        "unit": "Second"
+                                                    }
+                                                }
+                                            },
+                                            "HTTP_DELETE_microsoftAuthenticatorAuthenticationMethod": {
+                                                "type": "Http",
+                                                "inputs": {
+                                                    "uri": "https://graph.microsoft.com/v1.0/users/@{outputs('Compose_account_UPN')}/authentication/microsoftAuthenticatorMethods/@{item()['Id']}",
+                                                    "method": "DELETE"
+                                                },
+                                                "runAfter": {
+                                                    "Delay_Delete_microsoftAuthenticatorAuthenticationMethod": [
+                                                        "Succeeded"
+                                                    ]
+                                                },
+                                                "runtimeConfiguration": {
+                                                    "contentTransfer": {
+                                                        "transferMode": "Chunked"
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "Compose": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    },
+                                    "Compose": {
+                                        "type": "Compose",
+                                        "inputs": "@item()['odataType']"
+                                    }
+                                },
+                                "case": "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod"
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Parse_authentication_methods": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "azuresentinel": {
+                    "id": "/subscriptions/{SubId}/providers/Microsoft.Web/locations/uksouth/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/{SubId}/resourceGroups/{RgName}/providers/Microsoft.Web/connections/azuresentinel-Incident-DisableUserAccount",
+                    "connectionName": "azuresentinel-Incident-DisableUserAccount",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                },
+                "azuresentinel-2": {
+                    "id": "/subscriptions/{SubId}/providers/Microsoft.Web/locations/uksouth/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/{SubId}/resourceGroups/{RgName}/providers/Microsoft.Web/connections/azuresentinel-11",
+                    "connectionName": "azuresentinel-11",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                },
+                "azuresentinel-1": {
+                    "id": "/subscriptions/{SubId}/providers/Microsoft.Web/locations/uksouth/managedApis/azuresentinel",
+                    "connectionId": "/subscriptions/{SubId}/resourceGroups/{RgName}/providers/Microsoft.Web/connections/MicrosoftSentinel-Entity-DefenderRestrictIP",
+                    "connectionName": "MicrosoftSentinel-Entity-DefenderRestrictIP",
+                    "connectionProperties": {
+                        "authentication": {
+                            "type": "ManagedServiceIdentity"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,43 @@
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query
+// Information: Parse Ubiquiti Wire Data Syslog Messages
+//
+source
+| extend TimeGenerated = todatetime(extract(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", 1, RawData))
+| extend HostName = extract(@"^.*?\s+([^ ]+)\s+", 1, RawData)
+| extend Rule = extract(@"\[(.*?)\]", 1, RawData)
+| extend Description = extract(@"DESCR=""([^""]+)""", 1, RawData)
+| extend SrcInterface = extract(@"IN=([^ ]+)", 1, RawData)
+| extend DestInterface = extract(@"OUT=([^ ]+)", 1, RawData)
+| extend mac_addresses = extract(@"MAC=([^ ]+)", 1, RawData)
+| extend SrcMAC = substring(mac_addresses, 0, 17)
+| extend Dst_MAC = substring(mac_addresses, 18, 17)
+| extend SrcIP = extract(@"SRC=((?:\d{1,3}\.){3}\d{1,3}|(?:(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}|::1))", 1, RawData)
+| extend DestIP = extract(@"DST=((?:\d{1,3}\.){3}\d{1,3}|(?:(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}|::1))", 1, RawData)
+| extend PacketLength = extract(@"LEN=([^ ]+)", 1, RawData)
+| extend TrafficClass = extract(@"TC=([^ ]+)", 1, RawData)
+| extend HopLimit = extract(@"HOPLIMIT=([^ ]+)", 1, RawData)
+| extend FlowLabel = extract(@"FLOWLBL=([^ ]+)", 1, RawData)
+| extend Protocol = extract(@"PROTO=([^ ]+)", 1, RawData)
+| extend SrcPort = extract(@"SPT=([^ ]+)", 1, RawData)
+| extend DstPort = extract(@"DPT=([^ ]+)", 1, RawData)
+| extend SequenceNumber = extract(@"SEQ=([^ ]+)", 1, RawData)
+| extend AckNumber = extract(@"ACK=([^ ]+)", 1, RawData)
+| extend WindowSize = extract(@"WINDOW=([^ ]+)", 1, RawData)
+| extend UrgentPointer = extract(@"URGP=([^ ]+)", 1, RawData)
+| extend uid = extract(@"UID=([^ ]+)", 1, RawData)
+| extend gid = extract(@"GID=([^ ]+)", 1, RawData)
+| extend mark = extract(@"MARK=([^ ]+)", 1, RawData)
+| where HostName contains "CHSEDG01"
+| where isnotempty(SrcIP)
+| project TimeGenerated,HostName,Rule,Description,SrcInterface,DestInterface,mac_addresses,SrcMAC,Dst_MAC,SrcIP,DestIP,PacketLength,TrafficClass,HopLimit,FlowLabel,Protocol,SrcPort,DstPort,SequenceNumber,AckNumber,WindowSize,UrgentPointer,uid,gid,mark
+
+
+
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query (Single Line)
+// Information: Parse Ubiquiti Wire Data Syslog Messages
+// 
+source | extend TimeGenerated = todatetime(extract(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", 1, RawData)) | extend HostName = extract(@"^.*?\s+([^ ]+)\s+", 1, RawData) | extend Rule = extract(@"\[(.*?)\]", 1, RawData) | extend Description = extract(@"DESCR=""([^""]+)""", 1, RawData) | extend SrcInterface = extract(@"IN=([^ ]+)", 1, RawData) | extend DestInterface = extract(@"OUT=([^ ]+)", 1, RawData) | extend mac_addresses = extract(@"MAC=([^ ]+)", 1, RawData) | extend SrcMAC = substring(mac_addresses, 0, 17) | extend Dst_MAC = substring(mac_addresses, 18, 17) | extend SrcIP = extract(@"SRC=((?:\d{1,3}\.){3}\d{1,3}|(?:(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}|::1))", 1, RawData) | extend DestIP = extract(@"DST=((?:\d{1,3}\.){3}\d{1,3}|(?:(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}|::1))", 1, RawData) | extend PacketLength = extract(@"LEN=([^ ]+)", 1, RawData) | extend TrafficClass = extract(@"TC=([^ ]+)", 1, RawData) | extend HopLimit = extract(@"HOPLIMIT=([^ ]+)", 1, RawData) | extend FlowLabel = extract(@"FLOWLBL=([^ ]+)", 1, RawData) | extend Protocol = extract(@"PROTO=([^ ]+)", 1, RawData) | extend SrcPort = extract(@"SPT=([^ ]+)", 1, RawData) | extend DstPort = extract(@"DPT=([^ ]+)", 1, RawData) | extend SequenceNumber = extract(@"SEQ=([^ ]+)", 1, RawData) | extend AckNumber = extract(@"ACK=([^ ]+)", 1, RawData) | extend WindowSize = extract(@"WINDOW=([^ ]+)", 1, RawData) | extend UrgentPointer = extract(@"URGP=([^ ]+)", 1, RawData) | extend uid = extract(@"UID=([^ ]+)", 1, RawData) | extend gid = extract(@"GID=([^ ]+)", 1, RawData) | extend mark = extract(@"MARK=([^ ]+)", 1, RawData) | where HostName contains "CHSEDG01" | where isnotempty(SrcIP) | project TimeGenerated,HostName,Rule,Description,SrcInterface,DestInterface,mac_addresses,SrcMAC,Dst_MAC,SrcIP,DestIP,PacketLength,TrafficClass,HopLimit,FlowLabel,Protocol,SrcPort,DstPort,SequenceNumber,AckNumber,WindowSize,UrgentPointer,uid,gid,mark

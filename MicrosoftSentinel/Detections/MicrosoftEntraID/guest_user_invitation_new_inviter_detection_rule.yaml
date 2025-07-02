@@ -1,0 +1,52 @@
+id: 5002c091-dae7-4189-96dd-23e95e2546fa
+name: Guest Users Invited to Tenant by New Inviters
+description: |
+  'Detects when a Guest User is added by a user account that has not been seen adding a guest in the previous 14 days'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AuditLogs
+    dataTypes:
+      - AuditLogs
+queryFrequency: P1D
+queryPeriod: P14D
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - Persistence
+relevantTechniques:
+  - T1078
+query: |
+  let normalGuestInviters = (
+  AuditLogs
+      | where TimeGenerated between(ago(14d)..ago(1d))
+      | where OperationName =~ "Invite external user"
+      | where Result =~ "success"
+      | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+      | where isnotempty(invitingUser)
+      | summarize by invitingUser
+  );
+  AuditLogs
+  | where TimeGenerated > ago(10d)
+  | where OperationName =~ "Invite external user"
+  | where Result =~ "success"
+  | extend invitingUser = tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)
+  | where isnotempty(invitingUser)
+      and invitingUser !in (normalGuestInviters)
+  | extend invitedUserPrincipalName = tostring(TargetResources[0].userPrincipalName)
+  | extend ipAddress = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: invitingUser
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: invitedUserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ipAddress
+version: 1.0.0
+kind: Scheduled

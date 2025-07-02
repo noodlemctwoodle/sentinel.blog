@@ -1,0 +1,67 @@
+id: 4e9a5600-2f36-4398-9375-081034a857d9
+name: Google Drive Changes by None Document Owner
+description: This rule looks for changes to a Google Drive file by someone other than the owner of the document.
+severity: Informational
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+query: |
+  GWorkspaceActivityReports
+  | where ActorKey != "SYSTEM"
+  | where EventMessage in (
+    "change_owner", "change_user_access", "change_user_access_hierarchy_reconciled"
+    , "change_document_access_scope", "change_event", "change_acl_editors", "change_owner"
+    , "change_document_visibility", "remove_member", "remove_user", "delete"
+    )
+      and Owner != ActorEmail
+      and Owner contains "domain.com" // Excludes folders owned by a group
+  | project-rename
+      ChangeMadeBy=ActorEmail,
+      DocumentOwner=Owner,
+      AccessChangedForUser=TargetUserName,
+      ChangeMade=EventMessage,
+      OldAccess=Oldvalue,
+      NewAccess=Newvalue,
+      DocumentTitle=DocTitle,
+      TimeChanged=TimeGenerated
+  // Group duplicate audit entries for the same action
+  | summarize AccessChangedForUsers = make_set(AccessChangedForUser)
+      by ChangeMadeBy
+      , DocumentOwner
+      , ChangeMade
+      , OldAccess
+      , NewAccess
+      , DocumentTitle
+suppressionEnabled: true
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: true
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AnyAlert
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+customDetails:
+  OldAccess: OldAccess
+  NewAccess: NewAccess
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: ChangeMadeBy
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: DocumentOwner
+- entityType: File
+  fieldMappings:
+  - identifier: Name
+    columnName: DocumentTitle
+suppressionDuration: 1d
+version: 1.0.0
+kind: Scheduled

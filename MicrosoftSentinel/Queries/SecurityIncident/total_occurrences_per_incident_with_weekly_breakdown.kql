@@ -1,0 +1,24 @@
+// Provides a comprehensive summary of incident patterns showing total occurrences, active weeks,
+// and detailed weekly breakdown for each incident type to identify persistent and sporadic threats
+
+SecurityIncident
+| where TimeGenerated >= ago(60d)
+| extend WeekStart = startofweek(TimeGenerated)
+| summarize 
+    WeeklyCount = count()
+    by Title, WeekStart
+| summarize 
+    TotalOccurrences = sum(WeeklyCount),
+    WeeklyBreakdown = make_bag(pack(tostring(WeekStart), WeeklyCount)),
+    FirstWeek = min(WeekStart),
+    LastWeek = max(WeekStart),
+    WeeksActive = dcount(WeekStart)
+    by Title
+| order by TotalOccurrences desc
+| project 
+    IncidentTitle = Title,
+    TotalCount = TotalOccurrences,
+    WeeksActive,
+    FirstSeen = format_datetime(FirstWeek, "yyyy-MM-dd"),
+    LastSeen = format_datetime(LastWeek, "yyyy-MM-dd"),
+    WeeklyBreakdown

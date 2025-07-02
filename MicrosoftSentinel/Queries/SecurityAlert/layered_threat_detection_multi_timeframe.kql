@@ -1,3 +1,6 @@
+// Multi-layered threat detection combining immediate high-severity alerts, campaign-style failed logons,
+// and long-term persistent threat patterns to identify threats across different time horizons
+
 // Short-term detection for immediate threats (real-time)
 union (
     SecurityAlert

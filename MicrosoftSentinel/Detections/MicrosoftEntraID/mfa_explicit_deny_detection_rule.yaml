@@ -1,0 +1,88 @@
+id: 324a9fd8-46af-4de4-943d-88993894cb97
+name: MFA Explicit Deny
+description: |
+  'Identifies explicit MFA denies'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SignInLogs
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - CredentialAccess
+  - InitialAccess
+  - LateralMovement
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1110
+  - T1078
+  - T0859
+  - T1078
+  - T0859
+  - T1078
+query: |
+  let threshold = 10;
+  let aadFunc = (tableName:string) { 
+  table(tableName) 
+  | where AuthenticationRequirement == "multiFactorAuthentication" 
+  | extend AuthResult = tostring(parse_json(AuthenticationDetails)[1].authenticationStepResultDetail) 
+  | where AuthResult in ("MFA completed in Azure AD", "MFA denied; user declined the authentication","MFA denied; user did not respond to mobile app notification") 
+  | summarize ['Result Types']=make_list(AuthResult) by CorrelationId, UserPrincipalName 
+  | where ['Result Types'] has ("MFA completed in Azure AD") and ['Result Types'] has_any ("MFA denied; user declined the authentication", "MFA denied; user did not respond to mobile app notification") 
+  | mv-expand ['Result Types'] to typeof(string) 
+  | where ['Result Types'] has_any ("MFA denied; user declined the authentication","MFA denied; user did not respond to mobile app notification") }; 
+  let aadSignin = aadFunc("SigninLogs"); 
+  let aadNonInt = aadFunc("AADNonInteractiveUserSignInLogs"); 
+  let deniedMFAUsers = union isfuzzy=true aadSignin, aadNonInt 
+  | summarize DeniedAttempts = count()by ['Result Types'], CorrelationId, UserPrincipalName
+  | where DeniedAttempts >= threshold; //Ammend the amount of times the user has denied the MFA push
+  deniedMFAUsers
+  | extend Severity = case
+      (DeniedAttempts < 20, "Medium"
+      ,DeniedAttempts >= 20, "High"
+      , "High"
+      )
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+alertDetailsOverride:
+  alertnameFormat: 
+  alertDescriptionFormat: 
+  alertTacticsColumnName: 
+  alertSeverityColumnName: Severity
+entityMappings:
+- entityType: Account
+  fieldMappings:
+    - identifier: Name
+      columnName: UserPrincipalName
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: DeniedAttempts
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: Severity
+- entityType: IP
+  fieldMappings:
+    - identifier: Address
+      columnName: CorrelationId
+suppressionDuration: 5h
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled
+

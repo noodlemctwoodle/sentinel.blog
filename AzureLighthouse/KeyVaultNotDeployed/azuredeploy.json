@@ -1,0 +1,235 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "mspOfferName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specify a unique name for your offer"
+            }
+        },
+        "mspOfferDescription": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Managed Service Provider offering"
+            }
+        },
+        "managedByTenantId": {
+            "type": "string",
+            "metadata": {
+                "description": "Specify the tenant id of the Managed Service Provider"
+            }
+        },
+        "resourceGroups": {
+            "type": "array",
+            "metadata": {
+                "description": "Specify the resource groups for the MSP offer"
+            }
+        },
+        "KeyVaultResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specify the resource group for the Key Vault"
+            }
+        },
+        "KeyVaultResourceGroupLocation": {
+            "type": "string",
+            "defaultValue": "uksouth",
+            "allowedValues": [
+                "eastus",
+                "uksouth",
+                "ukwest"
+            ],
+            "metadata": {
+                "description": "Specify the location for the Key Vault resource group"
+            }
+        },
+        "KeyVaultName": {
+            "type": "string",
+            "metadata": {
+                "description": "Specify the name of the Key Vault"
+            }
+        }
+    },
+    "variables": {
+        "apiVersionResources": "2022-09-01",
+        "apiVersionManagedServices": "2019-06-01",
+        "apiVersionKeyVault": "2021-10-01",
+        "keyVaultLocation": "[parameters('KeyVaultResourceGroupLocation')]",
+        "keyvaultauthorizations": [
+            { 
+                "principalId": "<principalId>",
+                "roleDefinitionId": "<roleDefinitionId>",
+                "principalIdDisplayName": "Security Engineering"
+            },
+            {
+                "principalId": "<principalId>",
+                "roleDefinitionId": "<RoleDefinitionId>",
+                "principalIdDisplayName": "Security Engineering",
+                "delegatedRoleDefinitionIds": [
+                    "00482a5a-887f-4fb3-b363-3b7fe8e74483",
+                    "4633458b-17de-408a-b874-0445c86b69e6"
+                ]
+            }
+        ],
+        "sentinelauthorizations": [
+            {
+                "principalId": "<principalId>",
+                "roleDefinitionId": "<roleDefinitionId>",
+                "principalIdDisplayName": "<PIMGroupName>"
+            },
+            {
+                "principalId": "<principalId>",
+                "roleDefinitionId": "<RoleDefinitionId>",
+                "principalIdDisplayName": "<PIMGroupName>",
+                "delegatedRoleDefinitionIds": [
+                    "ab8e14d6-4a74-4a29-9ba8-549422addade",
+                    "3e150937-b8fe-4cfb-8069-0eaf05ecd056"
+                ]
+            },
+            {
+                "principalId": "<principalId>",
+                "roleDefinitionId": "91c1777a-f3dc-4fae-b103-61d183457e46",
+                "principalIdDisplayName": "Lighthouse Administrator Role"
+            },
+            {
+                "principalId": "<principalId>",
+                "roleDefinitionId": "f4c81013-99ee-4d62-a7ee-b3f1f648599a",
+                "principalIdDisplayName": "Azure Security Insights"
+            }
+        ],
+        "multipleAuthorizations": [
+            "[variables('sentinelauthorizations')]",
+            "[variables('keyvaultauthorizations')]"
+        ],
+        "logicAppIpRules": [
+            {
+                "value": "52.178.150.68/32"
+            },
+            {
+                "value": "94.245.91.93/32"
+            },
+            {
+                "value": "20.82.226.52/32"
+            }
+        ]
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "[variables('apiVersionResources')]",
+            "name": "[parameters('KeyVaultResourceGroupName')]",
+            "location": "[variables('keyVaultLocation')]"
+        },
+        {
+            "type": "Microsoft.ManagedServices/registrationDefinitions",
+            "apiVersion": "[variables('apiVersionManagedServices')]",
+            "name": "[guid(parameters('resourceGroups')[copyIndex()].rgName)]",
+            "properties": {
+                "registrationDefinitionName": "[parameters('mspOfferName')]",
+                "description": "[parameters('mspOfferDescription')]",
+                "managedByTenantId": "[parameters('managedByTenantId')]",
+                "authorizations": "[variables('multipleAuthorizations')[copyIndex()]]"
+
+            },
+            "copy": {
+                "name": "deploymentCopy",
+                "count": "[length(parameters('resourceGroups'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups', parameters('KeyVaultResourceGroupName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "KeyVaultDeployment",
+            "resourceGroup": "[parameters('KeyVaultResourceGroupName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.KeyVault/vaults",
+                            "apiVersion": "[variables('apiVersionKeyVault')]",
+                            "name": "[parameters('KeyVaultName')]",
+                            "location": "[parameters('KeyVaultResourceGroupLocation')]",
+                            "properties": {
+                                "tenantId": "[tenant().tenantId]",
+                                "accessPolicies": [],
+                                "enabledForDeployment": false,
+                                "enabledForDiskEncryption": false,
+                                "enabledForTemplateDeployment": true,
+                                "enableSoftDelete": true,
+                                "softDeleteRetentionInDays": 90,
+                                "enableRbacAuthorization": true,
+                                "publicNetworkAccess": "Enabled",
+                                "sku": {
+                                    "family": "A",
+                                    "name": "standard"
+                                },
+                                "networkAcls": {
+                                    "bypass": "AzureServices",
+                                    "defaultAction": "Deny",
+                                    "ipRules": "[variables('logicAppIpRules')]",
+                                    "virtualNetworkRules": []
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups', parameters('KeyVaultResourceGroupName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2022-09-01",
+            "name": "[concat(parameters('resourceGroups')[copyIndex()].rgName, '-assign-msp')]",
+            "resourceGroup": "[parameters('resourceGroups')[copyIndex()].rgName]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.ManagedServices/registrationAssignments",
+                            "apiVersion": "2019-06-01",
+                            "name": "[guid(parameters('resourceGroups')[copyIndex()].rgName)]",
+                            "properties": {
+                                "registrationDefinitionId": "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(parameters('resourceGroups')[copyIndex()].rgName))]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups', parameters('KeyVaultResourceGroupName'))]",
+                "[subscriptionResourceId('Microsoft.ManagedServices/registrationDefinitions', guid(parameters('resourceGroups')[copyIndex()].rgName))]",
+                "KeyVaultDeployment"
+            ],
+            "copy": {
+                "name": "assignmentCopy",
+                "count": "[length(parameters('resourceGroups'))]"
+            }
+        }
+    ],
+    "outputs": {
+        "mspOfferName": {
+            "type": "string",
+            "value": "[concat('Managed by', ' ', parameters('mspOfferName'))]"
+        },
+        "sentinelauthorizations": {
+            "type": "array",
+            "value": "[variables('sentinelauthorizations')]"
+        },
+        "keyvaultauthorizations": {
+            "type": "array",
+            "value": "[variables('keyvaultauthorizations')]"
+        }
+    }
+}

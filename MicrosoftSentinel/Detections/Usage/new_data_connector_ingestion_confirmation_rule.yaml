@@ -1,0 +1,91 @@
+id: 319e29bd-e47d-48e0-8add-5ef1b77531a4
+name: New data received from new data connector
+version: 1.0.0
+kind: Scheduled
+description: New data received from new data connector
+severity: Informational
+queryFrequency: 5h
+queryPeriod: 5h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+- Collection
+relevantTechniques:
+- T0801
+query: |
+  let lastWeekStart = ago(14d); 
+  let lastWeekEnd = ago(7d); 
+  let thisWeekStart = ago(7d); 
+  let thisWeekEnd = ago(0d);
+  let SentinelRG = "CHS-UKS-SIEM-RG";
+  let newDataConnector =
+    // New Sentinel Data Connector
+    AzureActivity
+    | where OperationNameValue has "DATACONNECTORS/WRITE"
+        and ActivityStatusValue has "Start"
+        and ResourceGroup == SentinelRG
+    | extend DataConnector = tostring(split(tostring(parse_json(Properties).entity), "/")[12])
+    | summarize DataConnectors = make_set(DataConnector);
+  Usage
+  | where IsBillable == true
+  | where TimeGenerated >= lastWeekStart and TimeGenerated < lastWeekEnd 
+  | summarize LastWeekSize = sumif(Quantity, isnotempty(DataType)) / round(1024,-3) by DataType 
+  | union (
+      Usage
+      | where IsBillable == true
+      | where TimeGenerated >= thisWeekStart and TimeGenerated < thisWeekEnd 
+      | summarize DataTypes = make_set(DataType)
+      | mv-expand DataTypes
+      | where DataTypes !in (( 
+          Usage
+          | where IsBillable == true
+          | where TimeGenerated >= lastWeekStart and TimeGenerated < lastWeekEnd 
+          | summarize DataTypes = make_set(DataType)
+          | mv-expand DataTypes
+      ))
+      | project DataType = DataTypes, LastWeekSize = 0
+  )
+  | extend DataType = strcat(DataType_string, DataType_dynamic)
+  | join kind=leftouter (
+      Usage
+      | where IsBillable == true
+      | where TimeGenerated >= thisWeekStart and TimeGenerated < thisWeekEnd 
+      | summarize ThisWeekSize = sumif(Quantity, isnotempty(DataType)) / round(1024,-3) by DataType 
+  ) on DataType
+  | extend LastWeekSize = toreal(strcat(LastWeekSize_long, LastWeekSize_real))
+  | project DataType, LastWeekSize = round(toreal(LastWeekSize), 5), ThisWeekSize = round(toreal(ThisWeekSize), 5),
+      ['Size Change %'] = 
+          case(
+              LastWeekSize == 0 and ThisWeekSize > 0, 
+              toreal(100), // 100% increase if LastWeekSize was 0 and ThisWeekSize is greater than 0
+              LastWeekSize > 0 and ThisWeekSize / LastWeekSize > 10, 
+              toreal(100), // Cap at 1000% if the change is more than 10 times
+              round((ThisWeekSize - LastWeekSize) / LastWeekSize * 100, 0)
+          ) 
+  | order by abs(['Size Change %']) desc
+  | where ['Size Change %'] > 50
+  | where LastWeekSize == 0 and ThisWeekSize > 0
+  | where DataType in (newDataConnector)
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+entityMappings:
+- entityType: Account
+  fieldMappings:
+  - identifier: FullName
+    columnName: Caller
+- entityType: IP
+  fieldMappings:
+  - identifier: Address
+    columnName: CallerIpAddress
+suppressionEnabled: true
+suppressionDuration: 1d
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []

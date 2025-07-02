@@ -1,0 +1,40 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "mspOfferName": {
+            "value": "<OfferName>"
+        },
+        "SentinelResourceGroupName": {
+            "value": "[MicrosoftSentinel-ResourceGroup-Name]"
+        },
+        "mspOfferDescription": {
+            "value": "<Offer Description>"
+        },
+        "managedByTenantId": {
+            "value": "<TenantId>"
+        },
+        "authorizations": {
+            "value": [
+                {
+                    "principalId": "<PrincipalId>", 
+                    "roleDefinitionId": "3e150937-b8fe-4cfb-8069-0eaf05ecd056",
+                    "principalIdDisplayName": "<PIMGroup>"
+                }
+            ]
+        }, 
+        "eligibleAuthorizations":{
+            "value": [ 
+                { 
+                        "justInTimeAccessPolicy": { 
+                            "multiFactorAuthProvider": "Azure", 
+                            "maximumActivationDuration": "PT4H" 
+                        },
+                        "principalId": "<PrincipalId>", 
+                        "roleDefinitionId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+                        "principalIdDisplayName": "<PIMGroup>" 
+                }                             
+            ]    
+        }
+    }
+}

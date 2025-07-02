@@ -1,0 +1,39 @@
+id: d5a95f43-af4e-4e7b-9679-a31ff1f90ff6
+name: Security Event Log Cleared
+description: |
+  'Identifies when event logs are cleared on monitored systems. It queries for events with Event ID 1102, which indicates that event logs have been cleared. 
+  The rule runs on a 24-hour schedule, scanning the past 24 hours of log data for any instances of cleared event logs. If such an event is detected, it will generate an incident for investigation and potential response actions'
+severity: High
+requiredDataConnectors:
+  - connectorId: SecurityEvent
+    dataTypes:
+      - SecurityEvent
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+status: Available
+tactics:
+  - DefenseEvasion
+relevantTechniques:
+  - T1070
+query: |
+  SecurityEvent
+  | where TimeGenerated > ago(24h)
+  //Search back over the last 24 hours
+  | where EventID == 1102
+  //The EventID for Event Log Clearing is 1102
+  | project TimeGenerated, Account, AccountType,Computer, EventID, TargetAccount, TargetUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: Account
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Computer
+suppressionDuration: 5h
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

@@ -1,0 +1,49 @@
+id: a0cc3573-0d9b-4186-8fb7-e21158ba90a9
+name: New DCR Created
+description: Identifies when a new Data Collection Rule (DCR) is created in Azure.
+severity: Informational
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AuditLogs
+queryFrequency: PT5H
+queryPeriod: PT5H
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+query: |
+  // New DCR
+  AzureActivity
+  | where OperationNameValue has "DATACOLLECTIONRULES/WRITE"
+      and ActivitySubstatusValue has "OK"
+  | extend DCR_Name = tostring(parse_json(Properties).resource)
+  | extend DCR_RG = tostring(parse_json(Properties).resourceGroup)
+  | extend DCR_Sub = tostring(parse_json(Properties).subscriptionId)
+  | extend RBAC_Role = tostring(parse_json(tostring(Authorization_d.evidence)).role)
+  | summarize by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , DCR_Name, DCR_RG, DCR_Sub, Caller, RBAC_Role, CallerIpAddress
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

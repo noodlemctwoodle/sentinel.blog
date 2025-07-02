@@ -1,0 +1,11 @@
+
+// Creates a pivot table showing incident counts by title across weekly time periods,
+// then renders as a time chart to visualize trending patterns over the last 60 days
+
+SecurityIncident
+| where TimeGenerated >= ago(60d)
+| extend WeekStart = startofweek(TimeGenerated)
+| summarize IncidentCount = count() by Title, WeekStart
+| evaluate pivot(WeekStart, sum(IncidentCount))
+| order by Title asc
+| render timechart

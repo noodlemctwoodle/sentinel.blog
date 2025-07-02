@@ -197,7 +197,43 @@
     `;
     document.head.appendChild(style);
 
+    // Helper function to format JSON-like content with variables
+    function formatJSONWithVariables(content) {
+        try {
+            // First try to parse as valid JSON
+            const parsed = JSON.parse(content);
+            return JSON.stringify(parsed, null, 2);
+        } catch (e) {
+            // If parsing fails, try to format manually while preserving variables
+            try {
+                // Replace Logic App variables temporarily
+                const variablePattern = /@\{[^}]+\}/g;
+                const variables = [];
+                let tempContent = content.replace(variablePattern, (match) => {
+                    const placeholder = `__VAR_${variables.length}__`;
+                    variables.push(match);
+                    return `"${placeholder}"`;
+                });
+
+                // Try to parse the temp content
+                const parsed = JSON.parse(tempContent);
+                let formatted = JSON.stringify(parsed, null, 2);
+
+                // Restore variables without quotes
+                variables.forEach((variable, index) => {
+                    formatted = formatted.replace(`"__VAR_${index}__"`, variable);
+                });
+
+                return formatted;
+            } catch (e2) {
+                // If all formatting attempts fail, return original content
+                return content;
+            }
+        }
+    }
+
     function initCodeEmbeds() {
+        // Handle GitHub-hosted code (existing functionality)
         document.querySelectorAll('.code-embed-container[data-url]:not(.initialized)').forEach(container => {
             container.classList.add('initialized');
             
@@ -282,7 +318,7 @@
                     let formattedContent = data;
                     
                     if (detectedType === 'json') {
-                        try { formattedContent = JSON.stringify(JSON.parse(data), null, 2); } catch (e) {}
+                        formattedContent = formatJSONWithVariables(data);
                     }
                     
                     container.innerHTML = `
@@ -306,6 +342,82 @@
                 .catch(error => {
                     container.innerHTML = `<div style="color: red; padding: 20px;">Error: ${error.message}</div>`;
                 });
+        });
+
+        // Handle inline code (new functionality)
+        document.querySelectorAll('.code-embed-container[data-code]:not(.initialized)').forEach(container => {
+            container.classList.add('initialized');
+            
+            const inlineCode = container.getAttribute('data-code');
+            const codeType = container.getAttribute('data-type') || 'text';
+            const codeTitle = container.getAttribute('data-title') || null;
+            
+            if (!inlineCode) {
+                container.innerHTML = '<div style="color: red; padding: 20px;">Error: No code content specified</div>';
+                return;
+            }
+
+            const getLanguageInfo = (type) => {
+                const languages = {
+                    powershell: { display: 'PowerShell', prism: 'language-powershell' },
+                    json: { display: 'JSON', prism: 'language-json' },
+                    kql: { display: 'KQL', prism: 'language-kusto' },
+                    yaml: { display: 'YAML', prism: 'language-yaml' },
+                    bicep: { display: 'Bicep', prism: 'language-bicep' },
+                    javascript: { display: 'JavaScript', prism: 'language-javascript' },
+                    typescript: { display: 'TypeScript', prism: 'language-typescript' },
+                    python: { display: 'Python', prism: 'language-python' },
+                    css: { display: 'CSS', prism: 'language-css' },
+                    html: { display: 'HTML', prism: 'language-html' },
+                    xml: { display: 'XML', prism: 'language-xml' },
+                    text: { display: 'Text', prism: 'language-text' }
+                };
+                return languages[type] || languages.text;
+            };
+
+            const copyCode = () => {
+                const copyBtn = container.querySelector('.code-embed-copy');
+                navigator.clipboard.writeText(inlineCode).then(() => {
+                    copyBtn.textContent = 'Copied!';
+                    copyBtn.classList.add('success');
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                        copyBtn.classList.remove('success');
+                    }, 2000);
+                }).catch(() => {
+                    copyBtn.textContent = 'Error';
+                    setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                });
+            };
+
+            const langInfo = getLanguageInfo(codeType);
+            let formattedContent = inlineCode;
+            
+            // Format JSON if type is json (with variable support)
+            if (codeType === 'json') {
+                formattedContent = formatJSONWithVariables(inlineCode);
+            }
+
+            // Build header with optional title
+            const headerTitle = codeTitle || langInfo.display;
+            
+            container.innerHTML = `
+                <div class="code-embed-header">
+                    <div class="code-embed-indicator">${headerTitle}</div>
+                    <div class="code-embed-header-actions">
+                        <button class="code-embed-copy">Copy</button>
+                    </div>
+                </div>
+                <div class="code-embed-content">
+                    <pre><code class="${langInfo.prism}">${formattedContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+                </div>
+            `;
+            
+            container.querySelector('.code-embed-copy').addEventListener('click', copyCode);
+            
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAllUnder(container);
+            }
         });
     }
 

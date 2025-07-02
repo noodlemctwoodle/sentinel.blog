@@ -1,3 +1,6 @@
+// Compares SOC efficiency metrics before and after rule tuning by analyzing alert volume,
+// true positive rates, and mean time to resolution across two 6-month periods
+
 // SOC efficiency metrics before and after rule tuning
 let BeforeTuning = datetime("2025-01-01");
 let AfterTuning = datetime("2025-06-01");

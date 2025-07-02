@@ -1,0 +1,18 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "permissions": {
+            "value": [
+                {
+                    "name": "{New-Guid}",
+                    "principalId": "{Playbook ObjectId}",
+                    "roleDefinitionId": "{RBAC Role}",
+                    "delegatedManagedIdentityResourceId": "/subscriptions/{subscriptionId}/resourceGroups/{ResourceGroup}/providers/Microsoft.Logic/workflows/{PlaybookName}",
+                    "description": "Apply System Assigned Managed Identity Permissions",
+                    "principalType": "ServicePrincipal"
+                }
+            ]
+        }
+    }
+}

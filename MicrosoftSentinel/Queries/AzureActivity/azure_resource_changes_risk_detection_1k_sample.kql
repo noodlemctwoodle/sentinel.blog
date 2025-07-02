@@ -1,3 +1,6 @@
+// Samples Azure Activity logs for efficient analysis of high-risk operations within the last hour,
+// focusing on resource modifications while maintaining detection accuracy for critical changes
+
 // Sample large datasets while maintaining detection accuracy
 AzureActivity
 | where TimeGenerated > ago(1h)

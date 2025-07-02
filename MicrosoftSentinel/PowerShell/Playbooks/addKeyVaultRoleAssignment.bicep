@@ -1,0 +1,38 @@
+@description('Specifies the role the user will get with the secret in the vault. Valid values are: Key Vault Administrator, Key Vault Secrets User.')
+@allowed([
+  'Key Vault Administrator'
+  'Key Vault Secrets User'
+])
+param roleName string = 'Key Vault Secrets User'
+
+@description('Required. Array of Role Assignments to deploy')
+param permissions array
+
+@description('Specifies the roleId Mappings available to apply to the key vault.')
+var roleIdMapping = {
+  'Key Vault Administrator': '00482a5a-887f-4fb3-b363-3b7fe8e74483'
+  'Key Vault Secrets User': '4633458b-17de-408a-b874-0445c86b69e6'
+}
+
+@description('Specifies the name of the key vault.')
+param keyVaultName string
+
+
+@description('Specifies the Azure location where the key vault should be created.')
+param location string = resourceGroup().location
+
+@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault.')
+param tenantId string = subscription().tenantId
+
+resource kvRoleAssignment 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = [for item in permissions: {
+  name: guid(resourceGroup().id, item.name, item.roleDefinitionId)
+  properties: {
+    principalId: item.principalId
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', item.roleDefinitionId)
+    condition: contains(item, 'condition') && item.condition != '' ? item.condition : null
+    conditionVersion: contains(item, 'conditionVersion') && item.conditionVersion != '' ? item.conditionVersion : null
+    delegatedManagedIdentityResourceId: contains(item, 'delegatedManagedIdentityResourceId') && item.delegatedManagedIdentityResourceId != '' ? item.delegatedManagedIdentityResourceId : null
+    description: item.description
+    principalType: item.principalType
+  }
+}]

@@ -1,3 +1,6 @@
+// Analyzes data ingestion costs by log type over the last 24 hours,
+// calculating table sizes in GB and estimated costs to identify the most expensive data sources
+
 let timeFrame = ago(1d);
 let Categories =
     union *

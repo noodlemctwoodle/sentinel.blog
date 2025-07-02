@@ -1,0 +1,51 @@
+id: 3a5f5980-cd45-4059-b4c5-f9fbde4db8d9
+name: New Data Connector Deployed
+description: Identifies when a new data connector was deployed
+severity: Informational
+requiredDataConnectors:
+  - connectorId: AzureActivity
+    dataTypes:
+      - AuditLogs
+queryFrequency: PT5H
+queryPeriod: PT5H
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Collection
+relevantTechniques:
+  - T0801
+query: |
+  // New Sentinel Data Connector
+  let SentinelRG = "CHS-UKS-SIEM-RG";
+  AzureActivity
+  | where OperationNameValue has "DATACONNECTORS/WRITE"
+      and ActivityStatusValue has "Start"
+      and ResourceGroup == SentinelRG
+  | extend DataConnector = tostring(split(tostring(parse_json(Properties).entity), "/")[12])
+  | extend RBACRole = tostring(parse_json(tostring(Authorization_d.evidence)).role)
+  | summarize DataConnectors = make_set(DataConnector) by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , Caller, RBACRole, CallerIpAddress-
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

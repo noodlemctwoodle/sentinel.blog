@@ -1,0 +1,59 @@
+id: 6c23d7fc-f7f8-4795-b3a7-ea094f8a647d
+name: Testing - Potential TOR Exit Node Detected
+description: Azure Activity detected from a TOR exit node
+severity: Medium
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: P1D
+queryPeriod: P1D
+triggerOperator: gt
+triggerThreshold: 0
+status: Disabled
+tactics:
+  - Evasion
+  - DefenseEvasion
+techniques:
+  - T0849
+  - T1562
+query: |-
+  let TorIPAddress = _GetWatchlist('TorExitNodes');
+  AzureActivity
+  | where CallerIpAddress != ''
+  | extend WhoDidIt = Caller, ResourceName = tostring(parse_json(Properties).resource)
+  | join TorIPAddress on $left.CallerIpAddress == $right.TorExitNodes
+  | project TimeGenerated, SearchKey, OperationNameValue, Type, SubscriptionId, WhoDidIt, ResourceName, ResourceGroup
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: WhoDidIt
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: SearchKey
+  - entityType: AzureResource
+    fieldMappings:
+      - identifier: ResourceId
+        columnName: SubscriptionId
+  - entityType: SecurityGroup
+    fieldMappings:
+      - identifier: DistinguishedName
+        columnName: ResourceGroup
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: PT5H
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

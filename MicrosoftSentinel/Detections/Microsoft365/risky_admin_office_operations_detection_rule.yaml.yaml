@@ -1,0 +1,55 @@
+id: b1b4371c-356b-4a8a-9871-66abde4fc625
+name: Rare Office operations by Risky Account
+description: |
+  'Identifies Office operations initated by risky admin accounts (AADRiskyUser).'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: Office365
+    dataTypes:
+      - OfficeActivity
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - AADRiskyUsers
+queryFrequency: 1d
+queryPeriod: 1d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - Collection
+relevantTechniques:
+  - T1098
+  - T1114
+query: |
+  let riskyUser =
+      // Get list of risky users
+      AADRiskyUsers
+      | where TimeGenerated > ago(7d)
+      | project UserPrincipalName
+      ;
+  OfficeActivity
+  // Look for operations by admin who are Risky
+  | where UserId in(riskyUser) 
+      and UserType == "Admin"
+      and Operation in~ ("Add-MailboxPermission", "Add-MailboxFolderPermission", "Set-Mailbox", "New-ManagementRoleAssignment", "New-InboxRule", "Set-InboxRule", "Set-TransportRule")
+      and not(UserId has_any ("NT AUTHORITY\\SYSTEM (Microsoft.Exchange.ServiceHost)", "NT AUTHORITY\\SYSTEM (w3wp)", "devilfish-applicationaccount", "NT AUTHORITY\\SYSTEM (Microsoft.Exchange.AdminApi.NetCore"))
+      and TimeGenerated > ago(1d)
+  | project 
+    TimeGenerated
+    , UserId=tolower(UserId) 
+    , UserType
+    , ClientIP
+    , Operation
+    , Parameters
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserId
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+version: 1.0.0
+kind: Scheduled

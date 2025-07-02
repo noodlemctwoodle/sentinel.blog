@@ -1,3 +1,6 @@
+// Analyzes user sign-in behavior over the last 7 days with data cleaning and anomaly detection,
+// identifying users with suspicious activity patterns like impossible travel or multiple IP usage
+
 // User behaviour analytics with comprehensive error handling
 SigninLogs
 | where TimeGenerated > ago(7d)

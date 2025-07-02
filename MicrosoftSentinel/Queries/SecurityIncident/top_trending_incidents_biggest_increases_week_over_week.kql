@@ -1,0 +1,16 @@
+// Identifies the top 10 incident types with the biggest week-over-week increases,
+// showing which security incidents are trending upward and require immediate attention
+
+SecurityIncident
+| where TimeGenerated >= ago(60d)
+| extend WeekStart = startofweek(TimeGenerated)
+| summarize WeeklyCount = count() by Title, WeekStart
+| order by Title asc, WeekStart asc
+| extend WeekOverWeekChange = WeeklyCount - prev(WeeklyCount, 1)
+| where WeekOverWeekChange > 0  // Only show increasing trends
+| top 10 by WeekOverWeekChange desc
+| project 
+    IncidentTitle = Title,
+    WeekStarting = format_datetime(WeekStart, "yyyy-MM-dd"),
+    ThisWeekCount = WeeklyCount,
+    IncreaseFromLastWeek = WeekOverWeekChange

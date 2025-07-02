@@ -1,0 +1,14 @@
+// Shows how many times each incident type occurs per week over the last 60 days,
+// organized by incident title and week to identify recurring patterns and trends
+
+SecurityIncident
+| where TimeGenerated >= ago(60d)
+| extend WeekStart = startofweek(TimeGenerated)
+| summarize 
+    IncidentCount = count()
+    by Title, WeekStart
+| order by Title asc, WeekStart asc
+| project 
+    IncidentTitle = Title,
+    WeekStarting = format_datetime(WeekStart, "yyyy-MM-dd"),
+    WeeklyCount = IncidentCount

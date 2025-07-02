@@ -1,3 +1,6 @@
+// Detects malicious PowerShell activity by identifying suspicious command patterns and obfuscation,
+// while excluding legitimate automation and business-approved scripts to reduce false positives
+
 // PowerShell detection with comprehensive exclusions
 DeviceProcessEvents
 | where TimeGenerated > ago(24h)

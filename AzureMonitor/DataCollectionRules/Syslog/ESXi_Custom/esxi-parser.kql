@@ -1,0 +1,24 @@
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query
+// Information: Parse ESXi Syslog Messages
+//
+Source
+| extend TimeGenerated = todatetime(extract(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", 1, RawData))
+| extend HostName = extract(@"^.*?\s+([^ ]+)\s+", 1, RawData)
+| extend Parser = extract_all(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+([\w.-]+)\s+(\w+):\s+(\w+)\s+(\w+)\[(\w+)\]\s+([\s\S]+)", dynamic([1,2,3,4,5,6,7]), RawData)[0]
+| extend Substring =  iif(isnotempty(Parser), tostring(Parser[3]),"")
+| extend Sub = iif(Substring has ("sub="), extract(@"sub=([\w\d\(\)\-\.]+)\]?",1, Substring), dynamic("")),
+	 OpId = iif(Substring has ("opID="), extract(@"opID=([\w\d\(\)\-@]+)\s?\]?",1, Substring), dynamic("")),
+         UserName = iif(Substring has("suser="), extract(@"\suser=([\w\d\(\)\-]+)\]",1, Substring), dynamic (""))
+| extend Message = iif(isnotempty(Substring), extract(@"\[([\S\s]+)\]\s([\S\s]+)",2, Substring), "")
+| extend Message = iif(isempty(Message),RawData,Message)
+| extend Message = trim(@"^-- ", Message)
+
+
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query (Single Line)
+// Information: Parse ESXi Syslog Messages
+// 
+Source | extend TimeGenerated = todatetime(extract(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", 1, RawData)) | extend HostName = extract(@"^.*?\s+([^ ]+)\s+", 1, RawData) | extend Parser = extract_all(@"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+([\w.-]+)\s+(\w+):\s+(\w+)\s+(\w+)\[(\w+)\]\s+([\s\S]+)", dynamic([1,2,3,4,5,6,7]), RawData)[0] | extend Substring =  iif(isnotempty(Parser), tostring(Parser[3]),"") | extend Sub = iif(Substring has ("sub="), extract(@"sub=([\w\d\(\)\-\.]+)\]?",1, Substring), dynamic("")), 	 OpId = iif(Substring has ("opID="), extract(@"opID=([\w\d\(\)\-@]+)\s?\]?",1, Substring), dynamic("")),          UserName = iif(Substring has("suser="), extract(@"\suser=([\w\d\(\)\-]+)\]",1, Substring), dynamic ("")) | extend Message = iif(isnotempty(Substring), extract(@"\[([\S\s]+)\]\s([\S\s]+)",2, Substring), "") | extend Message = iif(isempty(Message),RawData,Message) | extend Message = trim(@"^-- ", Message)

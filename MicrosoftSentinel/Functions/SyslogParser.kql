@@ -1,0 +1,59 @@
+let syslogTable = () {
+    // Capture the required fields from Syslog table and create a new inline KQL fucntion
+    Syslog
+    | project
+        TimeGenerated,
+        Computer,
+        HostIP,
+        Facility,
+        SeverityLevel,
+        SyslogMessage,
+        ProcessName
+};
+// Split out User Authentication
+let UserAuthentication = 
+    syslogTable()
+    // Add new column "UserAuthentication" that can be called in a query.
+    | extend MessageType = "UserAuthentication"
+    // Capture the Syslog Authentication methods for Linux
+    | where ProcessName has_any ("su", "sudo")
+;
+// Split Login Sessions
+let LoginSessions = 
+    syslogTable
+    // Add new column "LoginSessions" that can be called in a query.
+    | extend MessageType = "LoginSessions"
+    // Capture the Sylog sessions process name
+    | where ProcessName has_any ("login")
+    | extend AuthenticationAttempts = toint(extract(@"FAILED LOGIN \((\d+)\)", 1, SyslogMessage))
+    // Extract Authentication failures using RE2 Regex
+    | extend Device = extract(@"on '([^']+)'", 1, SyslogMessage)
+    | extend Identity = extract(@"FOR '([^']+)'", 1, SyslogMessage)
+    | extend Result = extract(@", (.*)$", 1, SyslogMessage)
+    // Use Switch statement for parsing device type to analyst readable context
+    | extend DeviceType = case (
+        Device == "/dev/ttyS0", "Serial Console"
+        , "Unknown"
+        )
+;
+// Split out Remote Authentication    
+let RemoteAuthentication = 
+    syslogTable()
+    // Add new column "RemoteAuthentication" that can be called in a query.
+    | extend MessageType = "RemoteAuthentication"
+    // Capture the Sylog SSH process name
+    | where ProcessName == "sshd"
+    // Extract IPv4 address from the SyslogMessage
+    | extend RemoteIPv4Address = extract(@'\b((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', 0, SyslogMessage)
+    // Use the Kusto function to Geo Locatate the IP Information and create a new column of the data
+    | extend GeoIPLocation = geo_info_from_ip_address(RemoteIPv4Address)
+    | extend PublicKeyType = extract(@"Accepted (\w+)", 1, SyslogMessage)
+    // Split out SyslogMessage to Columns
+    | extend User = extract(@"for (\w+)", 1, SyslogMessage)
+    | extend IPAddress = extract(@"from (\d+\.\d+\.\d+\.\d+)", 1, SyslogMessage)
+    | extend Port = toint(extract(@"port (\d+)", 1, SyslogMessage))
+    | extend Protocol = extract(@"port \d+ (\w+):", 1, SyslogMessage)
+    | extend KeyFingerprint = extract(@": (\S+)$", 1, SyslogMessage)
+    ;
+// Join all the individual let statements together so they can be called in the function
+union UserAuthentication, RemoteAuthentication, LoginSessions

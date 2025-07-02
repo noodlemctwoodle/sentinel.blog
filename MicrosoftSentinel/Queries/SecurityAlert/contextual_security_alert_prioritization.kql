@@ -1,3 +1,6 @@
+// Enriches security alerts with user and device context from identity and asset data,
+// providing investigation priorities and recommended actions based on entity risk profiles
+
 // Main detection query with entity enrichment
 let UserRiskData = IdentityInfo
     | where TimeGenerated > ago(7d)

@@ -1,4 +1,6 @@
-// Analytical Rule performance analysis
+// Analyzes analytical rule performance over the last 30 days by measuring true positive rates,
+// false positive rates, alert velocity, and time to resolution to identify rules that need tuning
+
 let AnalysisWindow = 30d;
 let RulePerformance = SecurityIncident
     | where TimeGenerated > ago(AnalysisWindow)

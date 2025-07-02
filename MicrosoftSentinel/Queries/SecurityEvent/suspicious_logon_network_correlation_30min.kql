@@ -1,3 +1,6 @@
+// Correlates successful network logons with device network connections within a 5-minute window,
+// identifying accounts that access multiple systems from the same IP to detect lateral movement
+
 // Combining network and authentication data for comprehensive detection
 let TimeWindow = 30m;
 let SuspiciousLogons = SecurityEvent

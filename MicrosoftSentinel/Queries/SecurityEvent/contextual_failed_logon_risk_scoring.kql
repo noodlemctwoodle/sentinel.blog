@@ -1,3 +1,6 @@
+// Detects failed logon attempts with context-aware severity scoring based on account privileges,
+// system types, and logon patterns to prioritize high-risk authentication failures
+
 // Context-aware failed logon detection with dynamic severity assignment
 SecurityEvent
 | where TimeGenerated > ago(1h)

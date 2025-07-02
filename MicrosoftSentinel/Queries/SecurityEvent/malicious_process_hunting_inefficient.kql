@@ -1,3 +1,6 @@
+// Demonstrates inefficient query patterns with expensive full-text searches and large time windows,
+// showing what to avoid when writing performance-optimized security event queries
+
 // Inefficient approach - avoid this pattern
 SecurityEvent
 | where * has "malicious.exe"  // Expensive full-text search

@@ -1,0 +1,56 @@
+id: 6108be0a-0449-4d64-9e42-dc5b74208177
+name: Attempts to sign into disabled accounts
+description: |
+  'Identifies sign-in attempts to disabled accounts based on pre-defined thresholds. 
+  For trusted IPs, 20 attempts for SigninLogs and 100 attempts for AADNonInteractiveUserSignInLogs.
+  For non-trusted IPs, 10 attempts for SigninLogs and 60 attempts for AADNonInteractiveUserSignInLogs.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: AzureActiveDirectory
+    dataTypes:
+      - SignInLogs
+      - AADNonInteractiveUserSignInLogs
+queryFrequency: P1D
+queryPeriod: P1D
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1078
+  - T109888
+query: |
+  let timeframe = 1d;
+  let trustedIPs = _GetWatchlist('environmentIPs') | project IPAddress = tostring(SearchKey); 
+  let knownLeavers = _GetWatchlist('confirmedLeavers') | project UserPrincipalName = tolower(SearchKey);
+  let disabledFunc = union SigninLogs, AADNonInteractiveUserSignInLogs
+      | where ResultType == "50057"
+          and TimeGenerated > ago(timeframe)
+          and tolower(UserPrincipalName) !in(knownLeavers)
+      | extend IsTrustedIP = iff(IPAddress in (trustedIPs), "Yes", "No")
+      | summarize
+          StartTime = min(TimeGenerated), 
+          EndTime = max(TimeGenerated),
+          Count_SigninLogs = sumif(1, Type == "SigninLogs"),
+          Count_AADNonInteractiveUserSignInLogs = sumif(1, Type == "AADNonInteractiveUserSignInLogs")
+          by UserPrincipalName = tolower(UserPrincipalName), IPAddress, IsTrustedIP, Table = Type
+      | extend Threshold = case(
+          IsTrustedIP == "Yes" and Table == "SigninLogs", 20,
+          IsTrustedIP == "Yes" and Table == "AADNonInteractiveUserSignInLogs", 100,
+          IsTrustedIP == "No" and Table == "SigninLogs", 10,
+          IsTrustedIP == "No" and Table == "AADNonInteractiveUserSignInLogs", 60,
+          0
+        )
+      | where 
+        (Table == "SigninLogs" and Count_SigninLogs > Threshold) or 
+        (Table == "AADNonInteractiveUserSignInLogs" and Count_AADNonInteractiveUserSignInLogs > Threshold)
+  ;
+  disabledFunc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: UserPrincipalName
+version: 1.0.2
+kind: Scheduled

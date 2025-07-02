@@ -1,3 +1,6 @@
+// Efficiently hunts for suspicious process executions across multiple hosts within 24 hours,
+// using optimized filtering and aggregation to identify significant malicious activity patterns
+
 // Optimised approach - use this pattern instead
 let SuspiciousProcesses = dynamic(["malicious.exe", "bad.dll", "threat.ps1"]);
 let TimeRange = ago(24h);  // Reduced time window

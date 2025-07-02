@@ -1,0 +1,25 @@
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query
+// Information: Parse AIX Syslog Messages
+//
+source
+| extend TimeGenerated = todatetime(extract(@"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2})", 1, RawData))
+| extend Message = "Message forwarded from"
+| extend HostName = extract(@"Message forwarded from (\w+):", 1, RawData)
+| extend ProcessId = extract(@"sshd\[(\d+)\]", 1, RawData)
+| extend Message = extract(@"Message forwarded from \w+: (?:sshd\[\d+\]: )?(.+)$", 1, RawData)
+| extend IPAddress = extract(@"from ([\d.]+)", 1, RawData)
+| extend Port = extract(@"port (\d+)", 1, RawData)
+| extend SSH2 = extract(@"(ssh2)", 1, RawData)
+| extend FingerPrint = extract(@"SHA256:([\w\d]+)", 1, RawData)
+| extend Account = extract(@"(?:for|User|user|Failed) (\w+)", 1, RawData)
+| where not( Message has_any ("10.128.176.197", "10.128.176.198"))
+| project TimeGenerated,Account, Message, HostName, ProcessId, ErrorMessage, IPAddress, Port, SSH2, FingerPrint
+
+// Author: noodlemctwoodle
+// Version: 0.1
+// Type: Log Analytics Transformation Query (Single Line)
+// Information: Parse AIX Syslog Messages
+// 
+source | extend TimeGenerated = todatetime(extract(@"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+\d{2}:\d{2})", 1, RawData)) | extend Message = "Message forwarded from" | extend HostName = extract(@"Message forwarded from (\w+):", 1, RawData) | extend ProcessId = extract(@"sshd\[(\d+)\]", 1, RawData) | extend ErrorMessage = extract(@"Message forwarded from \w+: (?:sshd\[\d+\]: )?(.+)$", 1, RawData) | extend IPAddress = extract(@"from ([\d.]+)", 1, RawData) | extend Port = extract(@"port (\d+)", 1, RawData) | extend SSH2 = extract(@"(ssh2)", 1, RawData) | extend FingerPrint = extract(@"SHA256:([\w\d]+)", 1, RawData) | extend Account = extract(@"(?:for|User|user|Failed) (\w+)", 1, RawData) | where not( Message has_any ("10.128.176.197", "10.128.176.198")) | project TimeGenerated,Account, Message, HostName, ProcessId, ErrorMessage, IPAddress, Port, SSH2, FingerPrint

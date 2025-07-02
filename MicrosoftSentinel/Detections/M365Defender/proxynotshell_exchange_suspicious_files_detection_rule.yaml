@@ -1,0 +1,56 @@
+id: c67a24ca-0cda-414c-8ec7-b20a84f829f4
+name: CVE-2022-41040 & CVE-2022-41082 - Suspicious files in Exchange directories
+description: |
+  'Identifies potential ProxyNotShell attacks where suspicious files have been created by the Internet Information Service process on a Microsoft Exchange server.
+  https://security.microsoft.com/threatanalytics3/3269c2bd-ad05-47c9-ac09-cc2aa87475e6/analystreport?tid=d6915c91-3e55-4a26-a83f-4a40cee2782a'
+severity: High
+requiredDataConnectors:
+  - connectorId: MicrosoftDefenderforEndpoints
+    dataTypes:
+      - DeviceFileEvents
+queryFrequency: PT1H
+queryPeriod: PT1H
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Execution
+  - InitialAccess
+  - Persistence
+relevantTechniques:
+  - T1543
+  - T1574
+  - T1078
+  - T1566
+  - T1203
+query: |
+  DeviceFileEvents
+  | where TimeGenerated >= ago(7d)
+  | where InitiatingProcessFileName == "w3wp.exe"
+  | where FolderPath has @"FrontEnd\HttpProxy\"
+  | where InitiatingProcessCommandLine contains "MSExchange"
+  | project FileName, FolderPath, SHA256, InitiatingProcessCommandLine, DeviceId, TimeGenerated
+entityMappings:
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: FileName
+  - entityType: Process
+    fieldMappings:
+      - identifier: CommandLine
+        columnName: InitiatingProcessCommandLine
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: 5h
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: PT5H
+suppressionEnabled: false
+version: 1.0.0
+kind: Scheduled

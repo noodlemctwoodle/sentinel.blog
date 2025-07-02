@@ -1,3 +1,6 @@
+// Performs automated health checks on security detection rules over the last 7 days,
+// analyzing alert volume and patterns to provide tuning recommendations for rule optimization
+
 // Automated rule health check and recommendations
 let RuleHealthCheck = SecurityAlert
     | where TimeGenerated > ago(7d)

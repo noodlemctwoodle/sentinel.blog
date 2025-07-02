@@ -1,3 +1,6 @@
+// Analyzes process execution events with MITRE ATT&CK framework mapping over 4 hours,
+// scoring threat activities and identifying sophisticated attacks using multiple techniques
+
 // Process execution analysis with MITRE ATT&CK context
 DeviceProcessEvents
 | where TimeGenerated > ago(4h)
