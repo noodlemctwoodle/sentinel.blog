@@ -1,31 +1,22 @@
-id: 319e29bd-e47d-48e0-8add-5ef1b77531a4
-name: New data received from new data connector
-version: 1.0.0
-kind: Scheduled
-description: New data received from new data connector
+id: 27bbf64c-b98e-4760-85bb-ea22f3b8cbba
+name: Data ingestion Missing
+description: Enter rule description here
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Collection
-relevantTechniques:
-- T0801
+  - Impact
 query: |
   let lastWeekStart = ago(14d); 
   let lastWeekEnd = ago(7d); 
   let thisWeekStart = ago(7d); 
-  let thisWeekEnd = ago(0d);
-  let SentinelRG = "CHS-UKS-SIEM-RG";
-  let newDataConnector =
-    // New Sentinel Data Connector
-    AzureActivity
-    | where OperationNameValue has "DATACONNECTORS/WRITE"
-        and ActivityStatusValue has "Start"
-        and ResourceGroup == SentinelRG
-    | extend DataConnector = tostring(split(tostring(parse_json(Properties).entity), "/")[12])
-    | summarize DataConnectors = make_set(DataConnector);
+  let thisWeekEnd = ago(0d); 
   Usage
   | where IsBillable == true
   | where TimeGenerated >= lastWeekStart and TimeGenerated < lastWeekEnd 
@@ -63,29 +54,25 @@ query: |
               round((ThisWeekSize - LastWeekSize) / LastWeekSize * 100, 0)
           ) 
   | order by abs(['Size Change %']) desc
-  | where ['Size Change %'] > 50
-  | where LastWeekSize == 0 and ThisWeekSize > 0
-  | where DataType in (newDataConnector)
-eventGroupingSettings:
-  aggregationKind: SingleAlert
+  | where LastWeekSize > 0 and ThisWeekSize == 0
 entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: Caller
-- entityType: IP
-  fieldMappings:
-  - identifier: Address
-    columnName: CallerIpAddress
-suppressionEnabled: true
-suppressionDuration: 1d
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: YourColumnName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

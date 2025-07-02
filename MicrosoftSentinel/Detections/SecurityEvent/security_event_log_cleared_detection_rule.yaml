@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: SecurityEvent
     dataTypes:
       - SecurityEvent
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: P1D
+queryPeriod: P1D
 triggerOperator: gt
 triggerThreshold: 0
 status: Available
@@ -33,7 +33,7 @@ entityMappings:
     fieldMappings:
       - identifier: HostName
         columnName: Computer
-suppressionDuration: 5h
+suppressionDuration: PT5H
 suppressionEnabled: false
 version: 1.0.0
 kind: Scheduled

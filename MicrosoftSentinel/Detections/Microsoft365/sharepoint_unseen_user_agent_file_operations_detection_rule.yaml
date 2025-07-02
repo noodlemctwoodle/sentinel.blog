@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
-queryFrequency: 1d
-queryPeriod: 8d
+queryFrequency: P1D
+queryPeriod: P8D
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -64,35 +64,34 @@ query: |
   | extend UserIdName = tostring(split(UserId, '@')[0]), UserIdUPNSuffix = tostring(split(UserId, '@')[1])
   | project-reorder StartTime, EndTime, UserAgent, UserAgentSeenCount, UserId, ClientIP, Site_Url
   | order by UserAgentSeenCount desc, UserAgent asc, UserId asc, Site_Url asc
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserIdName
+      - identifier: UPNSuffix
+        columnName: UserIdUPNSuffix
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: ClientIP
+  - entityType: URL
+    fieldMappings:
+      - identifier: Url
+        columnName: Site_Url
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
 eventGroupingSettings:
   aggregationKind: SingleAlert
-entityMappings:
-- entityType: Account
-  fieldMappings:
-    - identifier: Name
-      columnName: UserIdName
-    - identifier: UPNSuffix
-      columnName: UserIdUPNSuffix
-- entityType: IP
-  fieldMappings:
-    - identifier: Address
-      columnName: ClientIP
-- entityType: URL
-  fieldMappings:
-    - identifier: Url
-      columnName: Site_Url
-suppressionDuration: 5h
+suppressionDuration: PT5H
 suppressionEnabled: false
 version: 1.0.0
 kind: Scheduled
-

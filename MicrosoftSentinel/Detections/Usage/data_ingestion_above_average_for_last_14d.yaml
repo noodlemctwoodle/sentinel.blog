@@ -1,14 +1,17 @@
-id: 27bbf64c-b98e-4760-85bb-ea22f3b8cbba
-name: Data ingestion Missing
-version: 1.0.0
-kind: Scheduled
+id: 48e9d8ba-55bd-401b-b092-4810df9db52d
+name: Data ingestion above average for last 7d
+description: Enter rule description here
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Impact
+  - Impact
 query: |
   let lastWeekStart = ago(14d); 
   let lastWeekEnd = ago(7d); 
@@ -51,18 +54,25 @@ query: |
               round((ThisWeekSize - LastWeekSize) / LastWeekSize * 100, 0)
           ) 
   | order by abs(['Size Change %']) desc
-  | where LastWeekSize > 0 and ThisWeekSize == 0
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-suppressionEnabled: true
-suppressionDuration: 1d
+  | where ['Size Change %'] > 50
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: YourColumnName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

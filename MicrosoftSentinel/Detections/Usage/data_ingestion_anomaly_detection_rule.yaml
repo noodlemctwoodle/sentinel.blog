@@ -1,14 +1,17 @@
-id: 69f8b7fcb-6763-4760-b78b-59ced11b7b80
+id: 78a0f021-c94a-4075-978e-4c01a5c5d6d8
 name: Data ingestion above average for last 7d
-version: 1.0.0
-kind: Scheduled
+description: Enter rule description here
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Impact
+  - Impact
 query: |
   let lastWeekStart = ago(14d); 
   let lastWeekEnd = ago(7d); 
@@ -52,17 +55,24 @@ query: |
           ) 
   | order by abs(['Size Change %']) desc
   | where ['Size Change %'] > 50
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-suppressionEnabled: true
-suppressionDuration: 1d
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: YourColumnName
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

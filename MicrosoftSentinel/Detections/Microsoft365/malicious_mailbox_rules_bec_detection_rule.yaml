@@ -3,15 +3,15 @@ name: Malicious Mailbox Rules (BEC)
 description: |
   'This rule searches for potentially malicious mailbox actions that could indicate email compromise. Typical adversary tactics include the creation of new inbox rules to divert incoming emails to default but underused mail folders. If a rule has been created which moves emails to one of the folders ("Archive", "RSS Feeds", "RSS Subscriptions", "Deleted", "Conversation History") and sets MarkedAsRead property'
 severity: High
-status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
       - OfficeActivity
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: P1D
+queryPeriod: P1D
 triggerOperator: gt
 triggerThreshold: 0
+status: Available
 tactics:
   - Persistence
   - Collection

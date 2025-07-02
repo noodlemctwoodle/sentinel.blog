@@ -3,7 +3,6 @@ name: Rare Office operations by Risky Account
 description: |
   'Identifies Office operations initated by risky admin accounts (AADRiskyUser).'
 severity: High
-status: Available
 requiredDataConnectors:
   - connectorId: Office365
     dataTypes:
@@ -11,10 +10,11 @@ requiredDataConnectors:
   - connectorId: AzureActiveDirectory
     dataTypes:
       - AADRiskyUsers
-queryFrequency: 1d
-queryPeriod: 1d
+queryFrequency: P1D
+queryPeriod: P1D
 triggerOperator: gt
 triggerThreshold: 0
+status: Available
 tactics:
   - Persistence
   - Collection

@@ -1,12 +1,13 @@
 id: 056a8215-eb86-4252-ac5b-294adf15b72f
 name: A new Lighthouse service provider was added
+description: Enter rule description here
 severity: Informational
 requiredDataConnectors:
   - connectorId: AzureActivity
     dataTypes:
       - AzureActivity
-queryFrequency: 30m
-queryPeriod: 30m
+queryFrequency: PT30M
+queryPeriod: PT30M
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -35,14 +36,14 @@ incidentConfiguration:
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
 eventGroupingSettings:
   aggregationKind: SingleAlert
-suppressionDuration: 5h
+suppressionDuration: PT5H
 suppressionEnabled: false
 version: 1.0.0
 kind: Scheduled

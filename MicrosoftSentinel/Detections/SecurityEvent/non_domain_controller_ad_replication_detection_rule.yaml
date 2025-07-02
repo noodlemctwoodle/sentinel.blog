@@ -7,8 +7,8 @@ requiredDataConnectors:
   - connectorId: SecurityEvent
     dataTypes:
       - SecurityEvent
-queryFrequency: 1d
-queryPeriod: 7d
+queryFrequency: P1D
+queryPeriod: P7D
 triggerOperator: gt
 triggerThreshold: 0
 status: Available

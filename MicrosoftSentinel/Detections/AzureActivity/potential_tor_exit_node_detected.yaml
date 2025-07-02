@@ -12,10 +12,8 @@ triggerOperator: gt
 triggerThreshold: 0
 status: Disabled
 tactics:
-  - Evasion
   - DefenseEvasion
 techniques:
-  - T0849
   - T1562
 query: |-
   let TorIPAddress = _GetWatchlist('TorExitNodes');

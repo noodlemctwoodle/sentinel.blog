@@ -1,17 +1,19 @@
-id: 319e29bd-e47d-48e0-8add-5ef1b77531a4
+id: 117dedf8-5a67-41d4-b97c-ca186e38626f
 name: New data received from new data connector
-version: 1.0.0
-kind: Scheduled
 description: New data received from new data connector
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Collection
+  - Collection
 relevantTechniques:
-- T0801
+  - T0801
 query: |
   let lastWeekStart = ago(14d); 
   let lastWeekEnd = ago(7d); 
@@ -66,26 +68,28 @@ query: |
   | where ['Size Change %'] > 50
   | where LastWeekSize == 0 and ThisWeekSize > 0
   | where DataType in (newDataConnector)
-eventGroupingSettings:
-  aggregationKind: SingleAlert
 entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: Caller
-- entityType: IP
-  fieldMappings:
-  - identifier: Address
-    columnName: CallerIpAddress
-suppressionEnabled: true
-suppressionDuration: 1d
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

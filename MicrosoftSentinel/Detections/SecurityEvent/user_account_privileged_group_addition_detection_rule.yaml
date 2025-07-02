@@ -8,8 +8,8 @@ requiredDataConnectors:
   - connectorId: SecurityEvents
     dataTypes:
       - SecurityEvent
-queryFrequency: 1h
-queryPeriod: 1h
+queryFrequency: PT1H
+queryPeriod: PT1H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -38,18 +38,6 @@ query: |
   | extend SimpleMemberName = tostring(split(tostring(split(MemberName, ",")[0]),"CN=")[1])
   | project StartTimeUtc = TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid
   | extend timestamp = StartTimeUtc, AccountCustomEntity = SimpleMemberName, HostCustomEntity = Computer
-incidentConfiguration:
-  createIncident: true
-  groupingConfiguration:
-    enabled: false
-    reopenClosedIncident: false
-    lookbackDuration: 5h
-    matchingMethod: AllEntities
-    groupByEntities: []
-    groupByAlertDetails: []
-    groupByCustomDetails: []
-eventGroupingSettings:
-  aggregationKind: SingleAlert
 entityMappings:
   - entityType: Account
     fieldMappings:
@@ -59,6 +47,17 @@ entityMappings:
     fieldMappings:
       - identifier: FullName
         columnName: HostCustomEntity
+incidentConfiguration:
+  createIncident: true
+  groupingConfiguration:
+    enabled: false
+    reopenClosedIncident: false
+    lookbackDuration: PT5H
+    matchingMethod: AllEntities
+    groupByEntities: []
+    groupByAlertDetails: []
+    groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
 version: 1.0.1
 kind: Scheduled
-

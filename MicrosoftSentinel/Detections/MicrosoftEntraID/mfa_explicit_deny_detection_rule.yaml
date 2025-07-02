@@ -8,8 +8,8 @@ requiredDataConnectors:
     dataTypes:
       - SignInLogs
       - AADNonInteractiveUserSignInLogs
-queryFrequency: 5h
-queryPeriod: 5h
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -47,42 +47,41 @@ query: |
       ,DeniedAttempts >= 20, "High"
       , "High"
       )
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: DeniedAttempts
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: Severity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CorrelationId
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
 eventGroupingSettings:
   aggregationKind: SingleAlert
-alertDetailsOverride:
-  alertnameFormat: 
-  alertDescriptionFormat: 
-  alertTacticsColumnName: 
-  alertSeverityColumnName: Severity
-entityMappings:
-- entityType: Account
-  fieldMappings:
-    - identifier: Name
-      columnName: UserPrincipalName
-- entityType: IP
-  fieldMappings:
-    - identifier: Address
-      columnName: DeniedAttempts
-- entityType: IP
-  fieldMappings:
-    - identifier: Address
-      columnName: Severity
-- entityType: IP
-  fieldMappings:
-    - identifier: Address
-      columnName: CorrelationId
-suppressionDuration: 5h
+suppressionDuration: PT5H
 suppressionEnabled: false
+alertDetailsOverride:
+  alertnameFormat: null
+  alertDescriptionFormat: null
+  alertTacticsColumnName: null
+  alertSeverityColumnName: Severity
 version: 1.0.0
 kind: Scheduled
-

@@ -1,14 +1,17 @@
 id: 9070ab40-52fe-4d11-b038-4e247afd6fac
 name: New DCR Created
-version: 1.0.0
-kind: Scheduled
+description: Enter rule description here
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Impact
+  - Impact
 query: |
   // New DCR
   AzureActivity
@@ -19,27 +22,28 @@ query: |
   | extend DCR_Sub = tostring(parse_json(Properties).subscriptionId)
   | extend RBAC_Role = tostring(parse_json(tostring(Authorization_d.evidence)).role)
   | summarize by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , DCR_Name, DCR_RG, DCR_Sub, Caller, RBAC_Role, CallerIpAddress
-eventGroupingSettings:
-  aggregationKind: SingleAlert
 entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: Caller
-- entityType: IP
-  fieldMappings:
-  - identifier: Address
-    columnName: CallerIpAddress
-suppressionEnabled: true
-suppressionDuration: 1d
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
-
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

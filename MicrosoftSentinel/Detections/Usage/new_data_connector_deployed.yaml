@@ -1,17 +1,19 @@
 id: 3a5f5980-cd45-4059-b4c5-f9fbde4db8d9
 name: New Data Connector Deployed
-version: 1.0.0
-kind: Scheduled
 description: A New Data Connector was deployed
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Collection
+  - Collection
 relevantTechniques:
-- T0801
+  - T0801
 query: |
   // New Sentinel Data Connector
   let SentinelRG = "CHS-UKS-SIEM-RG";
@@ -22,27 +24,28 @@ query: |
   | extend DataConnector = tostring(split(tostring(parse_json(Properties).entity), "/")[12])
   | extend RBACRole = tostring(parse_json(tostring(Authorization_d.evidence)).role)
   | summarize DataConnectors = make_set(DataConnector) by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , Caller, RBACRole, CallerIpAddress
-eventGroupingSettings:
-  aggregationKind: SingleAlert
 entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: Caller
-- entityType: IP
-  fieldMappings:
-  - identifier: Address
-    columnName: CallerIpAddress
-suppressionEnabled: true
-suppressionDuration: 1d
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
-
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

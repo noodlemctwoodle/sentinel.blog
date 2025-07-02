@@ -1,19 +1,33 @@
-id: 69f8b7fcb-6763-4760-b78b-59ced11b7b80
-name: Data ingestion above average for last 7d
-version: 1.0.0
-kind: Scheduled
+id: 319e29bd-e47d-48e0-8add-5ef1b77531a4
+name: New data received from new data connector
+description: New data received from new data connector
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Impact
+  - Collection
+relevantTechniques:
+  - T0801
 query: |
   let lastWeekStart = ago(14d); 
   let lastWeekEnd = ago(7d); 
   let thisWeekStart = ago(7d); 
-  let thisWeekEnd = ago(0d); 
+  let thisWeekEnd = ago(0d);
+  let SentinelRG = "CHS-UKS-SIEM-RG";
+  let newDataConnector =
+    // New Sentinel Data Connector
+    AzureActivity
+    | where OperationNameValue has "DATACONNECTORS/WRITE"
+        and ActivityStatusValue has "Start"
+        and ResourceGroup == SentinelRG
+    | extend DataConnector = tostring(split(tostring(parse_json(Properties).entity), "/")[12])
+    | summarize DataConnectors = make_set(DataConnector);
   Usage
   | where IsBillable == true
   | where TimeGenerated >= lastWeekStart and TimeGenerated < lastWeekEnd 
@@ -52,17 +66,30 @@ query: |
           ) 
   | order by abs(['Size Change %']) desc
   | where ['Size Change %'] > 50
-eventGroupingSettings:
-  aggregationKind: SingleAlert
-suppressionEnabled: true
-suppressionDuration: 1d
+  | where LastWeekSize == 0 and ThisWeekSize > 0
+  | where DataType in (newDataConnector)
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: Caller
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

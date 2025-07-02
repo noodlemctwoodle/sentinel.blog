@@ -2,11 +2,15 @@ id: 836e2f4b-6a9d-4a73-a062-34fa47030121
 name: Activity from known suspicious user
 description: |
   'Please escalate this incident to Tier 3 / SOC Manager
-  
+
   REQUIRES WATCHLIST = "SuspiciousUsers"'
 severity: Medium
-queryFrequency: 1h
-queryPeriod: 1h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT1H
+queryPeriod: PT1H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
@@ -41,32 +45,32 @@ query: |
       | summarize by UserPrincipalName, DeviceType, DeviceTrust, DeviceOS
       ;
   union O365Activity, SuspiciousLogin
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: UserPrincipalName
+  - entityType: CloudApplication
+    fieldMappings:
+      - identifier: Name
+        columnName: Appname
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: DeviceType
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
 eventGroupingSettings:
   aggregationKind: SingleAlert
-entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: Name
-    columnName: UserPrincipalName
-- entityType: CloudApplication
-  fieldMappings:
-  - identifier: Name
-    columnName: Appname
-- entityType: Host
-  fieldMappings:
-  - identifier: HostName
-    columnName: DeviceType
-suppressionDuration: 5h
+suppressionDuration: PT5H
 suppressionEnabled: false
 version: 1.0.0
 kind: Scheduled

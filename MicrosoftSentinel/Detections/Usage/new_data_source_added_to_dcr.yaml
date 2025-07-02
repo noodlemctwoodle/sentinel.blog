@@ -1,14 +1,17 @@
 id: 63b63b36-9530-41d2-8f31-b435e99eb66d
 name: New Source added to DCR
-version: 1.0.0
-kind: Scheduled
+description: Enter rule description here
 severity: Informational
-queryFrequency: 5h
-queryPeriod: 5h
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: PT5H
+queryPeriod: PT5H
 triggerOperator: gt
 triggerThreshold: 0
 tactics:
-- Impact
+  - Impact
 query: |
   AzureActivity
   | where OperationNameValue has "DATACOLLECTIONRULEASSOCIATIONS/WRITE"
@@ -18,31 +21,32 @@ query: |
   | extend SourceRG = tostring(Properties_d.resourceGroup)
   | extend DCR = toupper(split(Resources[2], "-association")[0])
   | summarize by format_datetime(bin(TimeGenerated, 1d), "dd/MM/yyyy") , Source, SourceRG, DCR, Caller, CallerIpAddress
-eventGroupingSettings:
-  aggregationKind: SingleAlert
 entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: CallerIpAddress
-- entityType: IP
-  fieldMappings:
-  - identifier: Address
-    columnName: CallerIpAddress
-- entityType: Host
-  fieldMappings:
-  - identifier: HostName
-    columnName: Source
-suppressionEnabled: true
-suppressionDuration: 1d
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: CallerIpAddress
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: CallerIpAddress
+  - entityType: Host
+    fieldMappings:
+      - identifier: HostName
+        columnName: Source
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: false
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AllEntities
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
-
+eventGroupingSettings:
+  aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
+version: 1.0.0
+kind: Scheduled

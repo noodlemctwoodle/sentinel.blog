@@ -2,10 +2,16 @@ id: 4e9a5600-2f36-4398-9375-081034a857d9
 name: Google Drive Changes by None Document Owner
 description: This rule looks for changes to a Google Drive file by someone other than the owner of the document.
 severity: Informational
-queryFrequency: 1d
-queryPeriod: 1d
+requiredDataConnectors:
+  - connectorId: YourConnectorId
+    dataTypes:
+      - YourDataType
+queryFrequency: P1D
+queryPeriod: P1D
 triggerOperator: gt
 triggerThreshold: 0
+tactics:
+  - YourTactic
 query: |
   GWorkspaceActivityReports
   | where ActorKey != "SYSTEM"
@@ -33,35 +39,35 @@ query: |
       , OldAccess
       , NewAccess
       , DocumentTitle
-suppressionEnabled: true
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: ChangeMadeBy
+  - entityType: Account
+    fieldMappings:
+      - identifier: FullName
+        columnName: DocumentOwner
+  - entityType: File
+    fieldMappings:
+      - identifier: Name
+        columnName: DocumentTitle
 incidentConfiguration:
   createIncident: true
   groupingConfiguration:
     enabled: true
     reopenClosedIncident: false
-    lookbackDuration: 5h
+    lookbackDuration: PT5H
     matchingMethod: AnyAlert
     groupByEntities: []
     groupByAlertDetails: []
     groupByCustomDetails: []
 eventGroupingSettings:
   aggregationKind: SingleAlert
+suppressionDuration: P1D
+suppressionEnabled: true
 customDetails:
   OldAccess: OldAccess
   NewAccess: NewAccess
-entityMappings:
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: ChangeMadeBy
-- entityType: Account
-  fieldMappings:
-  - identifier: FullName
-    columnName: DocumentOwner
-- entityType: File
-  fieldMappings:
-  - identifier: Name
-    columnName: DocumentTitle
-suppressionDuration: 1d
 version: 1.0.0
 kind: Scheduled
