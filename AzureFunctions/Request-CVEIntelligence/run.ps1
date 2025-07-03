@@ -1,7 +1,7 @@
 # Import the System.Net namespace for HTTP functionality
 using namespace System.Net
 
-# Define parameters passed in via the param block.
+# Define parameters passed in via the param block for Azure Functions HTTP trigger
 param($Request, $TriggerMetadata)
 
 # Extract 'name' from the Request parameters, if not available, retrieve it from the Request body
@@ -22,25 +22,27 @@ if (-not $api) {
     $api = $Request.Body.API
 }
 
-# Azure Key Vault
-$vaultName = '<KeyVaultName>'
+# Azure Key Vault configuration
+$vaultName = '<YOUR_KEYVAULT_NAME>'
 
-#NIST API Key
-$NISTsecretName = 'NIST'
+# NIST API Key configuration
+$NISTsecretName = '<YOUR_NIST_SECRET_NAME>'
 $apiKey = (Get-AzKeyVaultSecret -VaultName $vaultName -Name $NISTsecretName -AsPlainText)
 
-# OpenCVE Credentials
-$username = 'noodlemctwoodle'
-$openCVEsecretName = 'OpenCVE'
+# OpenCVE API credentials configuration
+$username = '<YOUR_OPENCVE_USERNAME>'
+$openCVEsecretName = '<YOUR_OPENCVE_SECRET_NAME>'
 $openCVEsecret = (Get-AzKeyVaultSecret -VaultName $vaultName -Name $openCVEsecretName -AsPlainText)
 $credential = New-Object System.Management.Automation.PSCredential($username, (ConvertTo-SecureString $openCVEsecret -AsPlainText -Force))
 
+# Function to retrieve vulnerability data from Microsoft Security Response Center API
 function Get-MSVulnerability {
     param (
-        $date,
-        $name
+        $date,  # Security bulletin date/alias
+        $name   # CVE identifier
     )
     
+    # If no date provided, get it from Microsoft API using the CVE name
     if (-not $date) {
         # Retrieve 'date' from the Microsoft API using 'name'
         $aliasResponse = Invoke-RestMethod -Uri ("https://api.msrc.microsoft.com/cvrf/v2.0/Updates('" + $name + "')")
@@ -53,7 +55,7 @@ function Get-MSVulnerability {
         }
     }
 
-    # Send a GET request to the Microsoft API to get the CVE details.
+    # Send a GET request to the Microsoft API to get the CVE details
     $response = (Invoke-WebRequest ("https://api.msrc.microsoft.com/cvrf/" + $date) -Headers @{Accept = "application/json" }).Content | ConvertFrom-Json -Depth 99
 
     # Filter out the specific vulnerability details we want from the response
@@ -87,16 +89,17 @@ function Get-MSVulnerability {
     return $MSVulnerabilityObject
 }
 
+# Function to retrieve vulnerability data from NIST National Vulnerability Database
 function Get-NISTVulnerability {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$name,
+        [string]$name,    # CVE identifier
 
         [Parameter(Mandatory = $true)]
-        [string]$apiKey
+        [string]$apiKey   # NIST API key for authentication
     )
 
-#  Function to convert properties to individual keys
+    # Function to convert properties to individual keys for easier processing
     function ConvertPropertiesToIndividualKeys($metrics) {
         $result = @{}
         if ($null -ne $metrics) {
@@ -109,7 +112,7 @@ function Get-NISTVulnerability {
         return $result
     }
 
-    # Make request to the NIST API
+    # Make request to the NIST API with error handling
     try {
         $nist = (Invoke-WebRequest -Uri "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=$name" -Headers @{Accept = "application/json"; 'X-Api-Key'=$apiKey} -ErrorAction Stop).Content | ConvertFrom-Json -Depth 99
     }
@@ -118,12 +121,12 @@ function Get-NISTVulnerability {
         return $null
     }
 
-    # If no results, return null
+    # If no results found, return null
     if ($nist.totalResults -eq 0) {
         return $null
     }
 
-    # Process data from the NIST API
+    # Process data from the NIST API response
     $vulnerability = $null
     if ($nist.vulnerabilities.Count -gt 0) {
         $vulnerability = $nist.vulnerabilities | Select-Object -First 1
@@ -134,10 +137,11 @@ function Get-NISTVulnerability {
         return $null
     }
 
+    # Extract CVSS v2 metrics and properties
     $metricsV2 = $vulnerability.cve.metrics.cvssMetricV2 | Select-Object -First 1
     $metricsV2Properties = ConvertPropertiesToIndividualKeys ($metricsV2 | Select-Object -ExpandProperty cvssData)
 
-    # List of additional properties
+    # List of additional properties to include from CVSS v2
     $additionalProperties = @("baseSeverity", "exploitabilityScore", "impactScore", "acInsufInfo", "obtainAllPrivilege", "obtainUserPrivilege", "obtainOtherPrivilege", "userInteractionRequired")
 
     # Add the additional properties to the $metricsV2Properties
@@ -145,6 +149,7 @@ function Get-NISTVulnerability {
         $metricsV2Properties.$property = $metricsV2.$property
     }
 
+    # Extract CVSS v3.1 metrics
     $metricsV31Properties = ConvertPropertiesToIndividualKeys ($vulnerability.cve.metrics.cvssMetricV31 | Select-Object -First 1 -ExpandProperty cvssData)
 
     # Process URLs and tags from references
@@ -157,7 +162,7 @@ function Get-NISTVulnerability {
     $urls = $urls | Sort-Object | Get-Unique
     $tags = $tags | Sort-Object | Get-Unique
 
-    # Create a custom object with processed data
+    # Create a custom object with processed NIST vulnerability data
     $NISTVulnerabilityObject = [PSCustomObject]@{
         id                      = $vulnerability.cve.id
         sourceIdentifier        = $vulnerability.cve.sourceIdentifier
@@ -199,20 +204,20 @@ function Get-NISTVulnerability {
     return $NISTVulnerabilityObject
 }
 
-# Define Get-OpenCVEVulnerability function
+# Function to retrieve vulnerability data from OpenCVE API
 function Get-OpenCVEVulnerability {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$name,
+        [string]$name,        # CVE identifier
 
         [Parameter(Mandatory = $true)]
-        [PSCredential]$credential
+        [PSCredential]$credential  # OpenCVE API credentials
     )
 
-    # Make request to the OpenCVE API
+    # Make request to the OpenCVE API with authentication
     $opencve = (Invoke-WebRequest -Uri "https://www.opencve.io/api/cve/$name" -Headers @{Accept = "application/json"} -Credential $credential).Content | ConvertFrom-Json -Depth 99
 
-    # Process data from the OpenCVE API
+    # Process data from the OpenCVE API response
     $vulnerability = $opencve
 
     # Process vendors data into a more readable format and convert it into an array
@@ -228,7 +233,7 @@ function Get-OpenCVEVulnerability {
     $baseMetricV3 = $vulnerability.raw_nvd_data.impact.baseMetricV3
     $cvssV3 = $baseMetricV3.cvssV3 | ConvertTo-Json -Depth 99 | ConvertFrom-Json
 
-    # Create a custom object with processed data
+    # Create a custom object with processed OpenCVE vulnerability data
     $OpenCVEVulnerabilityObject = [PSCustomObject]@{
         id                 = $vulnerability.id
         summary            = $vulnerability.summary
@@ -263,16 +268,21 @@ function Get-OpenCVEVulnerability {
     return $OpenCVEVulnerabilityObject
 }
 
+# Main logic: Route to appropriate API based on the 'api' parameter
 if ($api -eq 'MS') {
+    # Call Microsoft Security Response Center API
     $vulnerabilityObject = Get-MSVulnerability -name $name -date $date
 }
 elseif ($api -eq 'NIST') {
+    # Call NIST National Vulnerability Database API
     $vulnerabilityObject = Get-NISTVulnerability -name $name -apiKey $apiKey
 }
 elseif ($api -eq 'OPENCVE') {
+    # Call OpenCVE API
     $vulnerabilityObject= Get-OpenCVEVulnerability -name $name -credential $credential
 }
 else {
+    # Return error for invalid API specification
     Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::BadRequest
             Body       = "Invalid API specified. Please specify 'MS', 'NIST', or 'OPENCVE'"
@@ -280,21 +290,24 @@ else {
     return
 }
 
-# Convert CVE data to JSON for output, or give appropriate error messages if data is not available
+# Convert CVE data to JSON for output, or provide appropriate error messages if data is not available
 if ($vulnerabilityObject) {
+    # Successfully retrieved vulnerability data - convert to JSON
     $body = ConvertTo-Json -InputObject $vulnerabilityObject -Depth 99
 }
 elseif (-not $vulnerabilityObject) {
+    # No vulnerability data found for the provided CVE
     $body = "CVE not found"
 }
 else {
+    # No valid CVE provided in the request
     Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::NoContent
             Body       = "No valid CVE provided"
         })
 }
 
-# Pass the final response to the output bindings
+# Pass the final response to the output bindings with HTTP 200 OK status
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
         StatusCode = [HttpStatusCode]::OK
         Body       = $body

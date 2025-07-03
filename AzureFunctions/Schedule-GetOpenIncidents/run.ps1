@@ -2,19 +2,19 @@
 param($Timer)
 
 # Define your Azure AD App Registration details
-$tenantId = '<TenantId>'
+$tenantId = '<YOUR_TENANT_ID>'
 
 # Application (client) ID
-$appId = '<ApplicationId>'
+$appId = '<YOUR_APPLICATION_ID>'
 
 # Define your Key Vault and Secret Name
-$vaultName = '<KeyVaultName>'
-$secretName = '<KeyVaultSecretName>'
+$vaultName = '<YOUR_KEYVAULT_NAME>'
+$secretName = '<YOUR_KEYVAULT_SECRET_NAME>'
 
 # Define Azure Storage account details
-$storageAccountName = "<StorageAccountName>"
-$containerName = "<ContainerName>"
-$storageSecretName = "<StorageAccountSecretName>"
+$storageAccountName = "<YOUR_STORAGE_ACCOUNT_NAME>"
+$containerName = "<YOUR_CONTAINER_NAME>"
+$storageSecretName = "<YOUR_STORAGE_SECRET_NAME>"
 
 # Generate the file name
 $tempFolder = $env:TEMP
@@ -26,10 +26,10 @@ $global:incidentSummaryByMonth = @{}
 
 # Define subscription to client name mapping
 $subscriptionToClientName = @{
-    "b7bd67e6-73ee-42c6-9922-547a3da4e98a" ="Customer1"
-    "b7bd67e6-73ee-42c6-9922-547a3da4e98b" = "Customer2"
-    "b7bd67e6-73ee-42c6-9922-547a3da4e98c" = "Customer3"
-    "b7bd67e6-73ee-42c6-9922-547a3da4e98d" = "Customer4"
+    "<SUBSCRIPTION_ID_1>" = "Client_A"
+    "<SUBSCRIPTION_ID_2>" = "Client_B"
+    "<SUBSCRIPTION_ID_3>" = "Client_C"
+    "<SUBSCRIPTION_ID_4>" = "Client_D"
 }
 
 function processWorkspace {

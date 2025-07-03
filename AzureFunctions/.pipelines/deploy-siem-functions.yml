@@ -3,72 +3,77 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-powershell
 
+# Trigger configuration - pipeline runs when changes are made to the specified branch
 trigger:
-- Develop
+- <YOUR_BRANCH_NAME>  # Replace with your target branch (e.g., main, develop, master)
 
+# Pipeline variables configuration
 variables:
   # Azure Resource Manager connection created during pipeline creation
-  azureSubscription: 'SecOps (FunctionApp)'
-
-  # Function app name
-  functionAppName: 'siem-functions'
-
-  # Agent VM image name
-  vmImageName: 'windows-2019'
-
-  # Working Directory
+  azureSubscription: '<YOUR_AZURE_SERVICE_CONNECTION>'  # Replace with your Azure service connection name
+  
+  # Function app name - the target Azure Function App for deployment
+  functionAppName: '<YOUR_FUNCTION_APP_NAME>'  # Replace with your Azure Function App name
+  
+  # Agent VM image name - specifies the build agent operating system
+  vmImageName: 'windows-2019'  # Can be updated to windows-latest or other available images
+  
+  # Working Directory - root directory for build operations
   workingDirectory: '$(System.DefaultWorkingDirectory)/'
 
+# Pipeline stages configuration
 stages:
 - stage: Build
-  displayName: Build stage
-
+  displayName: Build stage  # Human-readable name for the build stage
   jobs:
   - job: Build
-    displayName: Build
+    displayName: Build  # Human-readable name for the build job
     pool:
-      vmImage: $(vmImageName)
-
+      vmImage: $(vmImageName)  # Specifies which VM image to use for the build agent
     steps:
+    # Step 1: Build extensions if extensions.csproj exists
     - powershell: |
+        # Check if extensions.csproj file exists in the working directory
         if (Test-Path "extensions.csproj") {
-            dotnet build extensions.csproj --output ./$(workingDirectory)/bin
+          # Build the .NET extensions project and output to bin directory
+          dotnet build extensions.csproj --output ./$(workingDirectory)/bin
         }
-      displayName: 'Build extensions'
-
+      displayName: 'Build extensions'  # Description shown in pipeline logs
+    
+    # Step 2: Archive all files into a zip package
     - task: ArchiveFiles@2
-      displayName: 'Archive files'
+      displayName: 'Archive files'  # Description for the archive task
       inputs:
-        rootFolderOrFile: $(workingDirectory)
-        includeRootFolder: false
-        archiveType: zip
-        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-        replaceExistingArchive: true
-
+        rootFolderOrFile: $(workingDirectory)  # Source folder to archive
+        includeRootFolder: false  # Don't include the root folder in the archive
+        archiveType: zip  # Create a zip archive
+        archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip  # Output file path
+        replaceExistingArchive: true  # Overwrite existing archive if it exists
+    
+    # Step 3: Publish the build artifact for use in deployment stage
     - publish: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-      artifact: drop
+      artifact: drop  # Name of the artifact (used in deployment stage)
 
+# Deployment stage - deploys the built function app to Azure
 - stage: Deploy
-  displayName: Deploy stage
-  dependsOn: Build
-  condition: succeeded()
-
+  displayName: Deploy stage  # Human-readable name for the deployment stage
+  dependsOn: Build  # This stage depends on successful completion of Build stage
+  condition: succeeded()  # Only run if the Build stage succeeded
   jobs:
   - deployment: Deploy
-    displayName: Deploy
-    environment: $(functionAppName)
+    displayName: Deploy  # Human-readable name for the deployment job
+    environment: $(functionAppName)  # Azure DevOps environment for deployment approval/tracking
     pool:
-      vmImage: $(vmImageName)
-
+      vmImage: $(vmImageName)  # Use the same VM image as build stage
     strategy:
-      runOnce:
+      runOnce:  # Deployment strategy - runs once per deployment
         deploy:
-
           steps:
+          # Deploy the Function App package to Azure
           - task: AzureFunctionApp@1
-            displayName: 'Azure functions app deploy'
+            displayName: 'Azure functions app deploy'  # Description for deployment task
             inputs:
-              azureSubscription: '$(azureSubscription)'
-              appType: functionApp
-              appName: $(functionAppName)
-              package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'
+              azureSubscription: '$(azureSubscription)'  # Azure service connection for authentication
+              appType: functionApp  # Specifies this is a Function App deployment
+              appName: $(functionAppName)  # Target Function App name in Azure
+              package: '$(Pipeline.Workspace)/drop/$(Build.BuildId).zip'  # Path to the deployment package
