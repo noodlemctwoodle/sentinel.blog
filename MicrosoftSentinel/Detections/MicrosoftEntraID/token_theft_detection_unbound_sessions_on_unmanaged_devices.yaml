@@ -1,4 +1,4 @@
-id: d785aa67-d443-40f9-bf63-f781bf95ec13
+id: 286d4473-f5e2-4dfc-9c6e-1a9b6e1afd5e
 name: "Entra ID Token Theft Detection: Unbound Sessions on Unmanaged Devices (M356CommunityConf)"
 description: |-
   This detection identifies potential token theft attacks in Entra ID by monitoring for unbound authentication sessions that occur on unverified devices. When an authentication token is stolen, attackers can reuse it to access corporate resources while bypassing password requirements and multi-factor authentication (MFA). The detection focuses on indicators of compromise including session unbinding (code 1002) and the absence of essential device validation attributes, which are strong signals of token replay attacks.

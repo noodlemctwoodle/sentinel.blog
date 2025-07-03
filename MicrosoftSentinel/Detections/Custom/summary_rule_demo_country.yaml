@@ -12,8 +12,13 @@ triggerOperator: gt
 triggerThreshold: 0
 status: Disabled
 tactics:
-  - YourTactic
-techniques: []
+  - Impact
+techniques:
+  - T0827
+  - T0826
+  - T0829
+  - T0831
+  - T0832
 query: |-
   DockerFlow_CL
   | extend DstIPLocation = geo_info_from_ip_address(dstIp)
