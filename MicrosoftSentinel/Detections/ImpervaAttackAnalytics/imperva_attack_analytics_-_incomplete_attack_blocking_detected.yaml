@@ -1,4 +1,4 @@
-id: dc6fd872-1cce-4b82-a96f-44f9dfc1c2de
+id: b59d576c-a6c1-47d4-8685-f81bfcf155e9
 name: Imperva Attack Analytics  - Incomplete Attack Blocking Detected
 description: This detection identifies and prioritises web application attacks that potentially bypassed Imperva WAF protections in the last 3 hours. It focuses on incidents where some attack traffic was NOT blocked (events_blocked_percent < 100%), indicating potential security gaps that require immediate attention.
 severity: Informational

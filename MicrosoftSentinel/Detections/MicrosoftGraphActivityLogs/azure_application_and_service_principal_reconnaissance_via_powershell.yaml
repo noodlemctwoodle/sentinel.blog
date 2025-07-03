@@ -1,4 +1,4 @@
-id: 4cd0c0df-234b-435c-9451-dd976096001f
+id: 8c3ce005-aa8d-4970-9fa5-56e6cd911b8e
 name: Azure Application and Service Principal Reconnaissance via PowerShell
 description: |-
   This detection identifies potential reconnaissance activities where users leverage PowerShell to systematically enumerate Azure AD applications, service principals, and their associated permissions through Microsoft Graph API. The rule specifically monitors queries to user directories, organization information, application registrations, and service principal endpoints, which could indicate an attacker mapping the tenant's application ecosystem.

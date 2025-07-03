@@ -1,4 +1,4 @@
-id: 430316ad-af1c-4c2b-8500-e57c89b18213
+id: b64655b6-db98-44f1-8188-707d372c35c5
 name: Cross-Origin Device Code Flow Authentication Anomaly
 description: This detection identifies suspicious device code authentication flows that occur shortly after a browser sign-in, but from a different IP address, location, and user agent. This pattern may indicate credential theft, session hijacking, or other authentication-based attacks where an attacker is leveraging compromised credentials to establish persistent access. The detection specifically looks for device code authentication within 20 minutes of a browser sign-in, where all environmental indicators (IP, location, user agent) differ, suggesting the activity is coming from an unauthorized source. This technique is used by attackers to maintain access to compromised accounts while evading detection mechanisms that only monitor traditional sign-in methods.
 severity: Medium

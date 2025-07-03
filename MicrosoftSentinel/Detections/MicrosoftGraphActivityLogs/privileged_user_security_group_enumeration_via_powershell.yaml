@@ -1,4 +1,4 @@
-id: 3644bbfe-b52c-4f46-b2bc-8bb2a7bf55e8
+id: 7d269b05-9400-468f-b2a0-20dd6a79e41d
 name: Privileged User Security Group Enumeration via PowerShell
 description: This detection identifies users leveraging PowerShell to enumerate security groups and their memberships through Microsoft Graph API. The rule specifically targets reconnaissance activities where a user makes multiple requests to list security groups or examine their members. It incorporates blast radius assessment by prioritizing activities performed by users with privileged roles or group memberships, who pose a higher risk to the organization. The detection considers user identity context, administrative privileges, department, and management chain to help determine the potential impact of the activity. The rule focuses on patterns of multiple requests (more than 2) within a time window, which may indicate systematic information gathering rather than legitimate administrative tasks. Each alert includes details about the specific security groups accessed, allowing security teams to evaluate whether the activity is appropriate for the user's role.
 severity: High

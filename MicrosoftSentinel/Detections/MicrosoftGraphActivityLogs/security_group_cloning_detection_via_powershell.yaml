@@ -1,4 +1,4 @@
-id: 3a97c081-5f7c-4104-a8e9-fd828e52efc8
+id: d7858e9b-38b6-4b2c-89a7-0718a370849a
 name: Security Group Cloning Detection via PowerShell
 description: |-
   This detection identifies potential security group cloning activities performed through PowerShell against Microsoft Graph API. The rule monitors for the characteristic sequence of operations that indicate an attacker or insider threat is enumerating security groups and their memberships, potentially to clone them for privilege escalation or persistence purposes.

@@ -1,4 +1,4 @@
-id: 42cc8c6f-c222-41b0-bab8-2f8b8aa06834
+id: 00fca433-505e-46c8-8ef7-eaf3d6f7f790
 name: Privilege Escalation Attempt via Role Management and Group Access Estimation
 description: |-
   This detection identifies potential privilege escalation attempts where users leverage PowerShell to enumerate groups and assess their ability to modify them through Microsoft Graph API. The rule specifically targets reconnaissance activities where users query the role management "estimateAccess" API or enumerate all groups to identify potential authorization gaps they could exploit. The detection incorporates blast radius assessment by prioritizing activities performed by users with existing privileges, who may be looking to further expand their access.
