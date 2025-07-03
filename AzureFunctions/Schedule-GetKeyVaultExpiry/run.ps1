@@ -40,7 +40,7 @@ foreach ($keyVault in $keyVaults) {
     Connect-AzAccount -Credential $creds -Tenant $TenantId -Subscription $subscriptionId -ServicePrincipal -WarningAction SilentlyContinue
     
     # Get all secrets from the current Key Vault that expire within 2 days
-    $secrets = Get-AzKeyVaultSecret -VaultName $keyVault |
+    $secret = Get-AzKeyVaultSecret -VaultName $keyVault |
     Where-Object { $_.Expires -ne $null -and $_.Expires -lt (Get-Date).AddDays(2) } |
     ForEach-Object {
         # Add expiring secret details to the array

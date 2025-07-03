@@ -223,7 +223,7 @@ function Get-OpenCVEVulnerability {
     # Process vendors data into a more readable format and convert it into an array
     $vendors = $vulnerability.vendors.PSObject.Properties | ForEach-Object {
         $_.Value -replace '_', ' '
-    } | % { $_.Split(',') } | % { $_.Trim() }
+    } | ForEach-Object { $_.Split(',') } | ForEach-Object { $_.Trim() }
 
     # Extract and deduplicate reference data
     $reference_data = $vulnerability.raw_nvd_data.cve.references.reference_data | Group-Object -Property url -AsHashTable -AsString
