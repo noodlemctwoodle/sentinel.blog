@@ -86,6 +86,23 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
 
+    - name: Install PowerShell Modules
+      shell: pwsh
+      run: |
+          install-module -name SentinelARConverter -scope CurrentUser -Force
+
+    - name: Convert Yaml to ARM
+      shell: pwsh
+      run: |
+          $publishPath = "${{ github.workspace }}\MicrosoftSentinel\Detections"
+          Get-ChildItem -Path $publishPath -Recurse -Include *.yaml |
+            ForEach-Object {
+              Convert-SentinelARYamlToArm -Filename $_.FullName -UseOriginalFilename
+              Write-Host "Successfully converted $($_.Name)"
+              # Remove yaml we do not want in the artifact
+              Remove-Item $_.FullName -Force
+            }
+
     - name: Deploy Content to Microsoft Sentinel
       uses: azure/powershell@v2
       with:
