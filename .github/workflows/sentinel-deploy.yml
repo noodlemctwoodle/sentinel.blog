@@ -1,4 +1,4 @@
-name: Deploy Content to stl-eus-siem-law
+name: Deploy Content to Micorsoft Sentinel
 # Note: This workflow will deploy everything in the root directory.
 # To deploy content only from a specific path (for example SentinelContent):
 #   1. Add the target path to the "paths" property like such
@@ -59,9 +59,9 @@ jobs:
       uses: azure/login@v2
       if: ${{ steps.login1.outcome=='failure' }}
       with:
-        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID }}
-        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID }}
-        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID }}
+        client-id: ${{ secrets.SENTINEL_CLIENTID }}
+        tenant-id: ${{ secrets.SENTINEL_TENANTID }}
+        subscription-id: ${{ secrets.SENTINEL_SUBSCRIPTIONID }}
         environment: 'AzureCloud'
         audience: api://AzureADTokenExchange
         enable-AzPSSession: true
@@ -76,9 +76,9 @@ jobs:
       uses: azure/login@v2
       if: ${{ steps.login2.outcome=='failure'  }}
       with:
-        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID }}
-        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID }}
-        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID }}
+        client-id: ${{ secrets.SENTINEL_CLIENTID }}
+        tenant-id: ${{ secrets.SENTINEL_TENANTID }}
+        subscription-id: ${{ secrets.SENTINEL_SUBSCRIPTIONID }}
         environment: 'AzureCloud'
         audience: api://AzureADTokenExchange
         enable-AzPSSession: true
