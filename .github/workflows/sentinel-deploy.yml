@@ -8,6 +8,8 @@ name: Deploy Content to Micorsoft Sentinel
 #    - '.github/workflows/sentinel-deploy.yml'
 #   2. Append the path to the directory environment variable below
 #       directory: '${{ github.workspace }}/SentinelContent'
+# 
+#  ,AutomationRule,HuntingQuery,Parser,Playbook,Workbook
 
 on:
   push:
@@ -26,7 +28,7 @@ jobs:
       workspaceId: ${{ secrets.WORKSPACE_ID }}
       directory: '${{ github.workspace }}'
       cloudEnv: 'AzureCloud'
-      contentTypes: 'AnalyticsRule,AutomationRule,HuntingQuery,Parser,Playbook,Workbook'
+      contentTypes: 'AnalyticsRule'
       branch: 'main'
       sourceControlId: 'a69a6bbd-7c17-4691-a340-cc991c484e2b'
       rootDirectory: '${{ github.workspace }}'
