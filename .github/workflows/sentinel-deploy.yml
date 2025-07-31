@@ -1,11 +1,11 @@
-name: Deploy Content to stl-eus-siem-law [a69a6bbd-7c17-4691-a340-cc991c484e2b]
+name: Deploy Content to stl-eus-siem-law
 # Note: This workflow will deploy everything in the root directory.
 # To deploy content only from a specific path (for example SentinelContent):
 #   1. Add the target path to the "paths" property like such
 #    paths:
 #    - 'SentinelContent/**'
 #    - '!.github/workflows/**'
-#    - '.github/workflows/sentinel-deploy-a69a6bbd-7c17-4691-a340-cc991c484e2b.yml'
+#    - '.github/workflows/sentinel-deploy.yml'
 #   2. Append the path to the directory environment variable below
 #       directory: '${{ github.workspace }}/SentinelContent'
 
@@ -15,15 +15,15 @@ on:
     paths:
     - '**'
     - '!.github/workflows/**'  # this filter prevents other workflow changes from triggering this workflow
-    - '.github/workflows/sentinel-deploy-a69a6bbd-7c17-4691-a340-cc991c484e2b.yml'
+    - '.github/workflows/sentinel-deploy.yml'
 
 jobs:
   deploy-content:
     runs-on: windows-latest
     env:
-      resourceGroupName: 'stl-eus-siem-rg'
-      workspaceName: 'stl-eus-siem-law'
-      workspaceId: '5965567b-521f-4622-8f0f-975273834f29'
+      resourceGroupName: ${{ vars.RESOURCE_GROUP }}
+      workspaceName: ${{ vars.WORKSPACE_NAME }}
+      workspaceId: ${{ secrets.WORKSPACE_ID }}
       directory: '${{ github.workspace }}'
       cloudEnv: 'AzureCloud'
       contentTypes: 'AnalyticsRule,AutomationRule,HuntingQuery,Parser,Playbook,Workbook'
@@ -42,9 +42,9 @@ jobs:
       id: login1
       uses: azure/login@v2
       with:
-        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID_a69a6bbd7c174691a340cc991c484e2b }}
-        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID_a69a6bbd7c174691a340cc991c484e2b }}
-        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_a69a6bbd7c174691a340cc991c484e2b }}
+        client-id: ${{ secrets.SENTINEL_CLIENTID }}
+        tenant-id: ${{ secrets.SENTINEL_TENANTID}}
+        subscription-id: ${{ secrets.SENTINEL_SUBSCRIPTIONID }}
         environment: 'AzureCloud'
         audience: api://AzureADTokenExchange
         enable-AzPSSession: true
@@ -59,9 +59,9 @@ jobs:
       uses: azure/login@v2
       if: ${{ steps.login1.outcome=='failure' }}
       with:
-        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID_a69a6bbd7c174691a340cc991c484e2b }}
-        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID_a69a6bbd7c174691a340cc991c484e2b }}
-        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_a69a6bbd7c174691a340cc991c484e2b }}
+        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID }}
+        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID }}
+        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID }}
         environment: 'AzureCloud'
         audience: api://AzureADTokenExchange
         enable-AzPSSession: true
@@ -76,9 +76,9 @@ jobs:
       uses: azure/login@v2
       if: ${{ steps.login2.outcome=='failure'  }}
       with:
-        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID_a69a6bbd7c174691a340cc991c484e2b }}
-        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID_a69a6bbd7c174691a340cc991c484e2b }}
-        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID_a69a6bbd7c174691a340cc991c484e2b }}
+        client-id: ${{ secrets.AZURE_SENTINEL_CLIENTID }}
+        tenant-id: ${{ secrets.AZURE_SENTINEL_TENANTID }}
+        subscription-id: ${{ secrets.AZURE_SENTINEL_SUBSCRIPTIONID }}
         environment: 'AzureCloud'
         audience: api://AzureADTokenExchange
         enable-AzPSSession: true
@@ -91,4 +91,4 @@ jobs:
       with:
         azPSVersion: 'latest'
         inlineScript: |
-          ${{ github.workspace }}//.github/workflows/azure-sentinel-deploy-a69a6bbd-7c17-4691-a340-cc991c484e2b.ps1
+          ${{ github.workspace }}//.github/workflows/azure-sentinel-deploy.ps1
