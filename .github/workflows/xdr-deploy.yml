@@ -1,0 +1,40 @@
+name: Deploy Defender XDR Custom Detections
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'CustomDetections/**'
+      - '.github/scripts/Deploy-DefenderDetections.ps1'
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  DeployCustomDetections:
+    name: Deploy Defender XDR Custom Detection Rules
+    permissions:
+      contents: write
+      id-token: write  # Required for OIDC authentication
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.DEFENDER_CLIENTID }}
+          tenant-id: ${{ secrets.SENTINEL_TENANTID }}
+          subscription-id: ${{ secrets.SENTINEL_SUBSCRIPTIONID }}
+          environment: 'AzureCloud'
+          audience: api://AzureADTokenExchange
+          enable-AzPSSession: true
+          
+      - name: Deploy Custom Detection Rules
+        uses: azure/powershell@v1
+        with:
+          inlineScript: |
+            & "${{ github.workspace }}/.github/scripts/Deploy-DefenderDetections.ps1" `
+              -RulesPath "${{ github.workspace }}/MicrosoftSentinel/CustomDetections" `
+              -UseFederatedAuth
+          azPSVersion: 'latest'

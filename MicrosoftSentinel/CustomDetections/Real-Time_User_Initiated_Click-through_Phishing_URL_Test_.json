@@ -1,0 +1,47 @@
+{
+  "rule": {
+    "id": "72",
+    "createdDateTime": "2025-08-11T11:00:47.0003912Z",
+    "schedule": {
+      "period": "0",
+      "nextRunDateTime": "2025-08-11T11:00:47.0003912Z"
+    },
+    "detectionAction": {
+      "organizationalScope": null,
+      "alertTemplate": {
+        "title": "Real-Time User Initiated Click-through Phishing URL (Test)",
+        "description": "This detection identifies instances where users have clicked on malicious phishing URLs in real-time. The rule monitors user interaction with suspicious links across email clients, web browsers, and messaging platforms to alert security teams when a potential compromise is in progress. By tracking click-through events and correlating them with known phishing indicators, this detection enables rapid response to prevent credential theft, malware installation, and unauthorised access to sensitive systems. The rule incorporates threat intelligence feeds and historical phishing patterns to reduce false positives while prioritising high-risk interactions based on user behaviour, link characteristics, and contextual risk factors.",
+        "severity": "high",
+        "category": "InitialAccess",
+        "recommendedActions": null,
+        "mitreTechniques": [
+          "T1566",
+          "T1078",
+          "T1078.004"
+        ],
+        "impactedAssets": [
+          {
+            "@odata.type": "#microsoft.graph.security.impactedUserAsset",
+            "identifier": "accountUpn"
+          },
+          {
+            "@odata.type": "#microsoft.graph.security.impactedMailboxAsset",
+            "identifier": "accountUpn"
+          }
+        ]
+      },
+      "responseActions": []
+    },
+    "isEnabled": true,
+    "queryCondition": {
+      "queryText": "UrlClickEvents\n| where IsClickedThrough == 1\n",
+      "lastModifiedDateTime": null
+    },
+    "lastModifiedDateTime": "2025-08-11T11:00:47.0003912Z",
+    "displayName": "Real-Time User Initiated Click-through Phishing URL (Test)"
+  },
+  "metadata": {
+    "exportDate": "2025-08-11 12:31:47",
+    "source": "Microsoft Graph API"
+  }
+}
