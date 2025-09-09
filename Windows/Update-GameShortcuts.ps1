@@ -52,7 +52,7 @@
 
 .NOTES
     File Name      : UpdateGameShortcuts.ps1
-    Author         : Generated for desktop shortcut management
+    Author         : noodlemctwoodle
     Prerequisite   : PowerShell 5.0 or higher
     
     RECOMMENDED WORKFLOW:
