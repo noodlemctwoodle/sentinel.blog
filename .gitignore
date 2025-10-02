@@ -1,3 +1,33 @@
+# Local virtual environments (managed bootstrap venv lives under env/.venv)
+MicrosoftSentinel/notebooks/env/.venv/
+MicrosoftSentinel/notebooks/config/msticpyconfig.yaml
+.vscode/settings.json
+.env
+.env.local
+
+# Generic notebook output/cache folders
+*/notebook_output/
+*/outputs/
+*/artifacts/
+
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Notebook job output artifacts
+phishing_job_output/
+MicrosoftSentinel/notebooks/phishing_job_output/
+
+# Any other ad-hoc notebook run dirs
+MicrosoftSentinel/notebooks/**/run_output/
+
+# Requirements snapshot (full) can be regenerated
+requirements_full.txt
+
 # Ignore System Files
 .DS_Store
 .vscode
@@ -13,3 +43,9 @@ MicrosoftSentinel/Health/Workbooks/MicrosoftSentinelMonitoring.json
 
 # Exclude Sentinel Exports
 MicrosoftSentinel/Detections/Yaml/Health
+
+
+development.html
+
+# Custom Detections
+MicrosoftSentinel/CustomDetections/DefenderCustomDetections
