@@ -26,6 +26,8 @@ param (
     [string]$resourceGroupName,
     [Parameter(Position = 2, Mandatory = $true, HelpMessage = 'Enter Log Analytics Workspace Name')]
     [string]$workspaceName,
+    [Parameter(Position = 3, Mandatory = $true, HelpMessage = 'Enter Log Analytics Workspace Location')]
+    [string]$workspaceLocation,
     [Parameter(Mandatory)]
     [ValidateSet("Yes", "No")]
     [String]$preview = 'No'
@@ -115,7 +117,7 @@ Else {
         $installBody = @{"properties" = @{ 
                 "parameters" = @{ 
                     "workspace"          = @{"Value" = $workspaceName }
-                    "workspace-location" = @{"Value" = "" } 
+                    "workspace-location" = @{"Value" = "$workspaceLocation" } 
                 } 
                 "template"   = $packagedContent
                 "mode"       = "Incremental" 
