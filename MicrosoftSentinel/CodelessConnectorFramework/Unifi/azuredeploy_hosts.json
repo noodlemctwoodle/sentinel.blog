@@ -1,0 +1,507 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Log Analytics workspace name"
+            }
+        },
+        "workspace-location": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Region of the Log Analytics workspace"
+            }
+        },
+        "dataCollectionEndpointName": {
+            "type": "string",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Data Collection Endpoint"
+            }
+        },
+        "dataCollectionRuleName": {
+            "type": "string",
+            "defaultValue": "UniFiSiteManager-Hosts-DCR",
+            "metadata": {
+                "description": "Name of the Data Collection Rule"
+            }
+        },
+        "tableName": {
+            "type": "string",
+            "defaultValue": "UniFiSiteManager_Hosts_CL",
+            "metadata": {
+                "description": "Custom log table name (must end with _CL)"
+            }
+        },
+        "pollingIntervalMinutes": {
+            "type": "int",
+            "defaultValue": 5,
+            "minValue": 1,
+            "maxValue": 60,
+            "metadata": {
+                "description": "How often to poll the UniFi Site Manager API (in minutes)"
+            }
+        }
+    },
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+        "streamName": "[concat('Custom-', replace(parameters('tableName'), '_CL', '_Input'))]",
+        "outputStream": "[concat('Custom-', parameters('tableName'))]",
+        "_solutionName": "UniFi Site Manager",
+        "_solutionVersion": "3.0.0",
+        "_solutionAuthor": "Community",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-unifi-sitemanager-hosts",
+        "_solutionTier": "Community",
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_dataConnectorContentIdConnectorDefinition": "UniFiSiteManagerHostsConnectorDefinition",
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
+        "_dataConnectorContentIdConnections": "UniFiSiteManagerHostsConnections",
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_connectorUiConfigId": "UniFiSiteManagerHostsConnector",
+        "_connectorDataType": "UniFi Site Manager - Hosts"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('workspace'), '/', parameters('tableName'))]",
+            "apiVersion": "2022-10-01",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "schema": {
+                    "name": "[parameters('tableName')]",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Event generation time" },
+                        { "name": "id", "type": "string", "description": "Unique host identifier" },
+                        { "name": "hardwareId", "type": "string", "description": "Hardware identifier of the host device" },
+                        { "name": "hostType", "type": "string", "description": "Type of host (e.g., ucore, uck, udm)" },
+                        { "name": "ipAddress", "type": "string", "description": "Host IP address" },
+                        { "name": "owner", "type": "boolean", "description": "Whether the API caller owns this host" },
+                        { "name": "isBlocked", "type": "boolean", "description": "Whether the host is blocked" },
+                        { "name": "registrationTime", "type": "string", "description": "Host registration timestamp" },
+                        { "name": "lastConnectionStateChange", "type": "string", "description": "Last connection state change timestamp" },
+                        { "name": "latestBackupTime", "type": "string", "description": "Latest backup timestamp" },
+                        { "name": "userData", "type": "dynamic", "description": "User-defined data including apps and console group members" },
+                        { "name": "reportedState", "type": "dynamic", "description": "Host reported state (varies by UniFi OS version)" }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "displayName": "[concat(variables('_solutionName'), ' - Hosts Connector Definition')]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[parameters('dataCollectionRuleName')]",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspace-location')]",
+                            "properties": {
+                                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
+                                "streamDeclarations": {
+                                    "[variables('streamName')]": {
+                                        "columns": [
+                                            { "name": "id", "type": "string" },
+                                            { "name": "hardwareId", "type": "string" },
+                                            { "name": "type", "type": "string" },
+                                            { "name": "ipAddress", "type": "string" },
+                                            { "name": "owner", "type": "boolean" },
+                                            { "name": "isBlocked", "type": "boolean" },
+                                            { "name": "registrationTime", "type": "string" },
+                                            { "name": "lastConnectionStateChange", "type": "string" },
+                                            { "name": "latestBackupTime", "type": "string" },
+                                            { "name": "userData", "type": "dynamic" },
+                                            { "name": "reportedState", "type": "dynamic" }
+                                        ]
+                                    }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                            "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                            "name": "clv2ws1"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                    {
+                                        "streams": ["[variables('streamName')]"],
+                                        "destinations": ["clv2ws1"],
+                                        "transformKql": "source | extend TimeGenerated = now() | project-rename hostType = type",
+                                        "outputStream": "[variables('outputStream')]"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',variables('_dataConnectorContentIdConnectorDefinition'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspace-location')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                    "id": "[variables('_connectorUiConfigId')]",
+                    "title": "UniFi Site Manager - Hosts (via API)",
+                    "publisher": "Community",
+                    "descriptionMarkdown": "This connector ingests UniFi host (console/controller) data from the [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) into Microsoft Sentinel.\n\nHosts are the UniFi consoles and controllers (Dream Machine, Cloud Key, self-hosted controllers) that manage your UniFi network devices and sites.\n\n**Data Collected:**\n- Host inventory (ID, type, IP address)\n- Host ownership and access status\n- Connection state changes\n- Backup timestamps\n- Application and console configuration (userData)\n- Reported state including firmware and hardware details\n\n**Host Types:**\n- `ucore` - UniFi OS Console (UDM, UDR, UDW, UNVR)\n- `uck` - UniFi Cloud Key\n- `self-hosted` - Self-hosted Network Server\n\n**Rate Limits:**\n- v1 stable: 10,000 requests per minute\n\n**Prerequisites:**\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Navigate to **API** from the left navigation\n3. Click **Create API Key**\n4. Copy and securely store the generated key (shown only once)",
+                    "graphQueriesTableName": "[parameters('tableName')]",
+                    "graphQueries": [
+                        {
+                            "metricName": "Total hosts received",
+                            "legend": "UniFi Hosts",
+                            "baseQuery": "[parameters('tableName')]"
+                        }
+                    ],
+                    "sampleQueries": [
+                        {
+                            "description": "All UniFi hosts",
+                            "query": "[concat(parameters('tableName'), '\n| project TimeGenerated, id, hostType, ipAddress, owner, isBlocked\n| sort by TimeGenerated desc\n| take 100')]"
+                        },
+                        {
+                            "description": "Blocked hosts",
+                            "query": "[concat(parameters('tableName'), '\n| where isBlocked == true\n| project TimeGenerated, id, hostType, ipAddress\n| sort by TimeGenerated desc')]"
+                        },
+                        {
+                            "description": "Hosts by type",
+                            "query": "[concat(parameters('tableName'), '\n| summarize HostCount = dcount(id) by hostType\n| sort by HostCount desc')]"
+                        },
+                        {
+                            "description": "Recent connection state changes",
+                            "query": "[concat(parameters('tableName'), '\n| where isnotempty(lastConnectionStateChange)\n| extend ConnectionChange = todatetime(lastConnectionStateChange)\n| where ConnectionChange > ago(24h)\n| project TimeGenerated, id, hostType, ipAddress, ConnectionChange\n| sort by ConnectionChange desc')]"
+                        },
+                        {
+                            "description": "Hosts with recent backups",
+                            "query": "[concat(parameters('tableName'), '\n| where isnotempty(latestBackupTime)\n| extend BackupTime = todatetime(latestBackupTime)\n| where BackupTime > ago(7d)\n| project TimeGenerated, id, hostType, ipAddress, BackupTime\n| sort by BackupTime desc')]"
+                        },
+                        {
+                            "description": "Host applications and capabilities",
+                            "query": "[concat(parameters('tableName'), '\n| extend Apps = userData.apps\n| mv-expand Apps\n| summarize HostCount = dcount(id) by tostring(Apps)\n| sort by HostCount desc')]"
+                        }
+                    ],
+                    "dataTypes": [
+                        {
+                            "name": "[parameters('tableName')]",
+                            "lastDataReceivedQuery": "[concat(parameters('tableName'), '\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)')]"
+                        }
+                    ],
+                    "connectivityCriteria": [
+                        {
+                            "type": "HasDataConnectors"
+                        }
+                    ],
+                    "availability": {
+                        "status": 1,
+                        "isPreview": true
+                    },
+                    "permissions": {
+                        "resourceProvider": [
+                            {
+                                "provider": "Microsoft.OperationalInsights/workspaces",
+                                "permissionsDisplayText": "Read and Write permissions required",
+                                "providerDisplayName": "Workspace",
+                                "scope": "Workspace",
+                                "requiredPermissions": {
+                                    "read": true,
+                                    "write": true,
+                                    "delete": true
+                                }
+                            }
+                        ],
+                        "customs": [
+                            {
+                                "name": "UniFi Site Manager API Key",
+                                "description": "A read-only API key from [unifi.ui.com](https://unifi.ui.com) with access to your UniFi deployment. The API key is tied to your UI account and provides access to all hosts you own or have super admin permissions for."
+                            }
+                        ]
+                    },
+                    "instructionSteps": [
+                        {
+                            "title": "1. Obtain a UniFi Site Manager API Key",
+                            "description": "To connect to the UniFi Site Manager API, you need an API key:\n\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Click **API** in the left navigation bar\n3. Click **Create API Key**\n4. Copy the generated key immediately - it will only be displayed once\n\n> **Note:** The API key is currently read-only and provides access to all hosts associated with your UI account."
+                        },
+                        {
+                            "title": "2. Connect to UniFi Site Manager",
+                            "description": "Enter your API key below to start ingesting host data into Microsoft Sentinel.",
+                            "instructions": [
+                                {
+                                    "type": "Textbox",
+                                    "parameters": {
+                                        "label": "UniFi Site Manager API Key",
+                                        "placeholder": "Enter your API key from unifi.ui.com",
+                                        "type": "password",
+                                        "name": "apiKey"
+                                    }
+                                },
+                                {
+                                    "type": "ConnectionToggleButton",
+                                    "parameters": {
+                                        "connectLabel": "Connect",
+                                        "disconnectLabel": "Disconnect"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnectorDefinition')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataConnectorContentIdConnectorDefinition'))]",
+                "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspace-location')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), ' - Hosts Connections')]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters": {
+                        "connectorDefinitionName": {
+                            "defaultValue": "connectorDefinitionName",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspace')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection Endpoint",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        },
+                        "apiKey": {
+                            "defaultValue": "",
+                            "type": "securestring",
+                            "minLength": 1
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'UniFiSiteManagerHostsPoller')]",
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspace-location')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
+                                "dataType": "[variables('_connectorDataType')]",
+                                "dcrConfig": {
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
+                                    "streamName": "[variables('streamName')]"
+                                },
+                                "auth": {
+                                    "type": "APIKey",
+                                    "ApiKey": "[[parameters('apiKey')]",
+                                    "ApiKeyName": "X-API-Key",
+                                    "ApiKeyIdentifier": ""
+                                },
+                                "request": {
+                                    "apiEndpoint": "https://api.ui.com/v1/hosts",
+                                    "httpMethod": "GET",
+                                    "queryParameters": {
+                                        "pageSize": "200"
+                                    },
+                                    "headers": {
+                                        "Accept": "application/json"
+                                    },
+                                    "rateLimitQPS": 100,
+                                    "queryWindowInMin": "[parameters('pollingIntervalMinutes')]",
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 120
+                                },
+                                "response": {
+                                    "eventsJsonPaths": ["$.data[*]"],
+                                    "format": "json"
+                                },
+                                "paging": {
+                                    "pagingType": "NextPageToken",
+                                    "nextPageTokenJsonPath": "$.nextToken",
+                                    "nextPageParaName": "nextToken"
+                                },
+                                "isActive": true
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspace-location')]",
+            "apiVersion": "2023-04-01-preview",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataConnectorContentIdConnectorDefinition')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2025-01-01",
+                "providers": ["[variables('_solutionAuthor')]"],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[concat(variables('_solutionAuthor'), ' (', variables('_solutionId'), ')')]",
+                "descriptionHtml": "The UniFi Site Manager Hosts solution for Microsoft Sentinel provides visibility into your UniFi console infrastructure by ingesting host data from the official UniFi Site Manager API (api.ui.com). Monitor console health, connection states, backup status, and application configuration across all your UniFi deployments."
+            }
+        }
+    ]
+}
