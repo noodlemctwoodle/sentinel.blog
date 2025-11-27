@@ -65,18 +65,22 @@ Deploy individual connectors using the buttons below:
 
 | Connector | Deploy |
 |-----------|--------|
-| Devices | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FYOUR-REPO%2Funifi-sentinel-connector%2Fmain%2FUniFiSiteManager-Devices.json) |
-| Hosts | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FYOUR-REPO%2Funifi-sentinel-connector%2Fmain%2FUniFiSiteManager-Hosts.json) |
-| Sites | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FYOUR-REPO%2Funifi-sentinel-connector%2Fmain%2FUniFiSiteManager-Sites.json) |
-| ISP Metrics | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FYOUR-REPO%2Funifi-sentinel-connector%2Fmain%2FUniFiSiteManager-ISPMetrics.json) |
+| Devices | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_devices.json) |
+| Hosts | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_hosts.json) |
+| Sites | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_sites.json) |
+| ISP Metrics | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_isp_metrics.json) |
 
 ### Option 2: Azure CLI
 
 ```bash
+# Clone the repository
+git clone https://github.com/noodlemctwoodle/sentinel.blog.git
+cd sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi
+
 # Deploy Devices connector
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file UniFiSiteManager-Devices.json \
+  --template-file azuredeploy_devices.json \
   --parameters \
     workspace=<your-workspace-name> \
     workspace-location=<workspace-region> \
@@ -85,7 +89,7 @@ az deployment group create \
 # Deploy Hosts connector
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file UniFiSiteManager-Hosts.json \
+  --template-file azuredeploy_hosts.json \
   --parameters \
     workspace=<your-workspace-name> \
     workspace-location=<workspace-region> \
@@ -94,7 +98,7 @@ az deployment group create \
 # Deploy Sites connector
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file UniFiSiteManager-Sites.json \
+  --template-file azuredeploy_sites.json \
   --parameters \
     workspace=<your-workspace-name> \
     workspace-location=<workspace-region> \
@@ -103,7 +107,7 @@ az deployment group create \
 # Deploy ISP Metrics connector
 az deployment group create \
   --resource-group <your-resource-group> \
-  --template-file UniFiSiteManager-ISPMetrics.json \
+  --template-file azuredeploy_isp_metrics.json \
   --parameters \
     workspace=<your-workspace-name> \
     workspace-location=<workspace-region> \
@@ -115,6 +119,10 @@ az deployment group create \
 ### Option 3: PowerShell
 
 ```powershell
+# Clone the repository
+git clone https://github.com/noodlemctwoodle/sentinel.blog.git
+Set-Location sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi
+
 # Deploy all connectors
 $params = @{
     ResourceGroupName = "<your-resource-group>"
@@ -124,17 +132,17 @@ $params = @{
 }
 
 # Devices
-New-AzResourceGroupDeployment @params -TemplateFile "UniFiSiteManager-Devices.json"
+New-AzResourceGroupDeployment @params -TemplateFile "azuredeploy_devices.json"
 
 # Hosts
-New-AzResourceGroupDeployment @params -TemplateFile "UniFiSiteManager-Hosts.json"
+New-AzResourceGroupDeployment @params -TemplateFile "azuredeploy_hosts.json"
 
 # Sites
-New-AzResourceGroupDeployment @params -TemplateFile "UniFiSiteManager-Sites.json"
+New-AzResourceGroupDeployment @params -TemplateFile "azuredeploy_sites.json"
 
 # ISP Metrics (with custom interval)
 New-AzResourceGroupDeployment @params `
-    -TemplateFile "UniFiSiteManager-ISPMetrics.json" `
+    -TemplateFile "azuredeploy_isp_metrics.json" `
     -metricInterval "1h" `
     -pollingIntervalMinutes 60
 ```
@@ -144,7 +152,7 @@ New-AzResourceGroupDeployment @params `
 1. Navigate to the Azure Portal
 2. Go to **Deploy a custom template**
 3. Select **Build your own template in the editor**
-4. Paste the contents of the desired connector JSON file
+4. Paste the contents of the desired connector JSON file from [GitHub](https://github.com/noodlemctwoodle/sentinel.blog/tree/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi)
 5. Fill in the required parameters
 6. Review and create
 
@@ -547,19 +555,20 @@ The connector handles rate limiting automatically with retry logic. If you see p
 2. **Dynamic field access** - Use proper dot notation for nested fields in `meta`, `siteStatistics`, `userData`, `periods`
 3. **Timestamp parsing** - API returns ISO 8601 strings; use `todatetime()` for conversion
 
-## Files
+## Repository Structure
 
-| File | Description |
-|------|-------------|
-| `UniFiSiteManager-Devices.json` | Devices connector ARM template |
-| `UniFiSiteManager-Hosts.json` | Hosts connector ARM template |
-| `UniFiSiteManager-Sites.json` | Sites connector ARM template |
-| `UniFiSiteManager-ISPMetrics.json` | ISP Metrics connector ARM template |
-| `README.md` | This documentation |
+```
+MicrosoftSentinel/CodelessConnectorFramework/Unifi/
+├── README.md                      # This documentation
+├── azuredeploy_devices.json       # Devices connector ARM template
+├── azuredeploy_hosts.json         # Hosts connector ARM template
+├── azuredeploy_sites.json         # Sites connector ARM template
+└── azuredeploy_isp_metrics.json   # ISP Metrics connector ARM template
+```
 
 ## Contributing
 
-Contributions are welcome! Please submit issues and pull requests to help improve this connector.
+Contributions are welcome! Please submit issues and pull requests to [GitHub](https://github.com/noodlemctwoodle/sentinel.blog).
 
 ### Development
 
@@ -601,3 +610,22 @@ This project is licensed under the MIT License.
 - [Microsoft Sentinel CCF Documentation](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector)
 - [UniFi Site Manager API Documentation](https://developer.ui.com/site-manager-api/gettingstarted)
 - [UniFi Developer Portal](https://developer.ui.com/)
+- [Sentinel.blog](https://sentinel.blog)
+
+**Key updates:**
+
+1. **Fixed Deploy to Azure URLs** - Now pointing to the correct raw GitHub URLs:
+   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_devices.json`
+   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_hosts.json`
+   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_sites.json`
+   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_isp_metrics.json`
+
+2. **Updated file references** - Changed to match actual filenames (`azuredeploy_devices.json` instead of `UniFiSiteManager-Devices.json`)
+
+3. **Added git clone instructions** - CLI and PowerShell examples now include cloning the repository first
+
+4. **Added repository structure** - Shows the actual folder layout
+
+5. **Updated contributing section** - Links to the correct GitHub repository
+
+6. **Added Sentinel.blog acknowledgment**
