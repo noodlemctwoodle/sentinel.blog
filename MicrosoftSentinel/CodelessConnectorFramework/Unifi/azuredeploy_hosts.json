@@ -53,10 +53,10 @@
         "streamName": "[concat('Custom-', replace(parameters('tableName'), '_CL', '_Input'))]",
         "outputStream": "[concat('Custom-', parameters('tableName'))]",
         "_solutionName": "UniFi Site Manager",
-        "_solutionVersion": "0.1.0",
+        "_solutionVersion": "3.0.0",
         "_solutionAuthor": "Fetch Labs",
         "_solutionId": "azuresentinel.azure-sentinel-solution-unifi-sitemanager-hosts",
-        "_solutionTier": "Fetch Labs",
+        "_solutionTier": "Community",
         "dataConnectorVersionConnectorDefinition": "1.0.0",
         "dataConnectorVersionConnections": "1.0.0",
         "_dataConnectorContentIdConnectorDefinition": "UniFiSiteManagerHostsConnectorDefinition",
@@ -205,7 +205,7 @@
                 "connectorUiConfig": {
                     "id": "[variables('_connectorUiConfigId')]",
                     "title": "UniFi Site Manager - Hosts (via API)",
-                    "publisher": "Community",
+                    "publisher": "Fetch Labs",
                     "descriptionMarkdown": "This connector ingests UniFi host (console/controller) data from the [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) into Microsoft Sentinel.\n\nHosts are the UniFi consoles and controllers (Dream Machine, Cloud Key, self-hosted controllers) that manage your UniFi network devices and sites.\n\n**Data Collected:**\n- Host inventory (ID, type, IP address)\n- Host ownership and access status\n- Connection state changes\n- Backup timestamps\n- Application and console configuration (userData)\n- Reported state including firmware and hardware details\n\n**Host Types:**\n- `ucore` - UniFi OS Console (UDM, UDR, UDW, UNVR)\n- `uck` - UniFi Cloud Key\n- `self-hosted` - Self-hosted Network Server\n\n**Rate Limits:**\n- v1 stable: 10,000 requests per minute\n\n**Prerequisites:**\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Navigate to **API** from the left navigation\n3. Click **Create API Key**\n4. Copy and securely store the generated key (shown only once)",
                     "graphQueriesTableName": "[parameters('tableName')]",
                     "graphQueries": [

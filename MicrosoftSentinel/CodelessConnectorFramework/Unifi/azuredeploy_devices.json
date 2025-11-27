@@ -53,10 +53,10 @@
         "streamName": "[concat('Custom-', replace(parameters('tableName'), '_CL', '_Input'))]",
         "outputStream": "[concat('Custom-', parameters('tableName'))]",
         "_solutionName": "UniFi Site Manager",
-        "_solutionVersion": "0.1.0",
+        "_solutionVersion": "3.0.0",
         "_solutionAuthor": "Fetch Labs",
         "_solutionId": "azuresentinel.azure-sentinel-solution-unifi-sitemanager",
-        "_solutionTier": "Fetch Labs",
+        "_solutionTier": "Community",
         "dataConnectorVersionConnectorDefinition": "1.0.0",
         "dataConnectorVersionConnections": "1.0.0",
         "_dataConnectorContentIdConnectorDefinition": "UniFiSiteManagerConnectorDefinition",
@@ -217,7 +217,7 @@
                 "connectorUiConfig": {
                     "id": "[variables('_connectorUiConfigId')]",
                     "title": "UniFi Site Manager - Devices (via API)",
-                    "publisher": "Community",
+                    "publisher": "Fetch Labs",
                     "descriptionMarkdown": "This connector ingests UniFi device inventory data from the [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) into Microsoft Sentinel.\n\nThe UniFi Site Manager API provides programmatic access to monitor and manage UniFi deployments at scale. This connector retrieves device information including status, firmware versions, and configuration details.\n\n**Data Collected:**\n- Device inventory (name, model, IP, MAC)\n- Device status (online/offline)\n- Firmware versions and update availability\n- Adoption and startup times\n\n**Rate Limits:**\n- v1 stable: 10,000 requests per minute\n\n**Prerequisites:**\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Navigate to **API** from the left navigation\n3. Click **Create API Key**\n4. Copy and securely store the generated key (shown only once)",
                     "graphQueriesTableName": "[parameters('tableName')]",
                     "graphQueries": [
