@@ -2,59 +2,91 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "location": {
+        "workspace": {
             "type": "string",
             "minLength": 1,
-            "defaultValue": "[resourceGroup().location]",
             "metadata": {
-                "description": "Region for deployment"
+                "description": "Log Analytics workspace name"
             }
         },
         "workspace-location": {
             "type": "string",
-            "defaultValue": "",
+            "minLength": 1,
             "metadata": {
                 "description": "Region of the Log Analytics workspace"
             }
         },
-        "subscription": {
-            "defaultValue": "[last(split(subscription().id, '/'))]",
+        "dataCollectionEndpointName": {
             "type": "string",
+            "minLength": 1,
             "metadata": {
-                "description": "Subscription ID"
+                "description": "Name of the Data Collection Endpoint"
             }
         },
-        "resourceGroupName": {
-            "defaultValue": "[resourceGroup().name]",
+        "dataCollectionRuleName": {
             "type": "string",
+            "defaultValue": "UniFiSiteManager-Sites-DCR",
             "metadata": {
-                "description": "Resource group name"
+                "description": "Name of the Data Collection Rule"
             }
         },
-        "workspace": {
-            "defaultValue": "",
+        "tableName": {
             "type": "string",
+            "defaultValue": "UniFiSiteManager_Sites_CL",
             "metadata": {
-                "description": "Log Analytics workspace name"
+                "description": "Custom log table name (must end with _CL)"
+            }
+        },
+        "pollingIntervalMinutes": {
+            "type": "int",
+            "defaultValue": 5,
+            "minValue": 1,
+            "maxValue": 60,
+            "metadata": {
+                "description": "How often to poll the UniFi Site Manager API (in minutes)"
             }
         }
     },
     "variables": {
         "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspace'))]",
-        "_solutionName": "UniFi Sites",
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpointName'))]",
+        "streamName": "[concat('Custom-', replace(parameters('tableName'), '_CL', '_Input'))]",
+        "outputStream": "[concat('Custom-', parameters('tableName'))]",
+        "_solutionName": "UniFi Site Manager",
         "_solutionVersion": "3.0.0",
         "_solutionAuthor": "Fetch Labs",
-        "_solutionId": "azuresentinel.azure-sentinel-solution-unifi-sites-connector",
+        "_solutionId": "azuresentinel.azure-sentinel-solution-unifi-sitemanager-sites",
         "_solutionTier": "Community",
         "dataConnectorVersionConnectorDefinition": "1.0.0",
         "dataConnectorVersionConnections": "1.0.0",
-        "_dataConnectorContentIdConnectorDefinition": "UniFiSitesConnectorDefinition",
+        "_dataConnectorContentIdConnectorDefinition": "UniFiSiteManagerSitesConnectorDefinition",
         "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnectorDefinition')))]",
-        "_dataConnectorContentIdConnections": "UniFiSitesConnections",
+        "_dataConnectorContentIdConnections": "UniFiSiteManagerSitesConnections",
         "dataConnectorTemplateNameConnections": "[concat(parameters('workspace'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
-        "_logAnalyticsTableId1": "UniFiSites_CL"
+        "_connectorUiConfigId": "UniFiSiteManagerSitesConnector",
+        "_connectorDataType": "UniFi Site Manager - Sites"
     },
     "resources": [
+        {
+            "name": "[concat(parameters('workspace'), '/', parameters('tableName'))]",
+            "apiVersion": "2022-10-01",
+            "type": "Microsoft.OperationalInsights/workspaces/tables",
+            "location": "[parameters('workspace-location')]",
+            "properties": {
+                "schema": {
+                    "name": "[parameters('tableName')]",
+                    "columns": [
+                        { "name": "TimeGenerated", "type": "datetime", "description": "Event generation time" },
+                        { "name": "siteId", "type": "string", "description": "Unique identifier of the site" },
+                        { "name": "hostId", "type": "string", "description": "Unique identifier of the host managing this site" },
+                        { "name": "meta", "type": "dynamic", "description": "Site metadata including name, description, timezone, and gateway MAC" },
+                        { "name": "siteStatistics", "type": "dynamic", "description": "Site statistics including device counts, client counts, and performance metrics" },
+                        { "name": "permission", "type": "string", "description": "API caller's permission level for this site" },
+                        { "name": "isOwner", "type": "boolean", "description": "Whether the API caller owns this site" }
+                    ]
+                }
+            }
+        },
         {
             "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
             "apiVersion": "2023-04-01-preview",
@@ -65,7 +97,7 @@
             ],
             "properties": {
                 "contentId": "[variables('_dataConnectorContentIdConnectorDefinition')]",
-                "displayName": "[concat(variables('_solutionName'), ' - Definition')]",
+                "displayName": "[concat(variables('_solutionName'), ' - Sites Connector Definition')]",
                 "contentKind": "DataConnector",
                 "mainTemplate": {
                     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -106,39 +138,21 @@
                             }
                         },
                         {
-                            "name": "UniFiSitesDCR",
+                            "name": "[parameters('dataCollectionRuleName')]",
                             "apiVersion": "2021-09-01-preview",
                             "type": "Microsoft.Insights/dataCollectionRules",
                             "location": "[parameters('workspace-location')]",
                             "properties": {
-                                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscription'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/stl-sec-eus-unifi-dce')]",
+                                "dataCollectionEndpointId": "[variables('dataCollectionEndpointId')]",
                                 "streamDeclarations": {
-                                    "Custom-UniFiSitesInput": {
+                                    "[variables('streamName')]": {
                                         "columns": [
-                                            {
-                                                "name": "siteId",
-                                                "type": "string"
-                                            },
-                                            {
-                                                "name": "hostId",
-                                                "type": "string"
-                                            },
-                                            {
-                                                "name": "meta",
-                                                "type": "dynamic"
-                                            },
-                                            {
-                                                "name": "statistics",
-                                                "type": "dynamic"
-                                            },
-                                            {
-                                                "name": "permission",
-                                                "type": "string"
-                                            },
-                                            {
-                                                "name": "isOwner",
-                                                "type": "boolean"
-                                            }
+                                            { "name": "siteId", "type": "string" },
+                                            { "name": "hostId", "type": "string" },
+                                            { "name": "meta", "type": "dynamic" },
+                                            { "name": "statistics", "type": "dynamic" },
+                                            { "name": "permission", "type": "string" },
+                                            { "name": "isOwner", "type": "boolean" }
                                         ]
                                     }
                                 },
@@ -152,27 +166,23 @@
                                 },
                                 "dataFlows": [
                                     {
-                                        "streams": [
-                                            "Custom-UniFiSitesInput"
-                                        ],
-                                        "destinations": [
-                                            "clv2ws1"
-                                        ],
+                                        "streams": ["[variables('streamName')]"],
+                                        "destinations": ["clv2ws1"],
                                         "transformKql": "source | extend TimeGenerated = now() | project-rename siteStatistics = statistics",
-                                        "outputStream": "Custom-UniFiSites_CL"
+                                        "outputStream": "[variables('outputStream')]"
                                     }
                                 ]
                             }
                         }
                     ]
                 },
-                "contentSchemaVersion": "3.0.0",
-                "version": "[variables('_solutionVersion')]",
-                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
-                "packageId": "[variables('_solutionId')]",
+                "packageKind": "Solution",
                 "packageVersion": "[variables('_solutionVersion')]",
                 "packageName": "[variables('_solutionName')]",
-                "packageKind": "Solution"
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
             }
         },
         {
@@ -183,28 +193,56 @@
             "kind": "Customizable",
             "properties": {
                 "connectorUiConfig": {
-                    "id": "UniFiSitesConnector",
-                    "title": "UniFi Sites",
+                    "id": "[variables('_connectorUiConfigId')]",
+                    "title": "UniFi Site Manager - Sites (via API)",
                     "publisher": "Fetch Labs",
-                    "descriptionMarkdown": "Ingest UniFi site data from the UniFi Site Manager API into Microsoft Sentinel.",
-                    "graphQueriesTableName": "UniFiSites_CL",
+                    "descriptionMarkdown": "This connector ingests UniFi site data from the [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) into Microsoft Sentinel.\n\nSites represent logical network locations managed by UniFi Network application on hosts (consoles/controllers). Each site contains devices, clients, and network configuration.\n\n**Data Collected:**\n- Site identification (siteId, hostId)\n- Site metadata (name, description, timezone, gateway MAC)\n- Site statistics (device counts, client counts, performance metrics)\n- Access permissions and ownership\n\n**Metadata Fields (in `meta` object):**\n- `name` - Site display name\n- `desc` - Site description\n- `timezone` - Site timezone\n- `gatewayMac` - Gateway device MAC address\n\n**Statistics Fields (in `siteStatistics` object):**\n- Device counts by type and status\n- Connected client counts\n- Network performance metrics\n- WAN status and health\n\n**Rate Limits:**\n- v1 stable: 10,000 requests per minute\n\n**Prerequisites:**\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Navigate to **API** from the left navigation\n3. Click **Create API Key**\n4. Copy and securely store the generated key (shown only once)",
+                    "graphQueriesTableName": "[parameters('tableName')]",
                     "graphQueries": [
                         {
-                            "metricName": "Total sites",
+                            "metricName": "Total sites received",
                             "legend": "UniFi Sites",
-                            "baseQuery": "UniFiSites_CL"
+                            "baseQuery": "[parameters('tableName')]"
                         }
                     ],
                     "sampleQueries": [
                         {
-                            "description": "All UniFi Sites",
-                            "query": "UniFiSites_CL\n| project TimeGenerated, siteId, hostId, meta, permission, isOwner\n| take 100"
+                            "description": "All UniFi sites",
+                            "query": "[concat(parameters('tableName'), '\n| project TimeGenerated, siteId, hostId, permission, isOwner\n| sort by TimeGenerated desc\n| take 100')]"
+                        },
+                        {
+                            "description": "Sites with metadata details",
+                            "query": "[concat(parameters('tableName'), '\n| extend \n    siteName = tostring(meta.name),\n    siteDescription = tostring(meta.desc),\n    timezone = tostring(meta.timezone),\n    gatewayMac = tostring(meta.gatewayMac)\n| project TimeGenerated, siteId, siteName, siteDescription, timezone, gatewayMac\n| sort by siteName asc')]"
+                        },
+                        {
+                            "description": "Sites by permission level",
+                            "query": "[concat(parameters('tableName'), '\n| summarize SiteCount = dcount(siteId) by permission\n| sort by SiteCount desc')]"
+                        },
+                        {
+                            "description": "Owned vs shared sites",
+                            "query": "[concat(parameters('tableName'), '\n| summarize \n    OwnedSites = dcountif(siteId, isOwner == true),\n    SharedSites = dcountif(siteId, isOwner == false)')]"
+                        },
+                        {
+                            "description": "Sites grouped by host",
+                            "query": "[concat(parameters('tableName'), '\n| summarize SiteCount = dcount(siteId) by hostId\n| sort by SiteCount desc')]"
+                        },
+                        {
+                            "description": "Extract device counts from statistics",
+                            "query": "[concat(parameters('tableName'), '\n| extend \n    siteName = tostring(meta.name),\n    totalDevices = toint(siteStatistics.counts.totalDevice),\n    onlineDevices = toint(siteStatistics.counts.onlineDevice),\n    offlineDevices = toint(siteStatistics.counts.offlineDevice)\n| project TimeGenerated, siteName, totalDevices, onlineDevices, offlineDevices\n| sort by totalDevices desc')]"
+                        },
+                        {
+                            "description": "Extract client counts from statistics",
+                            "query": "[concat(parameters('tableName'), '\n| extend \n    siteName = tostring(meta.name),\n    wiredClients = toint(siteStatistics.counts.wiredClient),\n    wifiClients = toint(siteStatistics.counts.wifiClient),\n    guestClients = toint(siteStatistics.counts.guestClient)\n| project TimeGenerated, siteName, wiredClients, wifiClients, guestClients\n| sort by (wiredClients + wifiClients) desc')]"
+                        },
+                        {
+                            "description": "Sites by timezone",
+                            "query": "[concat(parameters('tableName'), '\n| extend timezone = tostring(meta.timezone)\n| summarize SiteCount = dcount(siteId) by timezone\n| sort by SiteCount desc')]"
                         }
                     ],
                     "dataTypes": [
                         {
-                            "name": "UniFiSites_CL",
-                            "lastDataReceivedQuery": "UniFiSites_CL\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)"
+                            "name": "[parameters('tableName')]",
+                            "lastDataReceivedQuery": "[concat(parameters('tableName'), '\n| summarize Time = max(TimeGenerated)\n| where isnotempty(Time)')]"
                         }
                     ],
                     "connectivityCriteria": [
@@ -232,21 +270,29 @@
                         ],
                         "customs": [
                             {
-                                "name": "UniFi API Key",
-                                "description": "Create at unifi.ui.com > API"
+                                "name": "UniFi Site Manager API Key",
+                                "description": "A read-only API key from [unifi.ui.com](https://unifi.ui.com) with access to your UniFi deployment. The API key is tied to your UI account and provides access to all sites you own or have admin permissions for."
                             }
                         ]
                     },
                     "instructionSteps": [
                         {
-                            "title": "Connect to UniFi Site Manager API",
-                            "description": "Enter your UniFi API Key from [unifi.ui.com](https://unifi.ui.com/api)",
+                            "title": "1. Obtain a UniFi Site Manager API Key",
+                            "description": "To connect to the UniFi Site Manager API, you need an API key:\n\n1. Sign in to [UniFi Site Manager](https://unifi.ui.com)\n2. Click **API** in the left navigation bar\n3. Click **Create API Key**\n4. Copy the generated key immediately - it will only be displayed once\n\n> **Note:** The API key is currently read-only and provides access to all sites associated with your UI account."
+                        },
+                        {
+                            "title": "2. Understanding Site Data",
+                            "description": "Sites contain nested data in the `meta` and `siteStatistics` fields:\n\n**Metadata (`meta`):**\n| Field | Description |\n|-------|-------------|\n| `name` | Site display name |\n| `desc` | Site description |\n| `timezone` | Configured timezone |\n| `gatewayMac` | Gateway MAC address |\n\n**Statistics (`siteStatistics`):**\n| Field | Description |\n|-------|-------------|\n| `counts.totalDevice` | Total device count |\n| `counts.onlineDevice` | Online devices |\n| `counts.wiredClient` | Wired clients |\n| `counts.wifiClient` | WiFi clients |\n\nUse dot notation in KQL to extract nested fields (e.g., `meta.name`, `siteStatistics.counts.totalDevice`)."
+                        },
+                        {
+                            "title": "3. Connect to UniFi Site Manager",
+                            "description": "Enter your API key below to start ingesting site data into Microsoft Sentinel.",
                             "instructions": [
                                 {
                                     "type": "Textbox",
                                     "parameters": {
-                                        "label": "UniFi API Key",
-                                        "placeholder": "Enter your UniFi Site Manager API Key",
+                                        "label": "UniFi Site Manager API Key",
+                                        "placeholder": "Enter your API key from unifi.ui.com",
                                         "type": "password",
                                         "name": "apiKey"
                                     }
@@ -261,8 +307,7 @@
                             ]
                         }
                     ]
-                },
-                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dcdef','-', uniqueString(concat(variables('_solutionId'),'-','DataConnectorDefinition','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]"
+                }
             }
         },
         {
@@ -294,8 +339,7 @@
                             "kind": "ResourcesDataConnector"
                         }
                     ]
-                },
-                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataConnectorContentIdConnectorDefinition'),'-', variables('dataConnectorVersionConnectorDefinition'))))]"
+                }
             }
         },
         {
@@ -308,7 +352,7 @@
             ],
             "properties": {
                 "contentId": "[variables('_dataConnectorContentIdConnections')]",
-                "displayName": "[concat(variables('_solutionName'), ' - Connections')]",
+                "displayName": "[concat(variables('_solutionName'), ' - Sites Connections')]",
                 "contentKind": "ResourcesDataConnector",
                 "mainTemplate": {
                     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -364,18 +408,18 @@
                             }
                         },
                         {
-                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'UniFiSitesPoller')]",
+                            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/', 'UniFiSiteManagerSitesPoller')]",
                             "apiVersion": "2022-12-01-preview",
                             "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
                             "location": "[parameters('workspace-location')]",
                             "kind": "RestApiPoller",
                             "properties": {
                                 "connectorDefinitionName": "[[parameters('connectorDefinitionName')]",
-                                "dataType": "UniFi Sites",
+                                "dataType": "[variables('_connectorDataType')]",
                                 "dcrConfig": {
                                     "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
                                     "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]",
-                                    "streamName": "Custom-UniFiSitesInput"
+                                    "streamName": "[variables('streamName')]"
                                 },
                                 "auth": {
                                     "type": "APIKey",
@@ -387,20 +431,18 @@
                                     "apiEndpoint": "https://api.ui.com/v1/sites",
                                     "httpMethod": "GET",
                                     "queryParameters": {
-                                        "pageSize": "100"
+                                        "pageSize": "200"
                                     },
                                     "headers": {
                                         "Accept": "application/json"
                                     },
-                                    "rateLimitQPS": 10,
-                                    "queryWindowInMin": 5,
+                                    "rateLimitQPS": 100,
+                                    "queryWindowInMin": "[parameters('pollingIntervalMinutes')]",
                                     "retryCount": 3,
-                                    "timeoutInSeconds": 60
+                                    "timeoutInSeconds": 120
                                 },
                                 "response": {
-                                    "eventsJsonPaths": [
-                                        "$.data[*]"
-                                    ],
+                                    "eventsJsonPaths": ["$.data[*]"],
                                     "format": "json"
                                 },
                                 "paging": {
@@ -454,56 +496,13 @@
                     ]
                 },
                 "firstPublishDate": "2025-01-01",
-                "providers": [
-                    "[variables('_solutionAuthor')]"
-                ],
+                "providers": ["[variables('_solutionAuthor')]"],
                 "contentKind": "Solution",
                 "packageId": "[variables('_solutionId')]",
                 "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
                 "displayName": "[variables('_solutionName')]",
-                "publisherDisplayName": "[variables('_solutionId')]",
-                "descriptionHtml": "UniFi Sites connector for Microsoft Sentinel"
-            }
-        },
-        {
-            "name": "[concat(parameters('workspace'), '/UniFiSites_CL')]",
-            "apiVersion": "2022-10-01",
-            "type": "Microsoft.OperationalInsights/workspaces/tables",
-            "location": "[parameters('workspace-location')]",
-            "properties": {
-                "schema": {
-                    "name": "UniFiSites_CL",
-                    "columns": [
-                        {
-                            "name": "TimeGenerated",
-                            "type": "datetime"
-                        },
-                        {
-                            "name": "siteId",
-                            "type": "string"
-                        },
-                        {
-                            "name": "hostId",
-                            "type": "string"
-                        },
-                        {
-                            "name": "meta",
-                            "type": "dynamic"
-                        },
-                        {
-                            "name": "siteStatistics",
-                            "type": "dynamic"
-                        },
-                        {
-                            "name": "permission",
-                            "type": "string"
-                        },
-                        {
-                            "name": "isOwner",
-                            "type": "boolean"
-                        }
-                    ]
-                }
+                "publisherDisplayName": "[concat(variables('_solutionAuthor'), ' (', variables('_solutionId'), ')')]",
+                "descriptionHtml": "The UniFi Site Manager Sites solution for Microsoft Sentinel provides visibility into your UniFi site configurations by ingesting site data from the official UniFi Site Manager API (api.ui.com). Monitor site health, device counts, client statistics, and network performance across all your UniFi deployments."
             }
         }
     ]
