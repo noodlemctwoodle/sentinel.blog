@@ -1,6 +1,3 @@
-Here's the updated README with the new naming conventions and improved documentation:
-
-```markdown
 # UniFi Site Manager Connector for Microsoft Sentinel
 
 A Codeless Connector Framework (CCF) data connector that ingests UniFi network data from the official [UniFi Site Manager API](https://developer.ui.com/site-manager-api/gettingstarted) into Microsoft Sentinel.
