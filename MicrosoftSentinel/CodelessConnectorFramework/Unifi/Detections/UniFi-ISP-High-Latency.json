@@ -1,0 +1,75 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345005')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345005')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - ISP High Latency",
+                "description": "Detects when ISP latency exceeds acceptable thresholds. High latency can impact business operations, VoIP quality, and may indicate ISP issues or network attacks.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// UniFi ISP High Latency Detection\n// Author: Fetch Labs (https://sentinel.blog)\nlet AvgLatencyThreshold = 100;\nlet MaxLatencyThreshold = 500;\nUniFiSiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = periods\n| extend \n    metricTime = todatetime(period.metricTime),\n    avgLatency = toint(period.data.wan.avgLatency),\n    maxLatency = toint(period.data.wan.maxLatency),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n| where avgLatency > AvgLatencyThreshold or maxLatency > MaxLatencyThreshold\n| summarize \n    EventCount = count(),\n    AvgLatency = avg(avgLatency),\n    MaxLatency = max(maxLatency),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by siteId, ispName, ispAsn\n| extend \n    TimeGenerated = now(),\n    AvgLatencyRounded = round(AvgLatency, 1)\n| project\n    TimeGenerated,\n    SiteId = siteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    AvgLatencyMs = AvgLatencyRounded,\n    MaxLatencyMs = MaxLatency,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1498",
+                    "T1499"
+                ],
+                "subTechniques": [
+                    "T1498.001"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "SiteId",
+                            "ISPName"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi High Latency: {{ISPName}} - Avg {{AvgLatencyMs}}ms, Max {{MaxLatencyMs}}ms",
+                    "alertDescriptionFormat": "High latency on {{ISPName}} for site {{SiteId}}. Avg: {{AvgLatencyMs}}ms."
+                },
+                "customDetails": {
+                    "SiteId": "SiteId",
+                    "ISPName": "ISPName",
+                    "ISPAsn": "ISPAsn",
+                    "AvgLatencyMs": "AvgLatencyMs",
+                    "MaxLatencyMs": "MaxLatencyMs",
+                    "EventCount": "EventCount"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

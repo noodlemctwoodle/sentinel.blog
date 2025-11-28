@@ -1,0 +1,66 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345004')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345004')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Firmware Update Available",
+                "description": "Detects when UniFi devices have firmware updates available. Keeping firmware updated is critical for security as updates often contain patches for vulnerabilities.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// UniFi Firmware Update Available Detection\n// Author: Fetch Labs (https://sentinel.blog)\nlet DeviceThreshold = 1;\nUniFiSiteManager_Devices_CL\n| where TimeGenerated > ago(1h)\n| summarize arg_max(TimeGenerated, *) by id\n| where isnotempty(updateAvailable)\n| summarize \n    DevicesNeedingUpdate = count(),\n    DeviceList = make_list(pack(\n        \"name\", coalesce(name, \"Unnamed\"),\n        \"model\", model,\n        \"currentVersion\", version,\n        \"availableVersion\", updateAvailable,\n        \"ip\", ip\n    )),\n    Models = make_set(model),\n    ProductLines = make_set(productLine)\n| where DevicesNeedingUpdate >= DeviceThreshold\n| extend \n    TimeGenerated = now(),\n    AffectedModels = strcat_array(Models, \", \"),\n    AffectedProductLines = strcat_array(ProductLines, \", \")\n| project\n    TimeGenerated,\n    DevicesNeedingUpdate,\n    AffectedModels,\n    AffectedProductLines\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "P1D",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1190"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P7D",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": null
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Firmware Updates Available: {{DevicesNeedingUpdate}} Devices",
+                    "alertDescriptionFormat": "{{DevicesNeedingUpdate}} devices have firmware updates. Models: {{AffectedModels}}. Product lines: {{AffectedProductLines}}."
+                },
+                "customDetails": {
+                    "DevicesNeedingUpdate": "DevicesNeedingUpdate",
+                    "AffectedModels": "AffectedModels",
+                    "AffectedProductLines": "AffectedProductLines"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

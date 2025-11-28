@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345007')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345007')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - ISP Downtime",
+                "description": "Detects when the ISP connection experiences downtime. Any downtime impacts business operations and should be investigated and documented for SLA purposes.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// UniFi ISP Downtime Detection\n// Author: Fetch Labs (https://sentinel.blog)\nUniFiSiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(30m)\n| mv-expand period = periods\n| extend \n    metricTime = todatetime(period.metricTime),\n    downtime = toint(period.data.wan.downtime),\n    uptime = todouble(period.data.wan.uptime),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n| where downtime > 0\n| summarize \n    TotalDowntimeSeconds = sum(downtime),\n    EventCount = count(),\n    AvgUptime = round(avg(uptime), 2),\n    FirstSeen = min(metricTime),\n    LastSeen = max(metricTime)\n    by siteId, ispName, ispAsn\n| extend \n    TimeGenerated = now(),\n    DowntimeMinutes = round(TotalDowntimeSeconds / 60.0, 2)\n| project\n    TimeGenerated,\n    SiteId = siteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    TotalDowntimeSeconds,\n    DowntimeMinutes,\n    AvgUptimePct = AvgUptime,\n    EventCount,\n    FirstSeen,\n    LastSeen\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT30M",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489",
+                    "T1499"
+                ],
+                "subTechniques": [
+                    "T1499.004"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": true,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "SiteId",
+                            "ISPName"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi ISP Downtime: {{ISPName}} - {{DowntimeMinutes}} minutes",
+                    "alertDescriptionFormat": "ISP downtime on {{ISPName}} for site {{SiteId}}. Total: {{DowntimeMinutes}} minutes."
+                },
+                "customDetails": {
+                    "SiteId": "SiteId",
+                    "ISPName": "ISPName",
+                    "ISPAsn": "ISPAsn",
+                    "TotalDowntimeSeconds": "TotalDowntimeSeconds",
+                    "DowntimeMinutes": "DowntimeMinutes",
+                    "AvgUptimePct": "AvgUptimePct",
+                    "EventCount": "EventCount"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

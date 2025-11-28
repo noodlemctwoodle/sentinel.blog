@@ -1,0 +1,69 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345002')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345002')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Multiple Devices Offline",
+                "description": "Detects when multiple UniFi devices go offline simultaneously. This typically indicates a network-wide issue such as power outage, upstream connectivity failure, or infrastructure problem requiring immediate investigation.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// UniFi Multiple Devices Offline Detection\n// Author: Fetch Labs (https://sentinel.blog)\nlet OfflineThreshold = 3;\nUniFiSiteManager_Devices_CL\n| where TimeGenerated > ago(30m)\n| summarize arg_max(TimeGenerated, *) by id\n| where status == \"offline\"\n| summarize \n    OfflineDeviceCount = count(),\n    OfflineDevices = make_list(coalesce(name, id)),\n    OfflineModels = make_list(model),\n    OfflineIPs = make_list(ip),\n    ProductLines = make_set(productLine)\n| where OfflineDeviceCount >= OfflineThreshold\n| extend \n    TimeGenerated = now(),\n    OfflineDeviceList = strcat_array(OfflineDevices, \", \"),\n    AffectedProductLines = strcat_array(ProductLines, \", \")\n| project\n    TimeGenerated,\n    OfflineDeviceCount,\n    OfflineDeviceList,\n    AffectedProductLines\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT2H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489",
+                    "T1499"
+                ],
+                "subTechniques": [
+                    "T1499.004"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": true,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "AnyAlert",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": null
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Mass Offline Event: {{OfflineDeviceCount}} Devices Down",
+                    "alertDescriptionFormat": "{{OfflineDeviceCount}} UniFi devices have gone offline simultaneously. Affected product lines: {{AffectedProductLines}}. This may indicate a network-wide issue requiring immediate attention."
+                },
+                "customDetails": {
+                    "OfflineDeviceCount": "OfflineDeviceCount",
+                    "OfflineDeviceList": "OfflineDeviceList",
+                    "AffectedProductLines": "AffectedProductLines"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

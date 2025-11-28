@@ -1,0 +1,92 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345001')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345001')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Device Offline",
+                "description": "Detects when a UniFi device goes offline. This could indicate network issues, power problems, or device failure requiring immediate attention.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// UniFi Device Offline Detection\n// Author: Fetch Labs (https://sentinel.blog)\nUniFiSiteManager_Devices_CL\n| where TimeGenerated > ago(1h)\n| summarize arg_max(TimeGenerated, *) by id\n| where status == \"offline\"\n| extend OfflineMinutes = datetime_diff('minute', now(), TimeGenerated)\n| where OfflineMinutes >= 10\n| extend\n    DeviceName = coalesce(name, \"Unnamed\"),\n    DeviceId = id,\n    Model = model,\n    IPAddress = ip,\n    MACAddress = mac,\n    ProductLine = productLine,\n    FirmwareVersion = version\n| extend hostName = DeviceName\n| project\n    TimeGenerated,\n    DeviceName,\n    DeviceId,\n    Model,\n    IPAddress,\n    MACAddress,\n    ProductLine,\n    Status = status,\n    OfflineMinutes,\n    FirmwareVersion,\n    hostName\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": null
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Device Offline: {{DeviceName}} ({{Model}})",
+                    "alertDescriptionFormat": "Device {{DeviceName}} ({{Model}}) at {{IPAddress}} has been offline."
+                },
+                "customDetails": {
+                    "DeviceId": "DeviceId",
+                    "DeviceName": "DeviceName",
+                    "Model": "Model",
+                    "ProductLine": "ProductLine",
+                    "IPAddress": "IPAddress",
+                    "MACAddress": "MACAddress",
+                    "OfflineMinutes": "OfflineMinutes",
+                    "FirmwareVersion": "FirmwareVersion"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "hostName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

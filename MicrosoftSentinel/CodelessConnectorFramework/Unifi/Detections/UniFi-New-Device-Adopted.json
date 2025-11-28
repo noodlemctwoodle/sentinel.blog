@@ -1,0 +1,94 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345003')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345003')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - New Device Adopted",
+                "description": "Detects when a new device is adopted into the UniFi network. While often legitimate, unexpected device adoptions could indicate unauthorized hardware being added to your network.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// UniFi New Device Adopted Detection\n// Author: Fetch Labs (https://sentinel.blog)\nUniFiSiteManager_Devices_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(adoptionTime)\n| extend AdoptionDateTime = todatetime(adoptionTime)\n| where AdoptionDateTime > ago(1h)\n| summarize arg_max(TimeGenerated, *) by id\n| extend\n    DeviceName = coalesce(name, \"Unnamed\"),\n    DeviceId = id,\n    Model = model,\n    IPAddress = ip,\n    MACAddress = mac,\n    ProductLine = productLine,\n    FirmwareVersion = version,\n    Shortname = shortname\n| extend hostName = DeviceName\n| project\n    TimeGenerated,\n    AdoptionTime = AdoptionDateTime,\n    DeviceName,\n    DeviceId,\n    Model,\n    IPAddress,\n    MACAddress,\n    ProductLine,\n    Status = status,\n    FirmwareVersion,\n    Shortname,\n    hostName\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT12H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1200",
+                    "T1133"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT24H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [
+                            "Host"
+                        ],
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": null
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi New Device Adopted: {{DeviceName}} ({{Model}})",
+                    "alertDescriptionFormat": "A new {{ProductLine}} device ({{Model}}) named '{{DeviceName}}' was adopted to the network."
+                },
+                "customDetails": {
+                    "DeviceId": "DeviceId",
+                    "DeviceName": "DeviceName",
+                    "Model": "Model",
+                    "ProductLine": "ProductLine",
+                    "IPAddress": "IPAddress",
+                    "MACAddress": "MACAddress",
+                    "FirmwareVersion": "FirmwareVersion",
+                    "AdoptionTime": "AdoptionTime"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "hostName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

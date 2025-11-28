@@ -6,6 +6,33 @@ A Codeless Connector Framework (CCF) data connector that ingests UniFi network d
 
 This connector enables security monitoring and network visibility for UniFi deployments by collecting data from the UniFi Site Manager API (api.ui.com). The Site Manager API provides programmatic access to monitor and manage UniFi deployments at scale.
 
+## Repository Structure
+
+```text
+MicrosoftSentinel/CodelessConnectorFramework/Unifi/
+├── README.md                           # This documentation
+├── Connectors/                         # Data connector ARM templates
+│   ├── azuredeploy_devices.json        # Devices connector
+│   ├── azuredeploy_hosts.json          # Hosts connector
+│   ├── azuredeploy_sites.json          # Sites connector
+│   └── azuredeploy_isp_metrics.json    # ISP Metrics connector
+├── Detections/                         # Analytics rules
+│   ├── README.md                       # Detections documentation
+│   ├── UniFi-Device-Offline.json
+│   ├── UniFi-Multiple-Devices-Offline.json
+│   ├── UniFi-New-Device-Adopted.json
+│   ├── UniFi-Firmware-Update-Available.json
+│   ├── UniFi-ISP-High-Latency.json
+│   ├── UniFi-ISP-Packet-Loss.json
+│   ├── UniFi-ISP-Downtime.json
+│   ├── UniFi-ISP-SLA-Breach.json
+│   ├── UniFi-Controller-Connection-Change.json
+│   ├── UniFi-Site-Health-Critical.json
+│   └── UniFi-Data-Connector-Health.json
+└── Workbook/                           # Sentinel workbook
+    └── UniFiSiteManager-Workbook.json  # Workbook template
+```
+
 ### Data Tables
 
 | Table | Description | Default Polling |
@@ -65,17 +92,17 @@ Deploy individual connectors using the buttons below:
 
 | Connector | Deploy |
 |-----------|--------|
-| Devices | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_devices.json) |
-| Hosts | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_hosts.json) |
-| Sites | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_sites.json) |
-| ISP Metrics | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2Fazuredeploy_isp_metrics.json) |
+| Devices | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2FConnectors%2Fazuredeploy_devices.json) |
+| Hosts | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2FConnectors%2Fazuredeploy_hosts.json) |
+| Sites | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2FConnectors%2Fazuredeploy_sites.json) |
+| ISP Metrics | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fnoodlemctwoodle%2Fsentinel.blog%2Fmain%2FMicrosoftSentinel%2FCodelessConnectorFramework%2FUnifi%2FConnectors%2Fazuredeploy_isp_metrics.json) |
 
 ### Option 2: Azure CLI
 
 ```bash
 # Clone the repository
 git clone https://github.com/noodlemctwoodle/sentinel.blog.git
-cd sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi
+cd sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi/Connectors
 
 # Deploy Devices connector
 az deployment group create \
@@ -121,7 +148,7 @@ az deployment group create \
 ```powershell
 # Clone the repository
 git clone https://github.com/noodlemctwoodle/sentinel.blog.git
-Set-Location sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi
+Set-Location sentinel.blog/MicrosoftSentinel/CodelessConnectorFramework/Unifi/Connectors
 
 # Deploy all connectors
 $params = @{
@@ -152,7 +179,7 @@ New-AzResourceGroupDeployment @params `
 1. Navigate to the Azure Portal
 2. Go to **Deploy a custom template**
 3. Select **Build your own template in the editor**
-4. Paste the contents of the desired connector JSON file from [GitHub](https://github.com/noodlemctwoodle/sentinel.blog/tree/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi)
+4. Paste the contents of the desired connector JSON file from [GitHub](https://github.com/noodlemctwoodle/sentinel.blog/tree/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/Connectors)
 5. Fill in the required parameters
 6. Review and create
 
@@ -165,6 +192,39 @@ New-AzResourceGroupDeployment @params `
 5. Click **Connect**
 
 > **Note**: Data may take up to 30 minutes to appear after initial connection.
+
+## Analytics Rules (Detections)
+
+Pre-built analytics rules are available in the [Detections](./Detections/) folder. These rules provide automated threat detection for your UniFi infrastructure.
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| Device Offline | Medium | Detects when a device goes offline |
+| Multiple Devices Offline | High | Detects mass offline events indicating network-wide issues |
+| New Device Adopted | Informational | Detects new devices added to the network |
+| Firmware Update Available | Low | Detects devices with pending firmware updates |
+| ISP High Latency | Medium | Detects when latency exceeds thresholds |
+| ISP Packet Loss | Medium | Detects packet loss on WAN connection |
+| ISP Downtime | High | Detects ISP outages |
+| ISP SLA Breach | Medium | Detects when uptime falls below SLA target |
+| Controller Connection Change | Medium | Detects controller connection state changes |
+| Site Health Critical | High | Detects sites with multiple offline devices |
+| Data Connector Health | Medium | Monitors data ingestion health |
+
+See the [Detections README](./Detections/README.md) for deployment instructions and configuration options.
+
+## Workbook
+
+A comprehensive workbook is available in the [Workbook](./Workbook/) folder for visualising your UniFi network data.
+
+### Features
+
+- **Overview Dashboard** - Infrastructure at a glance with availability scores
+- **Device Monitoring** - Status distribution, model inventory, offline tracking
+- **Firmware Management** - Compliance tracking and update requirements
+- **Host & Site Health** - Controller status and site-level metrics
+- **ISP Performance** - Latency trends, packet loss, bandwidth utilisation, SLA tracking
+- **Connector Health** - Data ingestion monitoring and troubleshooting
 
 ## Data Schema Reference
 
@@ -440,85 +500,6 @@ UniFiSiteManager_ISPMetrics_CL
 | render timechart
 ```
 
-## Analytics Rules (Examples)
-
-### Device Went Offline
-
-```kql
-// Run every 5 minutes, look back 10 minutes
-UniFiSiteManager_Devices_CL
-| where TimeGenerated > ago(10m)
-| where status != "online"
-| project 
-    TimeGenerated,
-    name,
-    model,
-    ip,
-    mac,
-    productLine
-```
-
-### High Packet Loss Detected
-
-```kql
-// Run every 15 minutes, look back 20 minutes
-UniFiSiteManager_ISPMetrics_CL
-| where TimeGenerated > ago(20m)
-| mv-expand period = periods
-| extend packetLoss = toint(period.data.wan.packetLoss)
-| where packetLoss > 5
-| project 
-    TimeGenerated,
-    siteId,
-    packetLoss
-```
-
-### Host Connection Lost
-
-```kql
-// Run every 5 minutes, look back 10 minutes
-UniFiSiteManager_Hosts_CL
-| where TimeGenerated > ago(10m)
-| where isBlocked == true
-| project 
-    TimeGenerated,
-    id,
-    hostType,
-    ipAddress
-```
-
-### Firmware Update Available (Daily Summary)
-
-```kql
-// Run daily
-UniFiSiteManager_Devices_CL
-| where TimeGenerated > ago(1d)
-| where isnotempty(updateAvailable)
-| summarize arg_max(TimeGenerated, *) by id
-| project 
-    name,
-    model,
-    version,
-    updateAvailable
-```
-
-### New Device Adopted
-
-```kql
-// Run every 15 minutes, look back 20 minutes
-UniFiSiteManager_Devices_CL
-| where TimeGenerated > ago(20m)
-| where isnotempty(adoptionTime)
-| extend AdoptionDate = todatetime(adoptionTime)
-| where AdoptionDate > ago(1h)
-| project 
-    TimeGenerated,
-    name,
-    model,
-    ip,
-    AdoptionDate
-```
-
 ## API Endpoints Used
 
 | Endpoint | Method | Description | Rate Limit |
@@ -559,17 +540,6 @@ The connector handles rate limiting automatically with retry logic. If you see p
 1. **Missing fields** - Some fields vary by UniFi OS version; use `isnotempty()` checks
 2. **Dynamic field access** - Use proper dot notation for nested fields in `meta`, `siteStatistics`, `userData`, `periods`
 3. **Timestamp parsing** - API returns ISO 8601 strings; use `todatetime()` for conversion
-
-## Repository Structure
-
-```
-MicrosoftSentinel/CodelessConnectorFramework/Unifi/
-├── README.md                      # This documentation
-├── azuredeploy_devices.json       # Devices connector ARM template
-├── azuredeploy_hosts.json         # Hosts connector ARM template
-├── azuredeploy_sites.json         # Sites connector ARM template
-└── azuredeploy_isp_metrics.json   # ISP Metrics connector ARM template
-```
 
 ## Contributing
 
@@ -616,21 +586,3 @@ This project is licensed under the MIT License.
 - [UniFi Site Manager API Documentation](https://developer.ui.com/site-manager-api/gettingstarted)
 - [UniFi Developer Portal](https://developer.ui.com/)
 - [Sentinel.blog](https://sentinel.blog)
-
-**Key updates:**
-
-1. **Fixed Deploy to Azure URLs** - Now pointing to the correct raw GitHub URLs:
-   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_devices.json`
-   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_hosts.json`
-   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_sites.json`
-   - `https://raw.githubusercontent.com/noodlemctwoodle/sentinel.blog/main/MicrosoftSentinel/CodelessConnectorFramework/Unifi/azuredeploy_isp_metrics.json`
-
-2. **Updated file references** - Changed to match actual filenames (`azuredeploy_devices.json` instead of `UniFiSiteManager-Devices.json`)
-
-3. **Added git clone instructions** - CLI and PowerShell examples now include cloning the repository first
-
-4. **Added repository structure** - Shows the actual folder layout
-
-5. **Updated contributing section** - Links to the correct GitHub repository
-
-6. **Added Sentinel.blog acknowledgment**

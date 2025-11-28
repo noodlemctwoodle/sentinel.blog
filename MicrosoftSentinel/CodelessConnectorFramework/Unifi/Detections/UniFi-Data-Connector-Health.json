@@ -1,0 +1,72 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345011')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345011')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Data Connector Health",
+                "description": "Monitors the health of UniFi Site Manager data connectors and alerts when data ingestion stops or becomes stale. This ensures visibility into your UniFi infrastructure is maintained.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// UniFi Data Connector Health Monitoring\n// Author: Fetch Labs (https://sentinel.blog)\nlet StaleThreshold = 30;\nlet DevicesHealth = UniFiSiteManager_Devices_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"UniFiSiteManager_Devices_CL\", TableDisplay = \"Devices\";\nlet HostsHealth = UniFiSiteManager_Hosts_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"UniFiSiteManager_Hosts_CL\", TableDisplay = \"Hosts\";\nlet SitesHealth = UniFiSiteManager_Sites_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"UniFiSiteManager_Sites_CL\", TableDisplay = \"Sites\";\nlet ISPHealth = UniFiSiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(2h)\n| summarize LastReceived = max(TimeGenerated)\n| extend TableName = \"UniFiSiteManager_ISPMetrics_CL\", TableDisplay = \"ISP Metrics\";\nunion DevicesHealth, HostsHealth, SitesHealth, ISPHealth\n| extend \n    MinutesSinceData = datetime_diff('minute', now(), LastReceived),\n    Status = case(\n        datetime_diff('minute', now(), LastReceived) <= 15, \"Healthy\",\n        datetime_diff('minute', now(), LastReceived) <= 30, \"Delayed\",\n        datetime_diff('minute', now(), LastReceived) <= 60, \"Stale\",\n        \"Critical\"\n    )\n| where MinutesSinceData >= StaleThreshold\n| extend TimeGenerated = now()\n| project\n    TimeGenerated,\n    TableName,\n    TableDisplay,\n    LastReceived,\n    MinutesSinceData,\n    Status\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [
+                    "T1562.001"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "TableName"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Data Connector {{Status}}: {{TableDisplay}} - No data for {{MinutesSinceData}} minutes",
+                    "alertDescriptionFormat": "The {{TableDisplay}} connector ({{TableName}}) has not received data for {{MinutesSinceData}} minutes."
+                },
+                "customDetails": {
+                    "TableName": "TableName",
+                    "TableDisplay": "TableDisplay",
+                    "LastReceived": "LastReceived",
+                    "MinutesSinceData": "MinutesSinceData",
+                    "Status": "Status"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

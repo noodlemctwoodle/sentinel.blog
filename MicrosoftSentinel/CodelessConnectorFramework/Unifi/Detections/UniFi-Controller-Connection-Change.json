@@ -1,0 +1,86 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345009')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345009')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Controller Connection State Change",
+                "description": "Detects when a UniFi controller (Cloud Key, Dream Machine, etc.) experiences a connection state change. This could indicate network issues, power problems, or controller failures that may impact network management capabilities.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// UniFi Controller Connection State Change Detection\n// Author: Fetch Labs (https://sentinel.blog)\nUniFiSiteManager_Hosts_CL\n| where TimeGenerated > ago(1h)\n| where isnotempty(lastConnectionStateChange)\n| extend ConnectionChange = todatetime(lastConnectionStateChange)\n| where ConnectionChange > ago(1h)\n| summarize arg_max(TimeGenerated, *) by id\n| extend \n    HostTypeDisplay = case(\n        hostType == \"ucore\", \"UniFi OS Console\",\n        hostType == \"uck\", \"Cloud Key\",\n        hostType == \"uckp\", \"Cloud Key+\",\n        hostType == \"udm\", \"Dream Machine\",\n        hostType == \"udmpro\", \"Dream Machine Pro\",\n        hostType == \"udmse\", \"Dream Machine SE\",\n        hostType == \"self-hosted\", \"Self-Hosted\",\n        hostType\n    )\n| project\n    TimeGenerated,\n    ConnectionChangeTime = ConnectionChange,\n    HostId = id,\n    HostType = hostType,\n    HostTypeDisplay,\n    IPAddress = ipAddress,\n    IsBlocked = isBlocked,\n    IsOwner = owner\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT2H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact",
+                    "CommandAndControl"
+                ],
+                "techniques": [
+                    "T1489",
+                    "T1071"
+                ],
+                "subTechniques": [
+                    "T1071.001"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "IP"
+                        ],
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "HostId"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Controller Connection Change: {{HostTypeDisplay}} ({{IPAddress}})",
+                    "alertDescriptionFormat": "A {{HostTypeDisplay}} controller at {{IPAddress}} experienced a connection state change."
+                },
+                "customDetails": {
+                    "HostId": "HostId",
+                    "HostType": "HostType",
+                    "HostTypeDisplay": "HostTypeDisplay",
+                    "IPAddress": "IPAddress",
+                    "ConnectionChangeTime": "ConnectionChangeTime"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345008')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345008')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - ISP SLA Breach",
+                "description": "Detects when ISP uptime falls below the SLA threshold. This alert helps track SLA compliance and can be used for ISP accountability and contract negotiations.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "// UniFi ISP SLA Breach Detection\n// Author: Fetch Labs (https://sentinel.blog)\nlet SLAThreshold = 99.9;\nUniFiSiteManager_ISPMetrics_CL\n| where TimeGenerated > ago(1h)\n| mv-expand period = periods\n| extend \n    metricTime = todatetime(period.metricTime),\n    uptime = todouble(period.data.wan.uptime),\n    downtime = toint(period.data.wan.downtime),\n    ispName = tostring(period.data.wan.ispName),\n    ispAsn = tostring(period.data.wan.ispAsn)\n| summarize \n    AvgUptime = round(avg(uptime), 3),\n    MinUptime = round(min(uptime), 3),\n    TotalDowntimeSeconds = sum(downtime),\n    MeasurementCount = count()\n    by siteId, ispName, ispAsn\n| where AvgUptime < SLAThreshold\n| extend \n    TimeGenerated = now(),\n    SLATarget = SLAThreshold,\n    UptimeGap = round(SLAThreshold - AvgUptime, 3)\n| project\n    TimeGenerated,\n    SiteId = siteId,\n    ISPName = ispName,\n    ISPAsn = ispAsn,\n    AvgUptimePct = AvgUptime,\n    MinUptimePct = MinUptime,\n    SLATargetPct = SLATarget,\n    UptimeGapPct = UptimeGap,\n    TotalDowntimeSeconds,\n    MeasurementCount\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT4H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1499"
+                ],
+                "subTechniques": [
+                    "T1499.004"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "P1D",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "SiteId",
+                            "ISPName"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi SLA Breach: {{ISPName}} - {{AvgUptimePct}}% (Target: {{SLATargetPct}}%)",
+                    "alertDescriptionFormat": "SLA breach for {{ISPName}} at site {{SiteId}}. Uptime: {{AvgUptimePct}}%."
+                },
+                "customDetails": {
+                    "SiteId": "SiteId",
+                    "ISPName": "ISPName",
+                    "ISPAsn": "ISPAsn",
+                    "AvgUptimePct": "AvgUptimePct",
+                    "MinUptimePct": "MinUptimePct",
+                    "SLATargetPct": "SLATargetPct",
+                    "UptimeGapPct": "UptimeGapPct",
+                    "TotalDowntimeSeconds": "TotalDowntimeSeconds"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}

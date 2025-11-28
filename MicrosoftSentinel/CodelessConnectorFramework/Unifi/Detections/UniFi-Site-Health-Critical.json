@@ -1,0 +1,75 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a1b2c3d4-1234-5678-9abc-def012345010')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a1b2c3d4-1234-5678-9abc-def012345010')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "UniFi Site Manager - Site Health Critical",
+                "description": "Detects when a site has multiple offline devices, indicating a significant site-level issue such as power outage, network failure, or infrastructure problem requiring immediate attention.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// UniFi Site Health Critical Detection\n// Author: Fetch Labs (https://sentinel.blog)\nlet OfflineThreshold = 3;\nUniFiSiteManager_Sites_CL\n| where TimeGenerated > ago(30m)\n| summarize arg_max(TimeGenerated, *) by siteId\n| extend \n    siteName = tostring(meta.name),\n    timezone = tostring(meta.timezone),\n    totalDevices = toint(siteStatistics.counts.totalDevice),\n    offlineDevices = toint(siteStatistics.counts.offlineDevice),\n    wifiClients = toint(siteStatistics.counts.wifiClient),\n    wiredClients = toint(siteStatistics.counts.wiredClient)\n| where offlineDevices >= OfflineThreshold\n| extend \n    AvailabilityPct = round(100.0 * (totalDevices - offlineDevices) / totalDevices, 1),\n    TotalClients = wifiClients + wiredClients\n| project\n    TimeGenerated,\n    SiteId = siteId,\n    SiteName = siteName,\n    TotalDevices = totalDevices,\n    OfflineDevices = offlineDevices,\n    OnlineDevices = totalDevices - offlineDevices,\n    AvailabilityPct,\n    TotalClients,\n    WiFiClients = wifiClients,\n    WiredClients = wiredClients,\n    Timezone = timezone\n",
+                "queryFrequency": "PT15M",
+                "queryPeriod": "PT30M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": true,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1489",
+                    "T1499"
+                ],
+                "subTechniques": [
+                    "T1499.004"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": true,
+                        "lookbackDuration": "PT4H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": null,
+                        "groupByAlertDetails": null,
+                        "groupByCustomDetails": [
+                            "SiteId"
+                        ]
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "UniFi Site Critical: {{SiteName}} - {{OfflineDevices}}/{{TotalDevices}} Devices Offline",
+                    "alertDescriptionFormat": "Site '{{SiteName}}' has {{OfflineDevices}}/{{TotalDevices}} devices offline."
+                },
+                "customDetails": {
+                    "SiteId": "SiteId",
+                    "SiteName": "SiteName",
+                    "TotalDevices": "TotalDevices",
+                    "OfflineDevices": "OfflineDevices",
+                    "OnlineDevices": "OnlineDevices",
+                    "AvailabilityPct": "AvailabilityPct",
+                    "TotalClients": "TotalClients"
+                },
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null
+            }
+        }
+    ]
+}
