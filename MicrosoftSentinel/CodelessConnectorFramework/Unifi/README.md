@@ -261,12 +261,17 @@ ISP metrics provide internet connection health data.
 UniFiSiteManager_ISPMetrics_CL
 | mv-expand period = periods
 | extend 
-    periodStart = todatetime(period.start),
-    avgLatency = todouble(period.latency.avg),
-    packetLoss = todouble(period.packetLoss),
-    downloadKbps = todouble(period.download),
-    uploadKbps = todouble(period.upload),
-    uptime = todouble(period.uptime)
+    metricTime = todatetime(period.metricTime),
+    avgLatency = toint(period.data.wan.avgLatency),
+    maxLatency = toint(period.data.wan.maxLatency),
+    packetLoss = toint(period.data.wan.packetLoss),
+    downloadMbps = todouble(period.data.wan.download_kbps) / 1000,
+    uploadMbps = todouble(period.data.wan.upload_kbps) / 1000,
+    uptime = toint(period.data.wan.uptime),
+    downtime = toint(period.data.wan.downtime),
+    ispName = tostring(period.data.wan.ispName),
+    ispAsn = tostring(period.data.wan.ispAsn),
+    firmwareVersion = tostring(period.version)
 ```
 
 **Period fields:**
@@ -386,7 +391,7 @@ UniFiSiteManager_Sites_CL
 ```kql
 UniFiSiteManager_ISPMetrics_CL
 | mv-expand period = periods
-| extend avgLatency = todouble(period.latency.avg)
+| extend avgLatency = toint(period.data.wan.avgLatency)
 | where avgLatency > 100
 | project TimeGenerated, hostId, siteId, avgLatency
 | sort by avgLatency desc
@@ -397,7 +402,7 @@ UniFiSiteManager_ISPMetrics_CL
 ```kql
 UniFiSiteManager_ISPMetrics_CL
 | mv-expand period = periods
-| extend packetLoss = todouble(period.packetLoss)
+| extend packetLoss = toint(period.data.wan.packetLoss)
 | where packetLoss > 1
 | project TimeGenerated, hostId, siteId, packetLoss
 | sort by packetLoss desc
@@ -408,7 +413,7 @@ UniFiSiteManager_ISPMetrics_CL
 ```kql
 UniFiSiteManager_ISPMetrics_CL
 | mv-expand period = periods
-| extend uptime = todouble(period.uptime)
+| extend uptime = toint(period.data.wan.uptime)
 | summarize 
     AvgUptime = avg(uptime), 
     MinUptime = min(uptime),
@@ -424,9 +429,9 @@ UniFiSiteManager_ISPMetrics_CL
 UniFiSiteManager_ISPMetrics_CL
 | mv-expand period = periods
 | extend 
-    periodStart = todatetime(period.start),
-    downloadMbps = todouble(period.download) / 1000,
-    uploadMbps = todouble(period.upload) / 1000
+    periodStart = todatetime(period.metricTime),
+    downloadMbps = todouble(period.data.wan.download_kbps) / 1000,
+    uploadMbps = todouble(period.data.wan.upload_kbps) / 1000
 | summarize 
     AvgDownload = avg(downloadMbps), 
     AvgUpload = avg(uploadMbps) 
@@ -460,7 +465,7 @@ UniFiSiteManager_Devices_CL
 UniFiSiteManager_ISPMetrics_CL
 | where TimeGenerated > ago(20m)
 | mv-expand period = periods
-| extend packetLoss = todouble(period.packetLoss)
+| extend packetLoss = toint(period.data.wan.packetLoss)
 | where packetLoss > 5
 | project 
     TimeGenerated,
