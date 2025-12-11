@@ -1,0 +1,30 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "PlaybookName": {
+            "value": "Incident-GreenboneScanner"
+        },
+        "GreenboneScannerIPs": {
+            "value": [
+                "10.0.0.100",
+                "10.0.0.101",
+                "192.168.1.50"
+            ]
+        },
+        "AlertTitlePatterns": {
+            "value": [
+                "Exploit attempt detected",
+                "Suspicious network activity",
+                "Vulnerability scan detected",
+                "Port scan detected"
+            ]
+        },
+        "WorkspaceName": {
+            "value": "YOUR-SENTINEL-WORKSPACE-NAME"
+        },
+        "ResourceGroupName": {
+            "value": "YOUR-RESOURCE-GROUP"
+        }
+    }
+}

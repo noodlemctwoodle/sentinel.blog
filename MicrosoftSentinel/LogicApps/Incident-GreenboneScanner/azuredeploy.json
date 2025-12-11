@@ -1,0 +1,492 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "title": "Incident-GreenboneScanner",
+        "description": "Automatically closes Microsoft Sentinel incidents triggered by Greenbone/OpenVAS vulnerability scanner activity. Matches incidents by alert title patterns and source IP addresses.",
+        "lastUpdateTime": "2024-12-10T00:00:00.000Z"
+    },
+    "parameters": {
+        "PlaybookName": {
+            "type": "string",
+            "defaultValue": "Incident-GreenboneScanner",
+            "metadata": {
+                "description": "Name of the Logic App/Playbook"
+            }
+        },
+        "GreenboneScannerIPs": {
+            "type": "array",
+            "defaultValue": [
+                "10.0.0.100",
+                "10.0.0.101"
+            ],
+            "metadata": {
+                "description": "Array of Greenbone/OpenVAS scanner IP addresses"
+            }
+        },
+        "AlertTitlePatterns": {
+            "type": "array",
+            "defaultValue": [
+                "Exploit attempt detected",
+                "Suspicious network activity"
+            ],
+            "metadata": {
+                "description": "Array of alert/incident title patterns to match (case-insensitive)"
+            }
+        },
+        "SubscriptionId": {
+            "type": "string",
+            "defaultValue": "[subscription().subscriptionId]",
+            "metadata": {
+                "description": "Azure Subscription ID where Sentinel workspace resides"
+            }
+        },
+        "ResourceGroupName": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().name]",
+            "metadata": {
+                "description": "Resource Group name where Sentinel workspace resides"
+            }
+        },
+        "WorkspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name of the Log Analytics workspace with Microsoft Sentinel"
+            }
+        }
+    },
+    "variables": {
+        "AzureSentinelConnectionName": "[concat('azuresentinel-', parameters('PlaybookName'))]",
+        "AzureSentinelConnectionApiId": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', resourceGroup().location, 'azuresentinel')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('AzureSentinelConnectionName')]",
+            "location": "[resourceGroup().location]",
+            "kind": "V1",
+            "properties": {
+                "displayName": "[variables('AzureSentinelConnectionName')]",
+                "api": {
+                    "id": "[variables('AzureSentinelConnectionApiId')]"
+                },
+                "parameterValueType": "Alternative"
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2019-05-01",
+            "name": "[parameters('PlaybookName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Purpose": "Security Automation",
+                "Scanner": "Greenbone-OpenVAS",
+                "AutoClose": "true"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "type": "Object"
+                        },
+                        "GreenboneScannerIPs": {
+                            "type": "Array"
+                        },
+                        "AlertTitlePatterns": {
+                            "type": "Array"
+                        }
+                    },
+                    "triggers": {
+                        "Microsoft_Sentinel_incident": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                    }
+                                },
+                                "body": {
+                                    "callback_url": "@listCallbackUrl()"
+                                },
+                                "path": "/incident-creation"
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Initialize_-_MatchFound": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MatchFound",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            },
+                            "runAfter": {}
+                        },
+                        "Initialize_-_MatchedIP": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MatchedIP",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_-_MatchFound": ["Succeeded"]
+                            }
+                        },
+                        "Initialize_-_AlertTitles": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "AlertTitles",
+                                        "type": "array",
+                                        "value": []
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_-_MatchedIP": ["Succeeded"]
+                            }
+                        },
+                        "Initialize_-_TitleMatchFound": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "TitleMatchFound",
+                                        "type": "boolean",
+                                        "value": false
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_-_AlertTitles": ["Succeeded"]
+                            }
+                        },
+                        "Initialize_-_MatchedPattern": {
+                            "type": "InitializeVariable",
+                            "inputs": {
+                                "variables": [
+                                    {
+                                        "name": "MatchedPattern",
+                                        "type": "string",
+                                        "value": ""
+                                    }
+                                ]
+                            },
+                            "runAfter": {
+                                "Initialize_-_TitleMatchFound": ["Succeeded"]
+                            }
+                        },
+                        "Parse_Incident_Properties": {
+                            "type": "ParseJson",
+                            "inputs": {
+                                "content": "@triggerBody()?['object']?['properties']",
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "title": { "type": "string" },
+                                        "description": { "type": "string" },
+                                        "severity": { "type": "string" },
+                                        "status": { "type": "string" },
+                                        "incidentNumber": { "type": "integer" },
+                                        "additionalData": {
+                                            "type": "object",
+                                            "properties": {
+                                                "alertsCount": { "type": "integer" },
+                                                "alertProductNames": {
+                                                    "type": "array",
+                                                    "items": { "type": "string" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Initialize_-_MatchedPattern": ["Succeeded"]
+                            }
+                        },
+                        "For_Each_Alert": {
+                            "type": "Foreach",
+                            "foreach": "@coalesce(triggerBody()?['object']?['properties']?['Alerts'], json('[]'))",
+                            "actions": {
+                                "Append_Alert_Title": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "AlertTitles",
+                                        "value": "@items('For_Each_Alert')?['properties']?['alertDisplayName']"
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Parse_Incident_Properties": ["Succeeded"]
+                            }
+                        },
+                        "For_Each_Title_Pattern": {
+                            "type": "Foreach",
+                            "foreach": "@parameters('AlertTitlePatterns')",
+                            "actions": {
+                                "Check_Pattern_In_Title": {
+                                    "type": "If",
+                                    "expression": {
+                                        "or": [
+                                            {
+                                                "contains": [
+                                                    "@toLower(body('Parse_Incident_Properties')?['title'])",
+                                                    "@toLower(items('For_Each_Title_Pattern'))"
+                                                ]
+                                            },
+                                            {
+                                                "contains": [
+                                                    "@toLower(string(variables('AlertTitles')))",
+                                                    "@toLower(items('For_Each_Title_Pattern'))"
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "actions": {
+                                        "Set_TitleMatchFound_True": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "TitleMatchFound",
+                                                "value": true
+                                            }
+                                        },
+                                        "Set_MatchedPattern": {
+                                            "type": "SetVariable",
+                                            "inputs": {
+                                                "name": "MatchedPattern",
+                                                "value": "@items('For_Each_Title_Pattern')"
+                                            },
+                                            "runAfter": {
+                                                "Set_TitleMatchFound_True": ["Succeeded"]
+                                            }
+                                        }
+                                    },
+                                    "else": {
+                                        "actions": {}
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Alert": ["Succeeded"]
+                            }
+                        },
+                        "Check_If_Title_Matched": {
+                            "type": "If",
+                            "expression": {
+                                "equals": [
+                                    "@variables('TitleMatchFound')",
+                                    true
+                                ]
+                            },
+                            "actions": {
+                                "Entities_-_Get_IPs": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "body": "@triggerBody()?['object']?['properties']?['relatedEntities']",
+                                        "path": "/entities/ip"
+                                    }
+                                },
+                                "For_Each_IP_Entity": {
+                                    "type": "Foreach",
+                                    "foreach": "@body('Entities_-_Get_IPs')?['IPs']",
+                                    "actions": {
+                                        "Check_IP_Against_Scanner_List": {
+                                            "type": "If",
+                                            "expression": {
+                                                "contains": [
+                                                    "@parameters('GreenboneScannerIPs')",
+                                                    "@items('For_Each_IP_Entity')?['Address']"
+                                                ]
+                                            },
+                                            "actions": {
+                                                "Set_MatchFound_True": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "MatchFound",
+                                                        "value": true
+                                                    }
+                                                },
+                                                "Set_MatchedIP": {
+                                                    "type": "SetVariable",
+                                                    "inputs": {
+                                                        "name": "MatchedIP",
+                                                        "value": "@items('For_Each_IP_Entity')?['Address']"
+                                                    },
+                                                    "runAfter": {
+                                                        "Set_MatchFound_True": ["Succeeded"]
+                                                    }
+                                                }
+                                            },
+                                            "else": {
+                                                "actions": {}
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Entities_-_Get_IPs": ["Succeeded"]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_-_Title_Not_Matched": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "For_Each_Title_Pattern": ["Succeeded"]
+                            }
+                        },
+                        "Check_If_Match_Found": {
+                            "type": "If",
+                            "expression": {
+                                "equals": [
+                                    "@variables('MatchFound')",
+                                    true
+                                ]
+                            },
+                            "actions": {
+                                "Add_comment_to_incident_(V3)": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "message": "<p><strong>🔒 Auto-Closed by Greenbone Scanner Detection Playbook</strong></p><p><strong>Reason:</strong> Incident originated from authorized vulnerability scanner.</p><p><strong>Matched Scanner IP:</strong> @{variables('MatchedIP')}</p><p><strong>Matched Alert Pattern:</strong> @{variables('MatchedPattern')}</p><p><strong>Classification:</strong> Informational - Expected Activity</p><p><strong>Determination:</strong> Security Testing</p><p><strong>Closure Time:</strong> @{utcNow()}</p><hr><p><em>This incident was automatically resolved because it matched configured Greenbone/OpenVAS scanner IP addresses and alert title patterns indicating vulnerability scanning activity.</em></p>"
+                                        },
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "post",
+                                        "path": "/Incidents/Comment"
+                                    }
+                                },
+                                "Update_Incident": {
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method": "put",
+                                        "path": "/Incidents",
+                                        "body": {
+                                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                                            "classification": {
+                                                "ClassificationAndReason": "BenignPositive - SuspectedButExpected",
+                                                "ClassificationReasonText": "Greenbone/OpenVAS vulnerability scanner activity - automated security testing"
+                                            },
+                                            "status": "Closed",
+                                            "tagsToAdd": {
+                                                "TagsToAdd": [
+                                                    {
+                                                        "Tag": "Greenbone"
+                                                    },
+                                                    {
+                                                        "Tag": "OpenVAS"
+                                                    },
+                                                    {
+                                                        "Tag": "VulnerabilityScanner"
+                                                    },
+                                                    {
+                                                        "Tag": "AutoClosed"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Add_comment_to_incident_(V3)": ["Succeeded"]
+                                    }
+                                }
+                            },
+                            "else": {
+                                "actions": {
+                                    "Terminate_-_No_IP_Match": {
+                                        "type": "Terminate",
+                                        "inputs": {
+                                            "runStatus": "Succeeded"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {
+                                "Check_If_Title_Matched": ["Succeeded"]
+                            }
+                        }
+                    },
+                    "outputs": {}
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "azuresentinel": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('AzureSentinelConnectionName'))]",
+                                "connectionName": "[variables('AzureSentinelConnectionName')]",
+                                "id": "[variables('AzureSentinelConnectionApiId')]",
+                                "connectionProperties": {
+                                    "authentication": {
+                                        "type": "ManagedServiceIdentity"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "GreenboneScannerIPs": {
+                        "value": "[parameters('GreenboneScannerIPs')]"
+                    },
+                    "AlertTitlePatterns": {
+                        "value": "[parameters('AlertTitlePatterns')]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "LogicAppResourceId": {
+            "type": "string",
+            "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+        },
+        "LogicAppPrincipalId": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId]"
+        },
+        "RoleAssignmentCommand": {
+            "type": "string",
+            "value": "[concat('az role assignment create --assignee ', reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'full').identity.principalId, ' --role \"Microsoft Sentinel Responder\" --scope /subscriptions/', subscription().subscriptionId, '/resourceGroups/', parameters('ResourceGroupName'), '/providers/Microsoft.OperationalInsights/workspaces/', parameters('WorkspaceName'))]"
+        }
+    }
+}
