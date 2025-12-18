@@ -49,7 +49,7 @@ This project demonstrates how to orchestrate Model Context Protocol (MCP) server
 **Handoffs:** Passes threats to Incident Responder, detection gaps to Detection Engineer, or findings back to SOC Analyst
 
 ### 🛡️ Detection Engineer
-**Role:** Build and optimize detection rules  
+**Role:** Build and optimise detection rules  
 **Autonomy:** Verifies tables exist, searches for detection patterns, tests against historical data, checks prevalence, validates queries  
 **Handoffs:** Sends detections to Threat Hunter for validation, to Incident Responder for playbooks, or to SOC Analyst for operational review
 
@@ -60,7 +60,7 @@ This project demonstrates how to orchestrate Model Context Protocol (MCP) server
 
 ## The Tools
 
-### KQL-Search-MCP (My Tool)
+### KQL-Search-MCP
 **Purpose:** Search and work with KQL queries across GitHub  
 **Capabilities:**
 - 32 tools for searching, validating, and generating KQL queries
@@ -69,11 +69,10 @@ This project demonstrates how to orchestrate Model Context Protocol (MCP) server
 - Validates queries against actual table schemas
 - Generates queries from natural language
 
-**Install:** `npm install -g kql-search-mcp`  
-**VSCode Market Place:** https://marketplace.visualstudio.com/items?itemName=noodlemctwoodle.kql-search-mcp
+**VSCode Marketplace:** https://marketplace.visualstudio.com/items?itemName=noodlemctwoodle.kql-search-mcp  
 **npm:** https://www.npmjs.com/package/kql-search-mcp
 
-### Microsoft Sentinel MCP (Microsoft's Tools)
+### Microsoft Sentinel MCP
 
 **Data Exploration Collection:**
 - `list_sentinel_workspaces` - List accessible workspaces
@@ -146,9 +145,7 @@ This project demonstrates how to orchestrate Model Context Protocol (MCP) server
 
 ### Prerequisites
 - VS Code with GitHub Copilot
-- Claude (Sonnet 4 recommended)
 - Microsoft Sentinel or Defender XDR access
-- Node.js for KQL-Search-MCP
 
 ### Step 1: Install Extensions and Configure MCP Servers
 
@@ -349,10 +346,10 @@ The agents are just markdown files with YAML headers. Fork them, adapt them, imp
 
 MIT License - use it however you want.
 
-## Acknowledgments
+## Acknowledgements
 
 - **Microsoft** - For building Sentinel MCP and making security data accessible
-- **Anthropic** - For Claude and the MCP specification
+- **Anthropic** - For the MCP specification
 - **VS Code Team** - For custom agents and GitHub Copilot
 - **Security Community** - For thousands of detection rules and hunting queries that make this possible
 
@@ -360,9 +357,9 @@ MIT License - use it however you want.
 
 - **KQL-Search-MCP:** https://www.npmjs.com/package/kql-search-mcp
 - **Sentinel MCP Docs:** https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started
-- **Blog Post:** [Coming soon on sentinel.blog]
+- **Blog Post:** https://sentinel.blog/becoming-the-puppet-master-of-ai-soc-analysts
 - **My Blog:** https://sentinel.blog
 
 ---
 
-**Built by [@noodlemctwoodle](https://github.com/noodlemctwoodle) | Powered by curiosity and too much coffee ☕**
+**Built by [@noodlemctwoodle](https://github.com/noodlemctwoodle) | Powered by curiosity, too much coffee and not enough sleep ☕**
