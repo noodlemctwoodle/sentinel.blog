@@ -13,7 +13,7 @@ This project demonstrates how to orchestrate Model Context Protocol (MCP) server
 - ❌ Fully autonomous (requires human oversight)
 - ❌ Perfect (agents make mistakes and need supervision)
 - ❌ A solution to all SOC problems
-- ❌ Going to investigate alerts while you're on holiday (don't even think about it)
+- ❌ Going to investigate alerts while you're on holiday
 - ❌ A replacement for actually understanding what the queries do
 - ❌ Going to stop your CEO clicking phishing links
 - ❌ Able to explain to management why you need more budget
