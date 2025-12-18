@@ -6,6 +6,34 @@ An experimental framework for autonomous security operations using VS Code Custo
 
 This project demonstrates how to orchestrate Model Context Protocol (MCP) servers through VS Code custom agents to create an autonomous Security Operations Centre team. Rather than manually searching for queries, running investigations, and documenting findings, the agents handle the mechanical work while you focus on analysis and decision-making.
 
+## Limitations & Reality Checks
+
+### What This Is Not
+- ❌ Production-ready SOC replacement
+- ❌ Fully autonomous (requires human oversight)
+- ❌ Perfect (agents make mistakes and need supervision)
+- ❌ A solution to all SOC problems
+- ❌ Going to investigate alerts while you're on holiday (don't even think about it)
+- ❌ A replacement for actually understanding what the queries do
+- ❌ Going to stop your CEO clicking phishing links
+- ❌ Able to explain to management why you need more budget
+- ❌ A way to avoid learning KQL (sorry)
+
+### Known Issues
+- Agents sometimes search for tables that don't exist in your workspace
+- Query adaptation can introduce errors
+- False positive tuning requires human judgment
+- Handoff context can be verbose
+- Agents occasionally cite non-existent GitHub repos
+- Performance depends heavily on Claude model quality
+
+### What It Actually Is
+- ✅ An experiment in tool orchestration
+- ✅ A way to explore autonomous agent capabilities
+- ✅ A demonstration of MCP server coordination
+- ✅ A practical time-saver for investigation mechanics
+- ✅ An interesting approach to using tools we already have
+
 **What makes this interesting:** It's not just about AI answering questions - these agents actively use tools, make decisions, and hand off work to each other based on investigation findings.
 
 ## The Team
@@ -290,29 +318,6 @@ With 32 KQL-Search-MCP tools and thousands of community queries, there's no reas
 
 **Context Over Everything:**
 Handoffs include full context from previous investigation. The receiving agent doesn't start fresh - they continue where the previous agent left off.
-
-## Limitations & Reality Checks
-
-### What This Is Not
-- ❌ Production-ready SOC replacement
-- ❌ Fully autonomous (requires human oversight)
-- ❌ Perfect (agents make mistakes and need supervision)
-- ❌ A solution to all SOC problems
-
-### Known Issues
-- Agents sometimes search for tables that don't exist in your workspace
-- Query adaptation can introduce errors
-- False positive tuning requires human judgment
-- Handoff context can be verbose
-- Agents occasionally cite non-existent GitHub repos
-- Performance depends heavily on Claude model quality
-
-### What It Actually Is
-- ✅ An experiment in tool orchestration
-- ✅ A way to explore autonomous agent capabilities
-- ✅ A demonstration of MCP server coordination
-- ✅ A practical time-saver for investigation mechanics
-- ✅ An interesting approach to using tools we already have
 
 ## Why This Matters
 
