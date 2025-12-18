@@ -357,7 +357,7 @@ MIT License - use it however you want.
 
 - **KQL-Search-MCP:** https://www.npmjs.com/package/kql-search-mcp
 - **Sentinel MCP Docs:** https://learn.microsoft.com/en-us/azure/sentinel/datalake/sentinel-mcp-get-started
-- **Blog Post:** https://sentinel.blog/becoming-the-puppet-master-of-ai-soc-analysts
+- **Blog Post:** https://sentinel.blog/becoming-the-puppet-master-of-an-ai-soc-team/
 - **My Blog:** https://sentinel.blog
 
 ---
