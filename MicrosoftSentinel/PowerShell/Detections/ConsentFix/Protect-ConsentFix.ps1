@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Comprehensive PowerShell script to protect your Entra ID tenant against ConsentFix attacks
+    PowerShell script to protect your Entra ID tenant against ConsentFix attacks
 
 .DESCRIPTION
     This script helps protect your Microsoft Entra ID tenant against ConsentFix/AuthCodeFix attacks
