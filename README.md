@@ -10,6 +10,17 @@
 
 Welcome to the official repository for [Sentinel.blog](https://sentinel.blog), a resource dedicated to Microsoft Sentinel automation, best practices, and security operations excellence.
 
+
+### ☕ My Blog
+
+<a href="https://sentinel.blog/#/portal/signup">
+  <img src="https://sentinel.blog/content/images/size/w192h192/size/w256h256/2025/06/monty.png" alt="sentinel.blog" width="80"/>
+  <br/>
+  <strong>Subscribe to sentinel.blog</strong>
+  <br/>
+  Making Security SIEMlessly Simple
+</a>
+
 ## 📖 About This Repository
 
 This repository contains all the scripts, code samples, and solutions featured on Sentinel.blog. My goal is to provide security professionals with practical, ready-to-use tools that enhance Microsoft Sentinel deployments and streamline security operations.
@@ -101,16 +112,6 @@ Your feedback helps improve these tools. Reach out with suggestions or ideas for
 ### 🤝 Contribute
 
 Contribute your own scripts, improvements, or documentation enhancements through pull requests.
-
-### ☕ My Blog
-
-<a href="https://sentinel.blog/#/portal/signup">
-  <img src="https://sentinel.blog/content/images/size/w192h192/size/w256h256/2025/06/monty.png" alt="sentinel.blog" width="80"/>
-  <br/>
-  <strong>Subscribe to sentinel.blog</strong>
-  <br/>
-  Making Security SIEMlessly Simple
-</a>
 
 ## 📄 License
 
