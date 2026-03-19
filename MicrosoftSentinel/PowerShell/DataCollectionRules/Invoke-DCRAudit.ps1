@@ -38,7 +38,7 @@
     Exports full ARM templates alongside the report.
 
 .NOTES
-    Author  : Toby / noodlemctwoodle
+    Author  : Toby G
     Version : 1.0.0
     Date    : 2026-03-19
     Requires: Az.Accounts
