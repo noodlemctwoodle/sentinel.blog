@@ -560,6 +560,96 @@ foreach ($tableName in $resolvedTableNames) {
 
 Write-Progress -Activity "Analysing tables" -Completed
 
+# ── Lake Migration Cost Analysis ──────────────────────────────────────────────
+$lakeMigrationData = $null
+Write-Host "  Running lake migration cost analysis..." -NoNewline
+$lakeQuery = @"
+let analyticsIngestionCost = 2.30;
+let lakeScanCostPerGB = 0.005;
+let auxTierCostPerGBDay = 0.05;
+let lookbackDays = 90;
+let queryLookbackDays = 7;
+let knownTables = toscalar(
+    Usage
+    | where TimeGenerated > ago(lookbackDays * 1d)
+    | summarize make_set(DataType)
+);
+let avgHourlySizePerTable =
+    Usage
+    | where TimeGenerated > ago(lookbackDays * 1d)
+    | summarize AvgHourlyIngestionGB = avg(Quantity) / 1024 by DataType;
+LAQueryLogs
+| where TimeGenerated > ago(queryLookbackDays * 1d)
+| extend HoursDiff = todouble(datetime_diff('minute', QueryTimeRangeEnd, QueryTimeRangeStart)) / 60
+| where isnotempty(HoursDiff) and HoursDiff > 0
+| extend QueryOrigin = case(
+    RequestClientApp == "Sentinel-DataCollectionAggregator", "Automated"
+    , RequestClientApp == "Sentinel-Investigation-Queries", "Automated"
+    , RequestClientApp has "sdk" or RequestClientApp has "PSClient", "Automated"
+    , RequestClientApp == "AzureMonitorLogsConnector", "Automated"
+    , RequestClientApp == "M365D_AdvancedHunting" and isempty(AADEmail), "Automated"
+    , "Human")
+| serialize QueryNumber = row_number()
+| mv-expand TableName = knownTables to typeof(string)
+| where QueryText has_cs TableName
+| extend ExtractedTables = extract_all(@'(?:^|\|?\s*)([A-Z][A-Za-z0-9_]+)(?:\s*\||\s*$)', QueryText)
+| where array_index_of(ExtractedTables, TableName) >= 0
+| join kind=leftouter avgHourlySizePerTable on `$left.TableName == `$right.DataType
+| extend ScanSizeGB = AvgHourlyIngestionGB * HoursDiff
+| summarize
+    TotalScannedSizeGB = sum(ScanSizeGB)
+    , DistinctQueryCount = dcount(QueryNumber)
+    , HumanQueryCount = dcountif(QueryNumber, QueryOrigin == "Human")
+    , AutomatedQueryCount = dcountif(QueryNumber, QueryOrigin == "Automated")
+    , AvgHourlyIngestionGB = avg(AvgHourlyIngestionGB)
+    by DataType
+| extend
+    ProjectedWeeklyKQLLakeCost = TotalScannedSizeGB * lakeScanCostPerGB
+    , AnalyticsWeeklyCost = AvgHourlyIngestionGB * analyticsIngestionCost * 24 * 7
+    , AuxWeeklyCost = AvgHourlyIngestionGB * auxTierCostPerGBDay * 24 * 7
+| extend
+    CostDelta = AnalyticsWeeklyCost - (ProjectedWeeklyKQLLakeCost + AuxWeeklyCost)
+    , CandidateForLakeOnly = iif(
+        AnalyticsWeeklyCost > ProjectedWeeklyKQLLakeCost + AuxWeeklyCost
+        , "Move to Lake"
+        , "Keep in Analytics")
+| project
+    DataType
+    , AvgHourlyIngestionGB
+    , TotalScannedSizeGB
+    , DistinctQueryCount
+    , HumanQueryCount
+    , AutomatedQueryCount
+    , AnalyticsWeeklyCost
+    , ProjectedWeeklyKQLLakeCost
+    , AuxWeeklyCost
+    , CostDelta
+    , CandidateForLakeOnly
+| sort by CostDelta desc
+"@
+try {
+    $lakeQueryUri  = "$baseUri/api/query?api-version=2020-08-01"
+    $lakeQueryBody = @{ query = $lakeQuery }
+    $lakeQueryResp = Invoke-LAApi -Uri $lakeQueryUri -Method 'POST' -Token $token -Body $lakeQueryBody -Retries $MaxRetries
+    $lakeColumns   = $lakeQueryResp.tables[0].columns
+    $lakeRows      = $lakeQueryResp.tables[0].rows
+    $lakeMigrationData = [System.Collections.Generic.List[hashtable]]::new()
+    foreach ($row in $lakeRows) {
+        $entry = @{}
+        for ($i = 0; $i -lt $lakeColumns.Count; $i++) {
+            $colName = $lakeColumns[$i].ColumnName
+            if (-not $colName) { $colName = $lakeColumns[$i].name }
+            $entry[$colName] = $row[$i]
+        }
+        $lakeMigrationData.Add($entry)
+    }
+    Write-Host " $($lakeMigrationData.Count) tables analysed" -ForegroundColor Green
+}
+catch {
+    Write-Warning "  Could not run lake migration query: $_ — skipping cost analysis"
+    $lakeMigrationData = $null
+}
+
 #endregion
 
 
@@ -667,6 +757,64 @@ if ($seenRecs.Count -eq 0 -and $seenWarns.Count -eq 0) {
     [void]$recWarningsHtml.Append('<p class="muted">No recommendations — Sentinel Data Lake age not specified or no changes detected.</p>')
 }
 $recWarnCount = $seenRecs.Count + $seenWarns.Count
+
+# ── Lake Migration HTML ──────────────────────────────────────────────────────
+$lakeMigrationHtml = ''
+$lakeMigrationCount = 0
+$lakeMoveCandidates = 0
+if ($lakeMigrationData -and $lakeMigrationData.Count -gt 0) {
+    $lakeMigrationCount = $lakeMigrationData.Count
+    $lakeMoveCandidates = @($lakeMigrationData | Where-Object { $_.CandidateForLakeOnly -eq 'Move to Lake' }).Count
+    $totalSavings = ($lakeMigrationData | Where-Object { $_.CostDelta -gt 0 } | ForEach-Object { $_.CostDelta } | Measure-Object -Sum).Sum
+    $totalSavingsStr = '{0:N2}' -f $totalSavings
+
+    $lmSb = [System.Text.StringBuilder]::new()
+    [void]$lmSb.AppendLine('<div class="summary-row" style="margin-bottom:20px">')
+    [void]$lmSb.AppendLine("  <div class=`"summary-card sc-total`"><div class=`"num`">$lakeMigrationCount</div><div class=`"label`">Tables Analysed</div></div>")
+    [void]$lmSb.AppendLine("  <div class=`"summary-card sc-change`"><div class=`"num`">$lakeMoveCandidates</div><div class=`"label`">Move to Lake</div></div>")
+    [void]$lmSb.AppendLine("  <div class=`"summary-card sc-ok`"><div class=`"num`">$($lakeMigrationCount - $lakeMoveCandidates)</div><div class=`"label`">Keep in Analytics</div></div>")
+    [void]$lmSb.AppendLine("  <div class=`"summary-card`" style=`"border-color:var(--green)`"><div class=`"num`" style=`"color:var(--green)`">`$$totalSavingsStr</div><div class=`"label`">Potential Weekly Savings</div></div>")
+    [void]$lmSb.AppendLine('</div>')
+
+    [void]$lmSb.AppendLine('<p class="muted" style="margin-bottom:16px">Cost analysis based on <strong>90-day</strong> average ingestion and <strong>7-day</strong> query volume from LAQueryLogs. Tables where Lake + Aux cost is lower than Analytics cost are candidates for migration.</p>')
+
+    [void]$lmSb.AppendLine('<div class="table-controls"><div class="control-group"><label>Search</label><input type="text" class="tbl-search" placeholder="Filter by table name..."></div>')
+    [void]$lmSb.AppendLine('<div class="control-group"><label>Recommendation</label><select class="tbl-plan-filter"><option value="all">All</option><option value="Move to Lake">Move to Lake</option><option value="Keep in Analytics">Keep in Analytics</option></select></div></div>')
+
+    [void]$lmSb.AppendLine('<div class="table-wrap"><table class="main-table"><thead><tr>')
+    [void]$lmSb.AppendLine('<th data-col="0">Table</th><th data-col="1">Avg Hourly Ingestion (GB)</th><th data-col="2">Scanned (GB/wk)</th>')
+    [void]$lmSb.AppendLine('<th data-col="3">Queries</th><th data-col="4">Human</th><th data-col="5">Automated</th>')
+    [void]$lmSb.AppendLine('<th data-col="6">Analytics $/wk</th><th data-col="7">Lake Scan $/wk</th><th data-col="8">Aux $/wk</th>')
+    [void]$lmSb.AppendLine('<th data-col="9">Savings $/wk</th><th data-col="10">Recommendation</th>')
+    [void]$lmSb.AppendLine('</tr></thead><tbody>')
+
+    foreach ($row in $lakeMigrationData) {
+        $isMove = $row.CandidateForLakeOnly -eq 'Move to Lake'
+        $rowCls = $isMove ? 'row-change' : ''
+        $badge  = $isMove ? '<span class="badge badge-change">MOVE TO LAKE</span>' : '<span class="badge badge-ok">KEEP IN ANALYTICS</span>'
+        $deltaSign = if ([double]$row.CostDelta -gt 0) { '+' } else { '' }
+        $deltaColor = if ([double]$row.CostDelta -gt 0) { 'color:var(--green);font-weight:700' } else { 'color:var(--text-secondary)' }
+
+        [void]$lmSb.AppendLine("  <tr class=`"$rowCls`" data-plan=`"$($row.CandidateForLakeOnly)`">")
+        [void]$lmSb.AppendLine("    <td class=`"table-name`">$(HtmlEncode $row.DataType)</td>")
+        [void]$lmSb.AppendLine("    <td>$('{0:N4}' -f [double]$row.AvgHourlyIngestionGB)</td>")
+        [void]$lmSb.AppendLine("    <td>$('{0:N2}' -f [double]$row.TotalScannedSizeGB)</td>")
+        [void]$lmSb.AppendLine("    <td>$($row.DistinctQueryCount)</td>")
+        [void]$lmSb.AppendLine("    <td>$($row.HumanQueryCount)</td>")
+        [void]$lmSb.AppendLine("    <td>$($row.AutomatedQueryCount)</td>")
+        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.AnalyticsWeeklyCost)</td>")
+        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.ProjectedWeeklyKQLLakeCost)</td>")
+        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.AuxWeeklyCost)</td>")
+        [void]$lmSb.AppendLine("    <td style=`"$deltaColor`">$deltaSign`$$('{0:N2}' -f [double]$row.CostDelta)</td>")
+        [void]$lmSb.AppendLine("    <td>$badge</td>")
+        [void]$lmSb.AppendLine("  </tr>")
+    }
+
+    [void]$lmSb.AppendLine('</tbody></table></div>')
+    $lakeMigrationHtml = $lmSb.ToString()
+} else {
+    $lakeMigrationHtml = '<p class="muted">Lake migration cost analysis could not be performed. Ensure LAQueryLogs is enabled in the workspace.</p>'
+}
 
 # ── Sentinel Data Lake summary ───────────────────────────────────────────────────────────────
 $sdlHtml = ''
@@ -783,7 +931,7 @@ body{font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-seri
 .table-controls select{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;background:var(--bg);cursor:pointer}
 .expand-btn{margin-left:auto;padding:6px 14px;background:var(--bg-alt);border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text-secondary)}
 .expand-btn:hover{background:var(--border-light)}
-.table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.table-wrap{border:1px solid var(--border);border-radius:10px;overflow:auto;max-height:80vh}
 table.main-table{width:100%;border-collapse:collapse;font-size:.85rem}
 table.main-table thead th{background:var(--bg-alt);padding:10px 14px;text-align:left;font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);border-bottom:2px solid var(--border);position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
 table.main-table thead th:hover{color:var(--accent)}
@@ -873,6 +1021,7 @@ table.access-table .loc-archive td:first-child{color:var(--amber);font-weight:60
     <button class="tab-btn" data-tab="recs">Recommendations<span class="tab-count">$recWarnCount</span></button>
     <button class="tab-btn" data-tab="changes">Will Change<span class="tab-count">$changeCount</span></button>
     <button class="tab-btn" data-tab="unchanged">No Change<span class="tab-count">$unchangedCount</span></button>
+    <button class="tab-btn" data-tab="lakemigration">Lake Migration<span class="tab-count">$lakeMigrationCount</span></button>
   </div>
   <div class="tab-panel active" id="tab-summary">
     <h2>Sentinel Data Lake Transition Overview</h2>
@@ -904,6 +1053,10 @@ table.access-table .loc-archive td:first-child{color:var(--amber);font-weight:60
   <div class="tab-panel" id="tab-unchanged">
     <h2>Tables — No Change <span class="tab-count" style="font-size:.8rem">$unchangedCount</span></h2>
     $unchangedTableHtml
+  </div>
+  <div class="tab-panel" id="tab-lakemigration">
+    <h2>Lake Migration Cost Analysis <span class="tab-count" style="font-size:.8rem">$lakeMigrationCount tables &middot; $lakeMoveCandidates candidates</span></h2>
+    $lakeMigrationHtml
   </div>
   <footer class="report-footer">Sentinel Retention Assessment Report &middot; Generated $reportDate &middot; API 2025-07-01</footer>
 </div>
