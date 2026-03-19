@@ -61,6 +61,19 @@
     Path for the HTML report file. Defaults to
     SentinelRetentionReport_<workspace>_<timestamp>.html in the current directory.
 
+.PARAMETER AnalyticsIngestionCostPerGB
+    Analytics tier ingestion cost in USD per GB. Default: 2.30 (US East, simplified
+    commitment tier effective rate). Pay-as-you-go is 4.30/GB in most regions — set
+    this to match your actual pricing tier. Used in the Lake Migration Cost Analysis tab.
+
+.PARAMETER LakeIngestionCostPerGB
+    Sentinel Data Lake ingestion + data processing cost in USD per GB. Default: 0.15
+    (ingestion 0.05 + processing 0.10, US East). Used in the Lake Migration Cost Analysis tab.
+
+.PARAMETER LakeScanCostPerGB
+    Sentinel Data Lake KQL query scan cost in USD per GB. Default: 0.005 (US East).
+    Used in the Lake Migration Cost Analysis tab.
+
 .PARAMETER ThrottleMs
     Milliseconds between API calls. Default: 200.
 
@@ -78,10 +91,69 @@
         -TotalRetention     5y `
         -DataLakeAgeDays    7
 
+    Full report with all tables, 90-day hot retention, 5-year total retention,
+    and data access impact assessment for a workspace with Data Lake enabled 7 days ago.
+
+.EXAMPLE
+    .\Get-SentinelRetentionReport.ps1 `
+        -SubscriptionId    "00000000-0000-0000-0000-000000000000" `
+        -ResourceGroupName "rg-sentinel" `
+        -WorkspaceName     "law-sentinel-prod" `
+        -TableNames        "SigninLogs", "AADNonInteractiveUserSignInLogs"
+
+    Report on specific tables only, using default retention settings.
+
+.EXAMPLE
+    .\Get-SentinelRetentionReport.ps1 `
+        -SubscriptionId    "00000000-0000-0000-0000-000000000000" `
+        -ResourceGroupName "rg-sentinel" `
+        -WorkspaceName     "law-sentinel-prod" `
+        -AllTables `
+        -SkipEmpty `
+        -FilterPlan         Analytics `
+        -HotRetention       90d `
+        -TotalRetention     2y
+
+    Report only Analytics-plan tables that have ingested data in the last 90 days.
+
+.EXAMPLE
+    .\Get-SentinelRetentionReport.ps1 `
+        -SubscriptionId           "00000000-0000-0000-0000-000000000000" `
+        -ResourceGroupName        "rg-sentinel" `
+        -WorkspaceName            "law-sentinel-prod" `
+        -AllTables `
+        -SkipEmpty `
+        -HotRetention              90d `
+        -TotalRetention            5y `
+        -DataLakeAgeDays           7 `
+        -AnalyticsIngestionCostPerGB 4.30 `
+        -LakeIngestionCostPerGB     0.15 `
+        -LakeScanCostPerGB          0.005
+
+    Full report using pay-as-you-go Analytics pricing (4.30/GB) instead of the
+    default commitment tier rate (2.30/GB). The Lake Migration Cost Analysis tab
+    uses these values to calculate whether tables are cheaper in Analytics or
+    Sentinel Data Lake tier. Adjust all three cost parameters to match your
+    pricing tier and Azure region.
+
+.EXAMPLE
+    .\Get-SentinelRetentionReport.ps1 `
+        -SubscriptionId    "00000000-0000-0000-0000-000000000000" `
+        -ResourceGroupName "rg-sentinel" `
+        -WorkspaceName     "law-sentinel-prod" `
+        -AllTables `
+        -SkipEmpty `
+        -HotRetention       90d `
+        -TotalRetention     5y `
+        -OutputPath         "C:\Reports\sentinel-retention.html"
+
+    Save the report to a specific file path instead of the default location.
+
 .NOTES
     Authentication : Uses the current Az context (Connect-AzAccount).
     API Version    : 2025-07-01
     Author         : Toby G
+    Contributors   : @kapetanios55 (Lake Migration Cost Analysis)
     Requires       : Az.Accounts module
 #>
 
@@ -120,10 +192,21 @@ param (
 
     # ── Data Lake ────────────────────────────────────────────────────────────
     [ValidateRange(0, 4383)]
-    [int]$DataLakeAgeDays = -1,
+    [Nullable[int]]$DataLakeAgeDays,
 
     # ── Output ───────────────────────────────────────────────────────────────
     [string]$OutputPath,
+
+    # ── Lake Migration Cost Constants (USD, East US defaults) ────────────────
+    # Source: https://learn.microsoft.com/en-us/azure/sentinel/billing
+    [ValidateRange(0, 100)]
+    [double]$AnalyticsIngestionCostPerGB = 2.30,
+
+    [ValidateRange(0, 100)]
+    [double]$LakeIngestionCostPerGB = 0.15,
+
+    [ValidateRange(0, 100)]
+    [double]$LakeScanCostPerGB = 0.005,
 
     # ── Behaviour ────────────────────────────────────────────────────────────
     [int]$ThrottleMs = 200,
@@ -134,6 +217,7 @@ param (
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:Now = Get-Date
 
 #region ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -216,7 +300,7 @@ function Get-AllWorkspaceTables {
     do {
         $response = Invoke-LAApi -Uri $uri -Method 'GET' -Token $Token -Retries $Retries
         foreach ($t in $response.value) { $tables.Add($t) }
-        $uri = $response.PSObject.Properties['nextLink'] ? $response.nextLink : $null
+        $uri = ($response.PSObject.Properties['nextLink'] -and $response.nextLink) ? $response.nextLink : $null
     } while ($uri)
     Write-Host " $($tables.Count) tables found" -ForegroundColor Green
     return $tables
@@ -321,7 +405,7 @@ function Get-TransitionAdvice {
         }
         if ($LakeAgeDays -lt $ProposedHot) {
             $daysUntilCoverage = $ProposedHot - $LakeAgeDays
-            $coverageDate = (Get-Date).AddDays($daysUntilCoverage).ToString('yyyy-MM-dd')
+            $coverageDate = $script:Now.AddDays($daysUntilCoverage).ToString('yyyy-MM-dd')
             $warnings.Add(@{
                 Type = 'warning'
                 Text = "Lake coverage gap: Sentinel Data Lake has $LakeAgeDays days of mirrored data but analytics retention is $ProposedHot days. Full lake coverage in ~$daysUntilCoverage days ($coverageDate)."
@@ -339,7 +423,7 @@ function Get-TransitionAdvice {
     }
 
     $daysUntilFullCoverage = [Math]::Max(0, $ProposedHot - $LakeAgeDays)
-    $fullCoverageDate = (Get-Date).AddDays($daysUntilFullCoverage).ToString('yyyy-MM-dd')
+    $fullCoverageDate = $script:Now.AddDays($daysUntilFullCoverage).ToString('yyyy-MM-dd')
 
     if ($LakeAgeDays -lt $ProposedHot) {
         $warnings.Add(@{
@@ -377,7 +461,7 @@ function Get-TransitionAdvice {
     }
 
     $safeDaysToWait = [Math]::Max(0, $CurrentHot - $LakeAgeDays)
-    $safeDate = (Get-Date).AddDays($safeDaysToWait).ToString('yyyy-MM-dd')
+    $safeDate = $script:Now.AddDays($safeDaysToWait).ToString('yyyy-MM-dd')
 
     if ($LakeAgeDays -lt $CurrentHot) {
         $recommendations.Add(@{
@@ -410,17 +494,20 @@ function HtmlEncode ([string]$Text) {
 $HotRetentionDays   = ConvertTo-RetentionDays -Value $HotRetention   -AllowedValues $script:AllowedHotRetention   -ParameterName 'HotRetention'
 $TotalRetentionDays = ConvertTo-RetentionDays -Value $TotalRetention -AllowedValues $script:AllowedTotalRetention -ParameterName 'TotalRetention'
 
+if ($HotRetentionDays -eq -1)   { $HotRetentionDays   = $null }
+if ($TotalRetentionDays -eq -1) { $TotalRetentionDays = $null }
+
 if ($null -eq $HotRetentionDays -and $null -eq $TotalRetentionDays) {
     throw "At least one of -HotRetention or -TotalRetention must be specified."
 }
 if ($null -ne $HotRetentionDays -and $null -ne $TotalRetentionDays) {
-    if ($HotRetentionDays -ne -1 -and $TotalRetentionDays -ne -1 -and $TotalRetentionDays -lt $HotRetentionDays) {
+    if ($TotalRetentionDays -lt $HotRetentionDays) {
         throw "-TotalRetention ($TotalRetentionDays days) is less than -HotRetention ($HotRetentionDays days)."
     }
 }
 
 if (-not $OutputPath) {
-    $ts = (Get-Date).ToString('yyyyMMdd-HHmmss')
+    $ts = $script:Now.ToString('yyyyMMdd-HHmmss')
     $OutputPath = Join-Path (Get-Location) "SentinelRetentionReport_${WorkspaceName}_${ts}.html"
 }
 
@@ -532,7 +619,7 @@ foreach ($tableName in $resolvedTableNames) {
     # Data access impact
     $windows = $null
     $advice  = $null
-    if ($DataLakeAgeDays -ge 0 -and $willChange -and $curPlan -notin 'Basic', 'Auxiliary') {
+    if ($null -ne $DataLakeAgeDays -and $willChange -and $curPlan -notin 'Basic', 'Auxiliary') {
         $windows = Get-DataAccessWindows -CurrentHot $curHot -ProposedHot $propHot `
             -CurrentTotal $curTotal -ProposedTotal $propTotal -LakeAgeDays $DataLakeAgeDays
         $advice = Get-TransitionAdvice -CurrentHot $curHot -ProposedHot $propHot `
@@ -564,9 +651,12 @@ Write-Progress -Activity "Analysing tables" -Completed
 $lakeMigrationData = $null
 Write-Host "  Running lake migration cost analysis..." -NoNewline
 $lakeQuery = @"
-let analyticsIngestionCost = 2.30;
-let lakeScanCostPerGB = 0.005;
-let auxTierCostPerGBDay = 0.05;
+// Cost constants injected from script parameters — override with -AnalyticsIngestionCostPerGB, -LakeIngestionCostPerGB, -LakeScanCostPerGB
+// Defaults: US East, commitment tier rate. PAYG is 4.30/GB — set -AnalyticsIngestionCostPerGB accordingly
+// Source: https://learn.microsoft.com/en-us/azure/sentinel/billing
+let analyticsIngestionCost = $AnalyticsIngestionCostPerGB;
+let lakeScanCostPerGB = $LakeScanCostPerGB;
+let lakeIngestionCostPerGB = $LakeIngestionCostPerGB;
 let lookbackDays = 90;
 let queryLookbackDays = 7;
 let knownTables = toscalar(
@@ -606,11 +696,11 @@ LAQueryLogs
 | extend
     ProjectedWeeklyKQLLakeCost = TotalScannedSizeGB * lakeScanCostPerGB
     , AnalyticsWeeklyCost = AvgHourlyIngestionGB * analyticsIngestionCost * 24 * 7
-    , AuxWeeklyCost = AvgHourlyIngestionGB * auxTierCostPerGBDay * 24 * 7
+    , LakeIngestionWeeklyCost = AvgHourlyIngestionGB * lakeIngestionCostPerGB * 24 * 7
 | extend
-    CostDelta = AnalyticsWeeklyCost - (ProjectedWeeklyKQLLakeCost + AuxWeeklyCost)
+    CostDelta = AnalyticsWeeklyCost - (ProjectedWeeklyKQLLakeCost + LakeIngestionWeeklyCost)
     , CandidateForLakeOnly = iif(
-        AnalyticsWeeklyCost > ProjectedWeeklyKQLLakeCost + AuxWeeklyCost
+        AnalyticsWeeklyCost > ProjectedWeeklyKQLLakeCost + LakeIngestionWeeklyCost
         , "Move to Lake"
         , "Keep in Analytics")
 | project
@@ -622,7 +712,7 @@ LAQueryLogs
     , AutomatedQueryCount
     , AnalyticsWeeklyCost
     , ProjectedWeeklyKQLLakeCost
-    , AuxWeeklyCost
+    , LakeIngestionWeeklyCost
     , CostDelta
     , CandidateForLakeOnly
 | sort by CostDelta desc
@@ -657,10 +747,10 @@ catch {
 
 Write-Host "  Generating HTML report..." -NoNewline
 
-$reportDate     = (Get-Date).ToString('dd MMM yyyy HH:mm:ss')
+$reportDate     = $script:Now.ToString('dd MMM yyyy HH:mm:ss')
 $hotLabel       = ($null -ne $HotRetentionDays) ? (Format-RetentionFriendly $HotRetentionDays) : '(unchanged)'
 $totalLabel     = ($null -ne $TotalRetentionDays) ? (Format-RetentionFriendly $TotalRetentionDays) : '(unchanged)'
-$sdlLabel       = ($DataLakeAgeDays -ge 0) ? "$DataLakeAgeDays days" : 'Not specified'
+$sdlLabel       = ($null -ne $DataLakeAgeDays) ? "$DataLakeAgeDays days" : 'Not specified'
 $unchangedCount = @($tableData | Where-Object { $_.Status -eq 'unchanged' }).Count
 
 # ── Helper: build table rows HTML ─────────────────────────────────────────────
@@ -676,7 +766,7 @@ function Build-TableRowsHtml {
         $badge    = $t.Status -eq 'change' ? '<span class="badge badge-change">WILL CHANGE</span>' : '<span class="badge badge-ok">NO CHANGE</span>'
         $hotArrow   = ($t.CurHot -ne $t.PropHot)    ? "$(Format-RetentionFriendly $t.CurHot) &rarr; <strong>$(Format-RetentionFriendly $t.PropHot)</strong>" : (Format-RetentionFriendly $t.CurHot)
         $totalArrow = ($t.CurTotal -ne $t.PropTotal) ? "$(Format-RetentionFriendly $t.CurTotal) &rarr; <strong>$(Format-RetentionFriendly $t.PropTotal)</strong>" : (Format-RetentionFriendly $t.CurTotal)
-        $lakeVal    = $t.PropLake ? "$($t.PropLake)d" : '—'
+        $lakeVal    = ($t.PropLake -ge 0) ? "$($t.PropLake)d" : '—'
         $hotDef   = [bool]$t.HotDefault ? ' <span class="tag-default">ws-default</span>' : ''
         $totalDef = [bool]$t.TotalDefault ? ' <span class="tag-default">ws-default</span>' : ''
         $hasImpact  = $t.Windows -and $t.Windows.Count -gt 0
@@ -723,7 +813,7 @@ function Build-TableRowsHtml {
 # ── Split tables ──────────────────────────────────────────────────────────────
 $changedTables   = [System.Collections.Generic.List[hashtable]]::new()
 $unchangedTables = [System.Collections.Generic.List[hashtable]]::new()
-foreach ($t in ($tableData | Sort-Object { $_.Table })) {
+foreach ($t in ($tableData | Sort-Object { $_.Table } -Culture 'en-US')) {
     if ($t.Status -eq 'change' -or $t.Status -eq 'error') { $changedTables.Add($t) }
     else { $unchangedTables.Add($t) }
 }
@@ -776,7 +866,7 @@ if ($lakeMigrationData -and $lakeMigrationData.Count -gt 0) {
     [void]$lmSb.AppendLine("  <div class=`"summary-card`" style=`"border-color:var(--green)`"><div class=`"num`" style=`"color:var(--green)`">`$$totalSavingsStr</div><div class=`"label`">Potential Weekly Savings</div></div>")
     [void]$lmSb.AppendLine('</div>')
 
-    [void]$lmSb.AppendLine('<p class="muted" style="margin-bottom:16px">Cost analysis based on <strong>90-day</strong> average ingestion and <strong>7-day</strong> query volume from LAQueryLogs. Tables where Lake + Aux cost is lower than Analytics cost are candidates for migration.</p>')
+    [void]$lmSb.AppendLine('<p class="muted" style="margin-bottom:16px">Cost analysis based on <strong>90-day</strong> average ingestion and <strong>7-day</strong> query volume from LAQueryLogs. Tables where Data Lake ingestion + scan cost is lower than Analytics cost are candidates for migration. Pricing: Analytics `$$("{0:N2}" -f $AnalyticsIngestionCostPerGB)/GB, Lake ingestion `$$("{0:N2}" -f $LakeIngestionCostPerGB)/GB, Lake scan `$$("{0:N3}" -f $LakeScanCostPerGB)/GB.</p>')
 
     [void]$lmSb.AppendLine('<div class="table-controls"><div class="control-group"><label>Search</label><input type="text" class="tbl-search" placeholder="Filter by table name..."></div>')
     [void]$lmSb.AppendLine('<div class="control-group"><label>Recommendation</label><select class="tbl-plan-filter"><option value="all">All</option><option value="Move to Lake">Move to Lake</option><option value="Keep in Analytics">Keep in Analytics</option></select></div></div>')
@@ -784,30 +874,37 @@ if ($lakeMigrationData -and $lakeMigrationData.Count -gt 0) {
     [void]$lmSb.AppendLine('<div class="table-wrap"><table class="main-table"><thead><tr>')
     [void]$lmSb.AppendLine('<th data-col="0">Table</th><th data-col="1">Avg Hourly Ingestion (GB)</th><th data-col="2">Scanned (GB/wk)</th>')
     [void]$lmSb.AppendLine('<th data-col="3">Queries</th><th data-col="4">Human</th><th data-col="5">Automated</th>')
-    [void]$lmSb.AppendLine('<th data-col="6">Analytics $/wk</th><th data-col="7">Lake Scan $/wk</th><th data-col="8">Aux $/wk</th>')
+    [void]$lmSb.AppendLine('<th data-col="6">Analytics $/wk</th><th data-col="7">Lake Scan $/wk</th><th data-col="8">Lake Ingestion $/wk</th>')
     [void]$lmSb.AppendLine('<th data-col="9">Savings $/wk</th><th data-col="10">Recommendation</th>')
     [void]$lmSb.AppendLine('</tr></thead><tbody>')
 
-    foreach ($row in $lakeMigrationData) {
-        $isMove = $row.CandidateForLakeOnly -eq 'Move to Lake'
-        $rowCls = $isMove ? 'row-change' : ''
-        $badge  = $isMove ? '<span class="badge badge-change">MOVE TO LAKE</span>' : '<span class="badge badge-ok">KEEP IN ANALYTICS</span>'
-        $deltaSign = if ([double]$row.CostDelta -gt 0) { '+' } else { '' }
-        $deltaColor = if ([double]$row.CostDelta -gt 0) { 'color:var(--green);font-weight:700' } else { 'color:var(--text-secondary)' }
+    try {
+        foreach ($row in $lakeMigrationData) {
+            $isMove = $row.CandidateForLakeOnly -eq 'Move to Lake'
+            $rowCls = $isMove ? 'row-change' : ''
+            $badge  = $isMove ? '<span class="badge badge-change">MOVE TO LAKE</span>' : '<span class="badge badge-ok">KEEP IN ANALYTICS</span>'
+            $costDelta  = [double]($row.CostDelta ?? 0)
+            $deltaSign  = ($costDelta -gt 0) ? '+' : ''
+            $deltaColor = ($costDelta -gt 0) ? 'color:var(--green);font-weight:700' : 'color:var(--text-secondary)'
 
-        [void]$lmSb.AppendLine("  <tr class=`"$rowCls`" data-plan=`"$($row.CandidateForLakeOnly)`">")
-        [void]$lmSb.AppendLine("    <td class=`"table-name`">$(HtmlEncode $row.DataType)</td>")
-        [void]$lmSb.AppendLine("    <td>$('{0:N4}' -f [double]$row.AvgHourlyIngestionGB)</td>")
-        [void]$lmSb.AppendLine("    <td>$('{0:N2}' -f [double]$row.TotalScannedSizeGB)</td>")
-        [void]$lmSb.AppendLine("    <td>$($row.DistinctQueryCount)</td>")
-        [void]$lmSb.AppendLine("    <td>$($row.HumanQueryCount)</td>")
-        [void]$lmSb.AppendLine("    <td>$($row.AutomatedQueryCount)</td>")
-        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.AnalyticsWeeklyCost)</td>")
-        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.ProjectedWeeklyKQLLakeCost)</td>")
-        [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]$row.AuxWeeklyCost)</td>")
-        [void]$lmSb.AppendLine("    <td style=`"$deltaColor`">$deltaSign`$$('{0:N2}' -f [double]$row.CostDelta)</td>")
-        [void]$lmSb.AppendLine("    <td>$badge</td>")
-        [void]$lmSb.AppendLine("  </tr>")
+            [void]$lmSb.AppendLine("  <tr class=`"$rowCls`" data-plan=`"$(HtmlEncode $row.CandidateForLakeOnly)`">")
+            [void]$lmSb.AppendLine("    <td class=`"table-name`">$(HtmlEncode $row.DataType)</td>")
+            [void]$lmSb.AppendLine("    <td>$('{0:N4}' -f [double]($row.AvgHourlyIngestionGB ?? 0))</td>")
+            [void]$lmSb.AppendLine("    <td>$('{0:N2}' -f [double]($row.TotalScannedSizeGB ?? 0))</td>")
+            [void]$lmSb.AppendLine("    <td>$($row.DistinctQueryCount ?? 0)</td>")
+            [void]$lmSb.AppendLine("    <td>$($row.HumanQueryCount ?? 0)</td>")
+            [void]$lmSb.AppendLine("    <td>$($row.AutomatedQueryCount ?? 0)</td>")
+            [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]($row.AnalyticsWeeklyCost ?? 0))</td>")
+            [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]($row.ProjectedWeeklyKQLLakeCost ?? 0))</td>")
+            [void]$lmSb.AppendLine("    <td>`$$('{0:N2}' -f [double]($row.LakeIngestionWeeklyCost ?? 0))</td>")
+            [void]$lmSb.AppendLine("    <td style=`"$deltaColor`">$deltaSign`$$('{0:N2}' -f $costDelta)</td>")
+            [void]$lmSb.AppendLine("    <td>$badge</td>")
+            [void]$lmSb.AppendLine("  </tr>")
+        }
+    }
+    catch {
+        Write-Warning "  Error rendering lake migration row: $_"
+        [void]$lmSb.AppendLine('<tr><td colspan="11" class="error-cell">Error rendering row data</td></tr>')
     }
 
     [void]$lmSb.AppendLine('</tbody></table></div>')
@@ -818,7 +915,7 @@ if ($lakeMigrationData -and $lakeMigrationData.Count -gt 0) {
 
 # ── Sentinel Data Lake summary ───────────────────────────────────────────────────────────────
 $sdlHtml = ''
-if ($DataLakeAgeDays -ge 0) {
+if ($null -ne $DataLakeAgeDays) {
     $sdlHtml = @"
       <div class="facts-grid facts-3col">
         <div class="fact-card fact-green">
@@ -1070,7 +1167,7 @@ document.querySelectorAll('.main-table').forEach(tbl=>{let sc=-1,sa=true;tbl.que
 </html>
 "@
 
-$html | Out-File -FilePath $OutputPath -Encoding UTF8
+$html | Out-File -FilePath $OutputPath -Encoding utf8NoBOM
 Write-Host " Done" -ForegroundColor Green
 Write-Host "`n  Report saved to: $OutputPath`n" -ForegroundColor Cyan
 
