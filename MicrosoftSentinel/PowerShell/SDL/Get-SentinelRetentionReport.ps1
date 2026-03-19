@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Queries all (or selected) tables in a workspace via the Azure REST API
-    (2025-07-01), computes proposed retention changes, and produces a self-contained
+    (Tables: 2025-07-01, Query: 2020-08-01), computes proposed retention changes, and produces a self-contained
     HTML report with:
 
       • Executive summary with table counts and change breakdown
@@ -151,7 +151,8 @@
 
 .NOTES
     Authentication : Uses the current Az context (Connect-AzAccount).
-    API Version    : 2025-07-01
+    Tables API     : 2025-07-01
+    Query API      : 2020-08-01
     Author         : Toby G
     Contributors   : @kapetanios55 (Lake Migration Cost Analysis)
     Requires       : Az.Accounts module
@@ -263,11 +264,16 @@ function ConvertTo-RetentionDays {
     throw "-$ParameterName '$Value' is not valid. Allowed: $allowedList"
 }
 
+$script:TablesApiVersion = '2025-07-01'
+$script:QueryApiVersion  = '2020-08-01'
+
+$script:DaysToLabel = @{ -1 = '-' }
+foreach ($key in $script:AllowedTotalRetention.Keys) {
+    if ($key -ne 'default') { $script:DaysToLabel[$script:AllowedTotalRetention[$key]] = $key }
+}
+
 function Format-RetentionFriendly ([int]$Days) {
-    $map = @{ -1='-'; 30='30d'; 60='60d'; 90='90d'; 120='120d'; 180='180d'; 270='270d'
-              365='1y'; 547='1.5y'; 730='2y'; 1095='3y'; 1460='4y'; 1826='5y'
-              2191='6y'; 2556='7y'; 2922='8y'; 3288='9y'; 3653='10y'; 4018='11y'; 4383='12y' }
-    $map.ContainsKey($Days) ? $map[$Days] : "${Days}d"
+    $script:DaysToLabel.ContainsKey($Days) ? $script:DaysToLabel[$Days] : "${Days}d"
 }
 
 function Get-AzBearerToken {
@@ -314,7 +320,7 @@ function Invoke-LAApi {
 function Get-AllWorkspaceTables {
     param ([string]$BaseUri, [string]$Token, [int]$Retries)
     Write-Host "  Enumerating workspace tables..." -NoNewline
-    $uri = "$BaseUri/tables?api-version=2025-07-01"
+    $uri = "$BaseUri/tables?api-version=$script:TablesApiVersion"
     $tables = [System.Collections.Generic.List[object]]::new()
     do {
         $response = Invoke-LAApi -Uri $uri -Method 'GET' -Token $Token -Retries $Retries
@@ -329,21 +335,28 @@ function Get-SafeProperty ($Obj, [string]$Name, $Default = $null) {
     ($Obj -and $Obj.PSObject.Properties[$Name]) ? $Obj.$Name : $Default
 }
 
+function Add-AnalyticsCoverageWindows {
+    param ([System.Collections.Generic.List[hashtable]]$Windows, [int]$ProposedHot, [int]$LakeAgeDays)
+    $dualEnd = [Math]::Min($LakeAgeDays, $ProposedHot)
+    if ($dualEnd -gt 0) {
+        $Windows.Add(@{ Start = 0; End = $dualEnd; Where = 'Analytics + Data Lake'; Access = 'Interactive KQL, mirrored to lake'; Class = 'loc-analytics' })
+    }
+    if ($LakeAgeDays -lt $ProposedHot) {
+        $catchUpDays = $ProposedHot - $LakeAgeDays
+        $Windows.Add(@{ Start = $dualEnd; End = $ProposedHot; Where = 'Analytics only'; Access = "Interactive KQL — lake catches up in ~${catchUpDays}d"; Class = 'loc-analytics' })
+    }
+    return $dualEnd
+}
+
 function Get-DataAccessWindows {
     param ([int]$CurrentHot, [int]$ProposedHot, [int]$CurrentTotal, [int]$ProposedTotal, [int]$LakeAgeDays)
 
     $windows = [System.Collections.Generic.List[hashtable]]::new()
     $isReduction = $ProposedHot -lt $CurrentHot
 
+    $null = Add-AnalyticsCoverageWindows -Windows $windows -ProposedHot $ProposedHot -LakeAgeDays $LakeAgeDays
+
     if ($isReduction) {
-        $dualEnd = [Math]::Min($LakeAgeDays, $ProposedHot)
-        if ($dualEnd -gt 0) {
-            $windows.Add(@{ Start = 0; End = $dualEnd; Where = 'Analytics + Data Lake'; Access = 'Interactive KQL, mirrored to lake'; Class = 'loc-analytics' })
-        }
-        if ($LakeAgeDays -lt $ProposedHot) {
-            $catchUpDays = $ProposedHot - $LakeAgeDays
-            $windows.Add(@{ Start = $dualEnd; End = $ProposedHot; Where = 'Analytics only'; Access = "Interactive KQL — lake catches up in ~${catchUpDays}d"; Class = 'loc-analytics' })
-        }
         if ($LakeAgeDays -gt $ProposedHot) {
             $lakeEnd = [Math]::Min($LakeAgeDays, $CurrentHot)
             if ($lakeEnd -gt $ProposedHot) {
@@ -363,14 +376,6 @@ function Get-DataAccessWindows {
         }
     }
     else {
-        $dualEnd = [Math]::Min($LakeAgeDays, $ProposedHot)
-        if ($dualEnd -gt 0) {
-            $windows.Add(@{ Start = 0; End = $dualEnd; Where = 'Analytics + Data Lake'; Access = 'Interactive KQL, mirrored to lake'; Class = 'loc-analytics' })
-        }
-        if ($LakeAgeDays -lt $ProposedHot) {
-            $catchUpDays = $ProposedHot - $LakeAgeDays
-            $windows.Add(@{ Start = $dualEnd; End = $ProposedHot; Where = 'Analytics only'; Access = "Interactive KQL — lake catches up in ~${catchUpDays}d"; Class = 'loc-analytics' })
-        }
         if ($ProposedHot -lt $ProposedTotal) {
             $ltStart = $ProposedHot
             $lakeWindow = [Math]::Min($LakeAgeDays, $ProposedTotal) - $ltStart
@@ -558,7 +563,7 @@ if ($AllTables) {
     }
     if ($SkipEmpty) {
         Write-Host "  Querying Usage table..." -NoNewline
-        $queryUri  = "$baseUri/api/query?api-version=2020-08-01"
+        $queryUri  = "$baseUri/api/query?api-version=$script:QueryApiVersion"
         $queryBody = @{ query = "Usage | where TimeGenerated > ago(90d) | distinct DataType" }
         try {
             $queryResp   = Invoke-LAApi -Uri $queryUri -Method 'POST' -Token $token -Body $queryBody -Retries $MaxRetries
@@ -597,7 +602,7 @@ foreach ($tableName in $resolvedTableNames) {
         $cachedObj = $allTableObjects | Where-Object { $_.name -eq $tableName } | Select-Object -First 1
         $current = $cachedObj ? $cachedObj.properties : $null
     } else {
-        $uri = "$baseUri/tables/${tableName}?api-version=2025-07-01"
+        $uri = "$baseUri/tables/${tableName}?api-version=$script:TablesApiVersion"
         try   { $current = (Invoke-LAApi -Uri $uri -Method 'GET' -Token $token -Retries $MaxRetries).properties }
         catch { $current = $null }
     }
@@ -737,7 +742,7 @@ LAQueryLogs
 | sort by CostDelta desc
 "@
 try {
-    $lakeQueryUri  = "$baseUri/api/query?api-version=2020-08-01"
+    $lakeQueryUri  = "$baseUri/api/query?api-version=$script:QueryApiVersion"
     $lakeQueryBody = @{ query = $lakeQuery }
     $lakeQueryResp = Invoke-LAApi -Uri $lakeQueryUri -Method 'POST' -Token $token -Body $lakeQueryBody -Retries $MaxRetries
     $lakeColumns   = $lakeQueryResp.tables[0].columns
@@ -1122,7 +1127,7 @@ table.access-table .loc-archive td:first-child{color:var(--amber);font-weight:60
       <div class="meta-item"><div class="meta-label">Proposed Total</div><div class="meta-value">$totalLabel</div></div>
       <div class="meta-item"><div class="meta-label">Sentinel Data Lake Age</div><div class="meta-value">$sdlLabel</div></div>
       <div class="meta-item"><div class="meta-label">Generated</div><div class="meta-value">$reportDate</div></div>
-      <div class="meta-item"><div class="meta-label">API Version</div><div class="meta-value">2025-07-01</div></div>
+      <div class="meta-item"><div class="meta-label">API Versions</div><div class="meta-value" style="font-size:.78rem">Tables: $script:TablesApiVersion &middot; Query: $script:QueryApiVersion</div></div>
     </div>
   </header>
   <div class="summary-row">
@@ -1174,7 +1179,7 @@ table.access-table .loc-archive td:first-child{color:var(--amber);font-weight:60
     <h2>Lake Migration Cost Analysis <span class="tab-count" style="font-size:.8rem">$lakeMigrationCount tables &middot; $lakeMoveCandidates candidates</span></h2>
     $lakeMigrationHtml
   </div>
-  <footer class="report-footer">Sentinel Retention Assessment Report &middot; Generated $reportDate &middot; API 2025-07-01</footer>
+  <footer class="report-footer">Sentinel Retention Assessment Report &middot; Generated $reportDate &middot; Tables API $script:TablesApiVersion &middot; Query API $script:QueryApiVersion</footer>
 </div>
 <script>
 document.querySelectorAll('.tab-btn').forEach(b=>{b.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('tab-'+b.dataset.tab).classList.add('active')})});
