@@ -219,6 +219,25 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:Now = Get-Date
 
+#region ── Prerequisites ───────────────────────────────────────────────────────
+
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    throw "This script requires PowerShell 7.0 or later (latest stable: 7.5). Current version: $($PSVersionTable.PSVersion). Install from https://aka.ms/powershell"
+}
+
+if (-not (Get-Module -ListAvailable -Name Az.Accounts)) {
+    throw "Az.Accounts module is not installed. Run: Install-Module Az.Accounts -Scope CurrentUser"
+}
+
+$azContext = Get-AzContext -ErrorAction SilentlyContinue
+if (-not $azContext) {
+    throw "No Azure context found. Run Connect-AzAccount before executing this script."
+}
+
+Write-Host "  Authenticated as: $($azContext.Account.Id)" -ForegroundColor DarkGray
+
+#endregion
+
 #region ── Helpers ──────────────────────────────────────────────────────────────
 
 $script:AllowedHotRetention = [ordered]@{
