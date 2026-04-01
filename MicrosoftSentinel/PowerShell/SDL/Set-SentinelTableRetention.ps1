@@ -1038,7 +1038,8 @@ foreach ($tableName in $resolvedTableNames) {
     try {
         Write-Host "`n  Applying '$tableName'..." -NoNewline
         $response  = Invoke-LAApi -Uri $patchUri -Method 'PATCH' -Token $token -Body $body -Retries $MaxRetries
-        $provState = $response.properties.provisioningState
+        $respProps = ($response -and $response.PSObject.Properties['properties']) ? $response.properties : $null
+        $provState = ($respProps -and $respProps.PSObject.Properties['provisioningState']) ? $respProps.provisioningState : 'Unknown'
 
         $statusMsg = ($provState -eq 'Succeeded') ? 'Success' : "Pending - $provState"
         $msgColor  = ($provState -eq 'Succeeded') ? 'Green'   : 'Yellow'
@@ -1049,15 +1050,19 @@ foreach ($tableName in $resolvedTableNames) {
             Write-Host "    Re-run with -DryRun to verify the final state once provisioning completes." -ForegroundColor DarkYellow
         }
 
+        $respHot   = ($respProps -and $respProps.PSObject.Properties['retentionInDays'])      ? $respProps.retentionInDays      : $propHot
+        $respTotal = ($respProps -and $respProps.PSObject.Properties['totalRetentionInDays'])  ? $respProps.totalRetentionInDays  : $propTotal
+        $respLake  = ($respProps -and $respProps.PSObject.Properties['archiveRetentionInDays'])? $respProps.archiveRetentionInDays : $propLake
+
         $results.Add([PSCustomObject]@{
             Table         = $tableName
             Plan          = $curPlan
             TableType     = $curType
             CurrentHot    = $curHot
             CurrentTotal  = $curTotal
-            ProposedHot   = $response.properties.retentionInDays
-            ProposedTotal = $response.properties.totalRetentionInDays
-            LakeDays      = $response.properties.archiveRetentionInDays
+            ProposedHot   = $respHot
+            ProposedTotal = $respTotal
+            LakeDays      = $respLake
             Status        = $statusMsg
         })
         $changeCount++
