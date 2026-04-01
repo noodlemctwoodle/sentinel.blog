@@ -460,7 +460,12 @@ function Get-AllWorkspaceTables {
 function Get-TableCurrentState {
     param ([string]$TableName, [string]$BaseUri, [string]$Token, [int]$Retries)
     $uri = "$BaseUri/tables/${TableName}?api-version=2025-07-01"
-    try   { return (Invoke-LAApi -Uri $uri -Method 'GET' -Token $Token -Retries $Retries).properties }
+    try {
+        $response = Invoke-LAApi -Uri $uri -Method 'GET' -Token $Token -Retries $Retries
+        if ($response -and $response.PSObject.Properties['properties']) { return $response.properties }
+        Write-Warning "  GET response for '$TableName' has no 'properties' envelope — PATCH may also lack it"
+        return $null
+    }
     catch { Write-Warning "  Could not retrieve state for '$TableName': $_"; return $null }
 }
 
@@ -861,11 +866,16 @@ if ($AllTables) {
     $allTableObjects = Get-AllWorkspaceTables -BaseUri $baseUri -Token $token -Retries $MaxRetries
 
     if ($FilterPlan) {
-        $allTableObjects = @($allTableObjects | Where-Object { $_.properties.plan -in $FilterPlan })
+        $allTableObjects = @($allTableObjects | Where-Object {
+            $_.PSObject.Properties['properties'] -and $_.properties.PSObject.Properties['plan'] -and $_.properties.plan -in $FilterPlan
+        })
         Write-Host "  After plan filter    : $($allTableObjects.Count) tables"
     }
     if ($FilterTableType) {
-        $allTableObjects = @($allTableObjects | Where-Object { $_.properties.schema.tableType -in $FilterTableType })
+        $allTableObjects = @($allTableObjects | Where-Object {
+            $_.PSObject.Properties['properties'] -and $_.properties.PSObject.Properties['schema'] -and
+            $_.properties.schema.PSObject.Properties['tableType'] -and $_.properties.schema.tableType -in $FilterTableType
+        })
         Write-Host "  After type filter    : $($allTableObjects.Count) tables"
     }
     if ($SkipEmpty) {
@@ -919,7 +929,7 @@ foreach ($tableName in $resolvedTableNames) {
     # Reuse list-response properties when AllTables (saves API calls at scale)
     if ($allTableObjects) {
         $cachedObj = $allTableObjects | Where-Object { $_.name -eq $tableName } | Select-Object -First 1
-        $current   = $cachedObj ? $cachedObj.properties : $null
+        $current   = ($cachedObj -and $cachedObj.PSObject.Properties['properties']) ? $cachedObj.properties : $null
     } else {
         $current = Get-TableCurrentState -TableName $tableName -BaseUri $baseUri -Token $token -Retries $MaxRetries
     }
