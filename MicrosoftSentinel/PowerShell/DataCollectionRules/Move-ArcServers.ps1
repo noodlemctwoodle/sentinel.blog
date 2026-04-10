@@ -236,7 +236,7 @@ $banner = @'
 #   parent machine resource.                                                   #
 #                                                                              #
 #   CONSTRAINTS ENFORCED BY THIS SCRIPT                                        #
-#     - Source and destination must be in the same Microsoft Entra tenant.    #
+#     - Source and destination must be in the same Microsoft Entra tenant.     #
 #     - Destination RG must exist and be in the same Azure region as           #
 #       every machine being moved.                                             #
 #                                                                              #
@@ -314,7 +314,7 @@ if ($badRegion) {
 
 # ---- 5. Pre-flight validate via ARM (official dry run) ----
 # https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#validate-move
-$resourceIds = $machines.ResourceId
+$resourceIds = @($machines.ResourceId)
 $validateBody = @{
     resources           = $resourceIds
     targetResourceGroup = "/subscriptions/$DestinationSubscriptionId/resourceGroups/$DestinationResourceGroup"
