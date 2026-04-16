@@ -349,7 +349,46 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n## \ud83d\udcca Current Workspace Footprint"
+                            "json": "### Regional pricing reminder\n\nDefault rates are **USD East US**. North Europe and other regions typically run 5\u201310% higher on Analytics meters and similar on lake meters.\n\nFor customer-facing numbers, always validate via the [Azure pricing calculator](https://azure.microsoft.com/en-gb/pricing/calculator/) and override the *Rate override* field in the pricing inputs above. The auto-derived rates from the dropdown are reference figures only.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-overview-regional"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### Pricing model gotchas\n\n- **Commitment Tier**: moving tables out of Analytics reduces consumption but you still pay the daily commitment floor until you downgrade \u2014 **31-day minimum lock**. Model the saving as it would be *after* a CT downgrade, not before.\n- **Dedicated Cluster**: commitment is aggregated across cluster workspaces. Per-workspace moves only translate to actual billing savings if total cluster volume crosses a lower tier boundary.\n- **Pre-purchased Commit Units**: Sentinel cost deducts automatically from the CU pool. Moving tables to lake shifts consumption from the CU meter to the new lake meters, which **don't draw from the CU pool** \u2014 so you may end up paying twice (CU floor + lake usage) until the term ends.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-overview-pricing"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### Defender for Servers P2 / M365 E5 benefits\n\n- **Defender for Servers P2**: 500 MB/server/day free on eligible tables (primarily SecurityEvent).\n- **M365 E5**: ~5 MB/user/day free on Entra / XDR-related tables.\n\nThe `Usage` table's `IsBillable` flag already excludes these allowances, so workbook figures already reflect them. No manual adjustment needed.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-overview-benefits"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Current Workspace Footprint"
                         },
                         "name": "footprint-header"
                     },
@@ -378,11 +417,33 @@
                             }
                         },
                         "name": "current-footprint"
+                    }
+                ]
+            },
+            "conditionalVisibility": {
+                "parameterName": "selectedTab",
+                "comparison": "isEqualTo",
+                "value": "overview"
+            },
+            "name": "group-overview"
+        },
+        {
+            "type": 12,
+            "content": {
+                "version": "NotebookGroup/1.0",
+                "groupType": "editable",
+                "items": [
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Ingestion-Based Analysis\n\nConservative model using only `Usage` table telemetry. Works on any workspace \u2014 no extra diagnostics required. Assumes you'd move the entire table to lake-only (fill-forward). **Excludes query cost** \u2014 see *Query-Weighted Analysis* tab for a more honest prediction if `LAQueryLogs` is enabled."
+                        },
+                        "name": "ingestion-header"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \u2139\ufe0f About this workbook\n\nHelps you decide which Sentinel tables to migrate from the **Analytics tier** to the **Data Lake tier** by comparing two cost models:\n\n- **Ingestion-based** \u2014 uses only the `Usage` table, conservative, works on every workspace. Best for first-pass identification.\n- **Query-weighted** \u2014 adds real query scan patterns from `LAQueryLogs`. Better for honest cost prediction once you've shortlisted candidates.\n\n**Recommended workflow**: shortlist on the Ingestion tab \u2192 confirm on the Query-Weighted tab if LAQueryLogs is enabled \u2192 verify nothing detection-critical depends on the table via Rule Coverage \u2192 apply the change in *Defender \u2192 Sentinel \u2192 Settings \u2192 Tables*.",
+                            "json": "### Decision tree\n\n1. Identify the top ~10 tables by saving above. Anything marked \u2705 *Verbose/low-fidelity* or \ud83d\udfe2 *Custom log* with no rule references in the drill-down is a safe move.\n2. Cross-check on **Query-Weighted Analysis** if LAQueryLogs is enabled. A table that looks great in ingestion but shows heavy automated query patterns may cost more in the lake once the query meter is factored in.\n3. For \u26a0\ufe0f tables with rule references: keep in Analytics, DCR-split the verbose columns, or replace the rule with a KQL Job that promotes lake hits to Analytics on a schedule.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -824,7 +885,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udccb Per-Table Query-Weighted Cost Model\n\nScan volume is estimated as `avgHourlyIngestionGB \u00d7 queryTimeRangeHours` \u2014 a conservative upper bound. The model compares:\n\n- **Analytics weekly cost** = weekly ingestion \u00d7 effective Analytics rate\n- **Lake weekly cost** = weekly ingestion \u00d7 (lake ingest + processing) + amortised storage + actual query scan \u00d7 lake query price"
+                            "json": "### Per-Table Query-Weighted Cost Model\n\nScan volume is estimated as `avgHourlyIngestionGB \u00d7 queryTimeRangeHours` \u2014 a conservative upper bound. The model compares:\n\n- **Analytics weekly cost** = weekly ingestion \u00d7 effective Analytics rate\n- **Lake weekly cost** = weekly ingestion \u00d7 (lake ingest + processing) + amortised storage + actual query scan \u00d7 lake query price"
                         },
                         "name": "queryweighted-table-header"
                     },
@@ -931,12 +992,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-querywt-method"
+                        "name": "guidance-rules-matrix"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \u26a0\ufe0f Methodology caveats\n\n- **Scan volume is an upper bound.** Filtered queries (with narrow `where` clauses) scan less than `avgHourlyIngestionGB \u00d7 queryTimeRangeHours`. Real lake query cost will be lower than projected \u2014 this biases recommendations toward 'keep in analytics' which is the safer default.\n- **Regex misses some references.** The `extract_all` pattern catches pipeline-start table references (`TableName | where ...`) but may miss `union *` wildcards, `search in (Table1, Table2)` syntax, or table references inside subqueries.\n- **ASIM and parser functions are invisible.** Rules using `_Im_NetworkSession()` etc. don't surface the underlying tables \u2014 the analysis assumes direct references only.\n- **Tables with zero queries in the lookback show zero query cost.** They're correctly identified as ideal lake candidates, but if a quarterly or annual query exists outside the window, you'd hit unexpected lake query cost when it next runs.",
+                            "json": "### Why we can't auto-resolve parsers\n\nThe rule-by-table search above uses **string matching against rule KQL bodies**. It catches `CommonSecurityLog | where ...` but not `_Im_NetworkSession() | where ...` \u2014 even though that ASIM parser may resolve to CommonSecurityLog, ASimNetworkSessionLogs, and several others.\n\n**Auto-resolution would require:**\n- Parsing every parser function definition (call to `Microsoft.OperationalInsights/savedSearches`)\n- Recursively expanding nested function calls\n- Maintaining a function \u2192 tables index that survives parser updates\n\n**Pragmatic workaround**: if your environment is ASIM-heavy, run `search '<TableName>'` across all `savedSearches` definitions before moving any table. Or maintain a `function \u2192 tables` lookup as part of your Sentinel-As-Code repo.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -1133,11 +1194,41 @@
                             "visualization": "piechart"
                         },
                         "name": "severity-dist-chart"
+                    }
+                ]
+            },
+            "conditionalVisibility": {
+                "parameterName": "selectedTab",
+                "comparison": "isEqualTo",
+                "value": "rules"
+            },
+            "name": "group-rules"
+        },
+        {
+            "type": 12,
+            "content": {
+                "version": "NotebookGroup/1.0",
+                "groupType": "editable",
+                "items": [
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Defender XDR Advanced Hunting \u2014 Cost Analysis\n\nEstimates size and cost delta for migrating Defender XDR Advanced Hunting tables (`DeviceProcessEvents`, `EmailEvents` etc.) from Analytics to Lake tier. Uses `estimate_data_size(*)` because XDR tables aren't tracked in `Usage`.\n\n**Prerequisites:**\n- This workbook must be opened in the **Defender unified SOC portal** (`security.microsoft.com`) \u2014 not plain Azure portal \u2014 so Advanced Hunting tables are in query scope.\n- The tenant must have Defender XDR licensed and the corresponding workloads ingested (Defender for Endpoint, for Office 365, for Identity, for Cloud Apps).\n\nMissing tables are tolerated via `union isfuzzy=true` \u2014 workloads you don't license simply won't appear in the results."
+                        },
+                        "name": "xdr-header"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83c\udfaf Detection impact decision matrix\n\nWhen a table appears in the rule list AND its rules show recent alerts:\n\n| Rule severity | Recent alerts | Verdict |\n|---|---|---|\n| High / Critical | Any | \ud83d\udd34 Keep in analytics \u2014 detection-critical |\n| Medium | > 10 in window | \ud83d\udfe0 Review \u2014 quantify detection value vs. saving |\n| Medium | < 10 in window | \ud83d\udfe1 Consider DCR column split |\n| Low / Informational | Any | \ud83d\udfe1 Likely safe with DCR split or KQL Job |\n| Any | Zero in 90 days | \u26aa Detection-dormant \u2014 safe to move |",
+                            "json": "> \u26a0\ufe0f **If the tables below return no data**, your Sentinel workspace isn't receiving Defender XDR data. XDR Advanced Hunting tables live in Defender's own data store and are only queryable from this workbook if the **Defender XDR data connector** is configured to stream them into Sentinel, OR if you're running this workbook in the Defender unified SOC portal.\n\nFor the common case where XDR data stays in Advanced Hunting only, scroll to the **Standalone query** section at the bottom of this tab \u2014 copy the KQL and run it directly at [security.microsoft.com/advanced-hunting](https://security.microsoft.com/advanced-hunting).",
+                            "style": "warning"
+                        },
+                        "name": "xdr-fallback-warning"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### \u2139\ufe0f About the XDR cost model\n\nAccuracy considerations specific to XDR tables:\n\n- **`estimate_data_size(*)` vs billed ingestion** \u2014 `estimate_data_size` returns the approximate serialised size of each row, which is close to but **not identical to** billed ingestion. For XDR tables mirrored to Log Analytics, billing uses the same volume measurement as other Sentinel tables.\n- **XDR Advanced Hunting retention is 30 days free by default** \u2014 longer retention (up to 12 years via Defender XDR data lake) incurs cost on the new lake meters.\n- **Not all XDR data is mirrored to Sentinel Analytics** \u2014 by default, Defender XDR sends alert data and select raw tables. Raw Advanced Hunting tables remain in XDR unless explicitly streamed. If you're seeing 0 bytes for a table that should have data, check your Defender XDR connector configuration.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
