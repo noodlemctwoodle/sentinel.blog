@@ -32,12 +32,19 @@
                         "type": 5,
                         "isRequired": true,
                         "multiSelect": false,
+                        "query": "resources\n| where type =~ 'microsoft.operationalinsights/workspaces'\n| project id, name\n| order by name asc",
+                        "crossComponentResources": [
+                            "{Subscription}"
+                        ],
                         "typeSettings": {
                             "resourceTypeFilter": {
                                 "microsoft.operationalinsights/workspaces": true
                             },
-                            "additionalResourceOptions": []
-                        }
+                            "additionalResourceOptions": [],
+                            "showDefault": false
+                        },
+                        "queryType": 1,
+                        "resourceType": "microsoft.resourcegraph/resources"
                     },
                     {
                         "id": "timerange",
