@@ -941,12 +941,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-ingestion-mitigation"
+                        "name": "guidance-querywt-method"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \u2699\ufe0f Applying the change\n\n*Defender portal \u2192 Microsoft Sentinel \u2192 Settings \u2192 Tables* to switch a table's tier. Validate post-migration actuals in *Defender portal \u2192 Microsoft Sentinel \u2192 Cost management* (currently preview, lake-only meters).",
+                            "json": "### Methodology caveats\n\n- **Scan volume is an upper bound.** Filtered queries (with narrow `where` clauses) scan less than `avgHourlyIngestionGB \u00d7 queryTimeRangeHours`. Real lake query cost will be lower than projected \u2014 this biases recommendations toward 'keep in analytics' which is the safer default.\n- **Regex misses some references.** The `extract_all` pattern catches pipeline-start table references (`TableName | where ...`) but may miss `union *` wildcards, `search in (Table1, Table2)` syntax, or table references inside subqueries.\n- **ASIM and parser functions are invisible.** Rules using `_Im_NetworkSession()` etc. don't surface the underlying tables \u2014 the analysis assumes direct references only.\n- **Tables with zero queries in the lookback show zero query cost.** They're correctly identified as ideal lake candidates, but if a quarterly or annual query exists outside the window, you'd hit unexpected lake query cost when it next runs.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -954,29 +954,7 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-ingestion-apply"
-                    }
-                ]
-            },
-            "conditionalVisibility": {
-                "parameterName": "selectedTab",
-                "comparison": "isEqualTo",
-                "value": "ingestion"
-            },
-            "name": "group-ingestion"
-        },
-        {
-            "type": 12,
-            "content": {
-                "version": "NotebookGroup/1.0",
-                "groupType": "editable",
-                "items": [
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "## \ud83d\udd0d Query-Weighted Analysis\n\nUses `LAQueryLogs` to compute **actual query scan volume per table** and project lake-tier query cost alongside ingestion, processing, and storage. This is a much more honest model for cost decisions because:\n\n- A cheap-to-ingest table that's queried constantly by automation will burn through lake query budget.\n- A verbose table that's almost never queried post-90-days is an even stronger lake candidate than the ingestion-only model suggests.\n\n**Prerequisite**: Audit diagnostic settings on the workspace must include `Audit` \u2192 `LAQueryLogs` logs sent to this workspace itself. If the check below shows 0 rows, see the bottom of this tab for enablement instructions.\n\n**Query origin classification**: Queries are tagged *Automated* when `RequestClientApp` is Sentinel internal, SDK, PSClient, AzureMonitorLogsConnector, or M365D Advanced Hunting without a user email. Everything else is *Human*."
-                        },
-                        "name": "queryweighted-header"
+                        "name": "guidance-querywt-caveats"
                     },
                     {
                         "type": 1,
@@ -1014,7 +992,7 @@
                         "type": 3,
                         "content": {
                             "version": "KqlItem/1.0",
-                            "query": "set truncationmaxrecords=10000;\nset truncationmaxsize=67108864;\nlet ingestionDays = toint('{IngestionLookbackDays}');\nlet queryDays = toint('{QueryLookbackDays}');\nlet userRate = toreal('{EffectiveAnalyticsRate}');\nlet modelRate = case('{PricingModel}' == 'CT50', 3.23, '{PricingModel}' == 'CT100', 2.96, '{PricingModel}' == 'CT200', 2.85, '{PricingModel}' == 'CT300', 2.77, '{PricingModel}' == 'CT400', 2.73, '{PricingModel}' == 'CT500', 2.61, '{PricingModel}' == 'CT1000', 2.41, '{PricingModel}' == 'CT2000', 2.22, '{PricingModel}' == 'CT5000', 2.11, 4.30);\nlet priceAnalytics = iif(userRate > 0, userRate, modelRate);\nlet priceLakeIngest = toreal('{LakeIngestPricePerGB}');\nlet priceLakeProc = toreal('{LakeProcessingPricePerGB}');\nlet priceLakeStore = toreal('{LakeStoragePricePerGBMonth}');\nlet priceLakeQuery = toreal('{LakeQueryPricePerGB}');\nlet lakeRetentionDays = toreal('{TargetLakeRetentionDays}');\nlet compressionRatio = toreal('{CompressionRatio}');\nlet knownTables = toscalar(\n    Usage\n    | where TimeGenerated > ago(ingestionDays * 1d)\n    | summarize make_set(DataType)\n);\nlet avgHourlySizePerTable = Usage\n    | where TimeGenerated > ago(ingestionDays * 1d)\n    | summarize AvgHourlyIngestionGB = avg(Quantity) / 1024.0 by DataType;\nLAQueryLogs\n| where TimeGenerated > ago(queryDays * 1d)\n| extend HoursDiff = todouble(datetime_diff('minute', QueryTimeRangeEnd, QueryTimeRangeStart)) / 60.0\n| where isnotempty(HoursDiff) and HoursDiff > 0\n| extend QueryOrigin = case(\n    RequestClientApp == 'Sentinel-DataCollectionAggregator', 'Automated'\n    , RequestClientApp == 'Sentinel-Investigation-Queries', 'Automated'\n    , RequestClientApp has 'sdk' or RequestClientApp has 'PSClient', 'Automated'\n    , RequestClientApp == 'AzureMonitorLogsConnector', 'Automated'\n    , RequestClientApp == 'M365D_AdvancedHunting' and isempty(AADEmail), 'Automated'\n    , 'Human')\n| serialize QueryNumber = row_number()\n| mv-expand TableName = knownTables to typeof(string)\n| where QueryText has_cs TableName\n| extend ExtractedTables = extract_all(@'(?:^|\\|?\\s*)([A-Z][A-Za-z0-9_]+)(?:\\s*\\||\\s*$)', QueryText)\n| where array_index_of(ExtractedTables, TableName) >= 0\n| join kind=leftouter avgHourlySizePerTable on $left.TableName == $right.DataType\n| extend ScanSizeGB = AvgHourlyIngestionGB * HoursDiff\n| summarize TotalScannedSizeGB = sum(ScanSizeGB)\n    , DistinctQueryCount = dcount(QueryNumber)\n    , HumanQueryCount = dcountif(QueryNumber, QueryOrigin == 'Human')\n    , AutomatedQueryCount = dcountif(QueryNumber, QueryOrigin == 'Automated')\n    , AvgHourlyIngestionGB = avg(AvgHourlyIngestionGB)\n  by DataType\n| extend WeeklyIngestionGB = AvgHourlyIngestionGB * 24.0 * 7.0\n    , DailyIngestionGB = AvgHourlyIngestionGB * 24.0\n| extend AnalyticsWeeklyCost = WeeklyIngestionGB * priceAnalytics\n| extend LakeWeeklyIngestCost = WeeklyIngestionGB * priceLakeIngest\n    , LakeWeeklyProcCost = WeeklyIngestionGB * priceLakeProc\n    , LakeWeeklyStorageCost = DailyIngestionGB * lakeRetentionDays / compressionRatio * priceLakeStore * 7.0 / 30.0\n    , LakeWeeklyQueryCost = TotalScannedSizeGB * priceLakeQuery\n| extend LakeWeeklyTotalCost = LakeWeeklyIngestCost + LakeWeeklyProcCost + LakeWeeklyStorageCost + LakeWeeklyQueryCost\n| extend WeeklyCostDelta = AnalyticsWeeklyCost - LakeWeeklyTotalCost\n    , MonthlyCostDelta = (AnalyticsWeeklyCost - LakeWeeklyTotalCost) * 52.0 / 12.0\n    , Recommendation = case(AnalyticsWeeklyCost > LakeWeeklyTotalCost * 1.5, '\u2705 Strong lake candidate'\n        , AnalyticsWeeklyCost > LakeWeeklyTotalCost, '\ud83d\udfe1 Marginal \u2014 review detection value'\n        , '\u274c Keep in analytics (lake would cost more)')\n| order by WeeklyCostDelta desc\n| project ['Table']=DataType\n    , ['Avg GB/hr']=round(AvgHourlyIngestionGB, 4)\n    , ['Weekly scan GB']=round(TotalScannedSizeGB, 2)\n    , ['Queries (7d)']=DistinctQueryCount\n    , ['Human']=HumanQueryCount\n    , ['Automated']=AutomatedQueryCount\n    , ['Analytics weekly ({Currency})']=round(AnalyticsWeeklyCost, 2)\n    , ['Lake weekly total ({Currency})']=round(LakeWeeklyTotalCost, 2)\n    , ['Weekly \u0394 ({Currency})']=round(WeeklyCostDelta, 2)\n    , ['Monthly \u0394 ({Currency})']=round(MonthlyCostDelta, 2)\n    , Recommendation",
+                            "query": "set truncationmaxrecords=10000;\nset truncationmaxsize=67108864;\nlet ingestionHours = toreal({TimeRange:seconds}) / 3600.0;\nlet queryDays = toint('{QueryLookbackDays}');\nlet userRate = toreal('{EffectiveAnalyticsRate}');\nlet modelRate = case('{PricingModel}' == 'CT50', 3.23, '{PricingModel}' == 'CT100', 2.96, '{PricingModel}' == 'CT200', 2.85, '{PricingModel}' == 'CT300', 2.77, '{PricingModel}' == 'CT400', 2.73, '{PricingModel}' == 'CT500', 2.61, '{PricingModel}' == 'CT1000', 2.41, '{PricingModel}' == 'CT2000', 2.22, '{PricingModel}' == 'CT5000', 2.11, 4.30);\nlet priceAnalytics = iif(userRate > 0, userRate, modelRate);\nlet priceLakeIngest = toreal('{LakeIngestPricePerGB}');\nlet priceLakeProc = toreal('{LakeProcessingPricePerGB}');\nlet priceLakeStore = toreal('{LakeStoragePricePerGBMonth}');\nlet priceLakeQuery = toreal('{LakeQueryPricePerGB}');\nlet lakeRetentionDays = toreal('{TargetLakeRetentionDays}');\nlet compressionRatio = toreal('{CompressionRatio}');\nlet knownTables = toscalar(\n    Usage\n    | where TimeGenerated {TimeRange}\n    | summarize make_set(DataType)\n);\nlet avgHourlySizePerTable = Usage\n    | where TimeGenerated {TimeRange}\n    | summarize AvgHourlyIngestionGB = avg(Quantity) / 1024.0 by DataType;\nLAQueryLogs\n| where TimeGenerated > ago(queryDays * 1d)\n| extend HoursDiff = todouble(datetime_diff('minute', QueryTimeRangeEnd, QueryTimeRangeStart)) / 60.0\n| where isnotempty(HoursDiff) and HoursDiff > 0\n| extend QueryOrigin = case(\n    RequestClientApp == 'Sentinel-DataCollectionAggregator', 'Automated'\n    , RequestClientApp == 'Sentinel-Investigation-Queries', 'Automated'\n    , RequestClientApp has 'sdk' or RequestClientApp has 'PSClient', 'Automated'\n    , RequestClientApp == 'AzureMonitorLogsConnector', 'Automated'\n    , RequestClientApp == 'M365D_AdvancedHunting' and isempty(AADEmail), 'Automated'\n    , 'Human')\n| serialize QueryNumber = row_number()\n| mv-expand TableName = knownTables to typeof(string)\n| where QueryText has_cs TableName\n| extend ExtractedTables = extract_all(@'(?:^|\\|?\\s*)([A-Z][A-Za-z0-9_]+)(?:\\s*\\||\\s*$)', QueryText)\n| where array_index_of(ExtractedTables, TableName) >= 0\n| join kind=leftouter avgHourlySizePerTable on $left.TableName == $right.DataType\n| extend ScanSizeGB = AvgHourlyIngestionGB * HoursDiff\n| summarize TotalScannedSizeGB = sum(ScanSizeGB)\n    , DistinctQueryCount = dcount(QueryNumber)\n    , HumanQueryCount = dcountif(QueryNumber, QueryOrigin == 'Human')\n    , AutomatedQueryCount = dcountif(QueryNumber, QueryOrigin == 'Automated')\n    , AvgHourlyIngestionGB = avg(AvgHourlyIngestionGB)\n  by DataType\n| extend WeeklyIngestionGB = AvgHourlyIngestionGB * 24.0 * 7.0\n    , DailyIngestionGB = AvgHourlyIngestionGB * 24.0\n| extend AnalyticsWeeklyCost = WeeklyIngestionGB * priceAnalytics\n| extend LakeWeeklyIngestCost = WeeklyIngestionGB * priceLakeIngest\n    , LakeWeeklyProcCost = WeeklyIngestionGB * priceLakeProc\n    , LakeWeeklyStorageCost = DailyIngestionGB * lakeRetentionDays / compressionRatio * priceLakeStore * 7.0 / 30.0\n    , LakeWeeklyQueryCost = TotalScannedSizeGB * priceLakeQuery\n| extend LakeWeeklyTotalCost = LakeWeeklyIngestCost + LakeWeeklyProcCost + LakeWeeklyStorageCost + LakeWeeklyQueryCost\n| extend WeeklyCostDelta = AnalyticsWeeklyCost - LakeWeeklyTotalCost\n    , MonthlyCostDelta = (AnalyticsWeeklyCost - LakeWeeklyTotalCost) * 52.0 / 12.0\n    , Recommendation = case(AnalyticsWeeklyCost > LakeWeeklyTotalCost * 1.5, '\u2705 Strong lake candidate'\n        , AnalyticsWeeklyCost > LakeWeeklyTotalCost, '\ud83d\udfe1 Marginal \u2014 review detection value'\n        , '\u274c Keep in analytics (lake would cost more)')\n| order by WeeklyCostDelta desc\n| project ['Table']=DataType\n    , ['Avg GB/hr']=round(AvgHourlyIngestionGB, 4)\n    , ['Weekly scan GB']=round(TotalScannedSizeGB, 2)\n    , ['Queries (7d)']=DistinctQueryCount\n    , ['Human']=HumanQueryCount\n    , ['Automated']=AutomatedQueryCount\n    , ['Analytics weekly ({Currency})']=round(AnalyticsWeeklyCost, 2)\n    , ['Lake weekly total ({Currency})']=round(LakeWeeklyTotalCost, 2)\n    , ['Weekly \u0394 ({Currency})']=round(WeeklyCostDelta, 2)\n    , ['Monthly \u0394 ({Currency})']=round(MonthlyCostDelta, 2)\n    , Recommendation",
                             "size": 0,
                             "queryType": 0,
                             "resourceType": "microsoft.operationalinsights/workspaces",
@@ -1126,29 +1104,20 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-querywt-caveats"
-                    }
-                ]
-            },
-            "conditionalVisibility": {
-                "parameterName": "selectedTab",
-                "comparison": "isEqualTo",
-                "value": "queryweighted"
-            },
-            "name": "group-queryweighted"
-        },
-        {
-            "type": 12,
-            "content": {
-                "version": "NotebookGroup/1.0",
-                "groupType": "editable",
-                "items": [
+                        "name": "guidance-rules-parsers"
+                    },
                     {
                         "type": 1,
                         "content": {
-                            "json": "## \ud83d\udee1\ufe0f Analytic Rule Coverage\n\nLive pull from `Microsoft.SecurityInsights/alertRules` via ARM. Use the dropdown below to search rules by table name \u2014 any table that appears is load-bearing for detection and needs a plan before moving to lake-only."
+                            "json": "### References\n\n- [Sentinel pricing](https://www.microsoft.com/en-us/security/pricing/microsoft-sentinel/)\n- [Commitment tiers & simplified pricing](https://learn.microsoft.com/en-us/azure/sentinel/billing)\n- [Data lake FAQ](https://techcommunity.microsoft.com/blog/microsoftsentinelblog/microsoft-sentinel-data-lake-faq/4457728)\n- [Dedicated cluster simplified pricing](https://learn.microsoft.com/en-us/azure/sentinel/billing-reduce-costs)\n- [LAQueryLogs reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/laquerylogs)\n\n---\n*Fetch Labs \u00b7 v3.8 \u00b7 4 tabs \u00b7 Toggleable contextual guidance \u00b7 ARM-based rule inventory \u00b7 CT/Cluster-aware \u00b7 LAQueryLogs query-weighted model*",
+                            "style": "info"
                         },
-                        "name": "rules-header"
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-rules-refs"
                     },
                     {
                         "type": 3,
@@ -1357,12 +1326,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-rules-matrix"
+                        "name": "guidance-xdr-about"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83e\udde9 Why we can't auto-resolve parsers\n\nThe rule-by-table search above uses **string matching against rule KQL bodies**. It catches `CommonSecurityLog | where ...` but not `_Im_NetworkSession() | where ...` \u2014 even though that ASIM parser may resolve to CommonSecurityLog, ASimNetworkSessionLogs, and several others.\n\n**Auto-resolution would require:**\n- Parsing every parser function definition (call to `Microsoft.OperationalInsights/savedSearches`)\n- Recursively expanding nested function calls\n- Maintaining a function \u2192 tables index that survives parser updates\n\n**Pragmatic workaround**: if your environment is ASIM-heavy, run `search '<TableName>'` across all `savedSearches` definitions before moving any table. Or maintain a `function \u2192 tables` lookup as part of your Sentinel-As-Code repo.",
+                            "json": "### XDR-specific migration considerations\n\n- **DeviceNetworkEvents & DeviceProcessEvents** are typically the largest XDR tables by orders of magnitude. Moving these to Lake can yield very large savings but they're also the most queried tables in hunting investigations \u2014 validate query patterns via the **Query-Weighted Analysis** tab before moving.\n- **AlertInfo / AlertEvidence** are detection-critical \u2014 rules and investigations rely on them. Keep in Analytics.\n- **IdentityInfo / DeviceInfo** are reference/inventory tables (low volume, high reuse). Usually not worth moving.\n- **Email* tables** \u2014 check whether your SOC runs email-investigation playbooks; these reference EmailEvents + UrlClickEvents heavily.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -1370,12 +1339,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-rules-parsers"
+                        "name": "guidance-xdr-considerations"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udcda References\n\n- [Sentinel pricing](https://www.microsoft.com/en-us/security/pricing/microsoft-sentinel/)\n- [Commitment tiers & simplified pricing](https://learn.microsoft.com/en-us/azure/sentinel/billing)\n- [Data lake FAQ](https://techcommunity.microsoft.com/blog/microsoftsentinelblog/microsoft-sentinel-data-lake-faq/4457728)\n- [Dedicated cluster simplified pricing](https://learn.microsoft.com/en-us/azure/sentinel/billing-reduce-costs)\n- [LAQueryLogs reference](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/laquerylogs)\n\n---\n*Fetch Labs \u00b7 v3.8 \u00b7 4 tabs \u00b7 Toggleable contextual guidance \u00b7 ARM-based rule inventory \u00b7 CT/Cluster-aware \u00b7 LAQueryLogs query-weighted model*",
+                            "json": "### Known limitations of this analysis\n\n- **Only ~21 core XDR tables** are in the union. Custom Defender XDR tables (connected apps via Security Copilot / custom connectors) aren't included.\n- **No Advanced Hunting query cost modelling** \u2014 unlike the `LAQueryLogs`-driven Sentinel model, XDR query volume doesn't produce the same telemetry. Manually estimate based on how often your SOC runs custom hunts on the tables listed.\n- **Schema changes can invalidate row-size estimates** \u2014 Microsoft periodically adds columns to XDR tables. Re-run this analysis quarterly to catch drift.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -1383,37 +1352,7 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-rules-refs"
-                    }
-                ]
-            },
-            "conditionalVisibility": {
-                "parameterName": "selectedTab",
-                "comparison": "isEqualTo",
-                "value": "rules"
-            },
-            "name": "group-rules"
-        },
-        {
-            "type": 12,
-            "content": {
-                "version": "NotebookGroup/1.0",
-                "groupType": "editable",
-                "items": [
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "## \ud83d\udee1\ufe0f Defender XDR Advanced Hunting \u2014 Cost Analysis\n\nEstimates size and cost delta for migrating Defender XDR Advanced Hunting tables (`DeviceProcessEvents`, `EmailEvents` etc.) from Analytics to Lake tier. Uses `estimate_data_size(*)` because XDR tables aren't tracked in `Usage`.\n\n**Prerequisites:**\n- This workbook must be opened in the **Defender unified SOC portal** (`security.microsoft.com`) \u2014 not plain Azure portal \u2014 so Advanced Hunting tables are in query scope.\n- The tenant must have Defender XDR licensed and the corresponding workloads ingested (Defender for Endpoint, for Office 365, for Identity, for Cloud Apps).\n\nMissing tables are tolerated via `union isfuzzy=true` \u2014 workloads you don't license simply won't appear in the results."
-                        },
-                        "name": "xdr-header"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "> \u26a0\ufe0f **If the tables below return no data**, your Sentinel workspace isn't receiving Defender XDR data. XDR Advanced Hunting tables live in Defender's own data store and are only queryable from this workbook if the **Defender XDR data connector** is configured to stream them into Sentinel, OR if you're running this workbook in the Defender unified SOC portal.\n\nFor the common case where XDR data stays in Advanced Hunting only, scroll to the **\ud83d\udccb Standalone query** section at the bottom of this tab \u2014 copy the KQL and run it directly at [security.microsoft.com/advanced-hunting](https://security.microsoft.com/advanced-hunting).",
-                            "style": "warning"
-                        },
-                        "name": "xdr-fallback-warning"
+                        "name": "guidance-xdr-limits"
                     },
                     {
                         "type": 9,
@@ -1554,45 +1493,6 @@
                             "json": "```kql\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n// Defender XDR Cost Analysis \u2014 Analytics vs Data Lake\n// Standalone version \u2014 runs directly in Defender Advanced Hunting\n// ( security.microsoft.com/advanced-hunting )\n//\n// Adjust constants below for your region / currency / pricing model\n// USD East US reference rates shown\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet lookbackDays          = 7;       // Analysis window\nlet analyticsIngestGB     = 4.30;    // PAYG. Commitment Tier rates:\n                                     //   CT 50  = 3.23   CT 100 = 2.96\n                                     //   CT 200 = 2.85   CT 300 = 2.77\n                                     //   CT 400 = 2.73   CT 500 = 2.61\n                                     //   CT 1K  = 2.41   CT 2K  = 2.22\n                                     //   CT 5K  = 2.11\nlet lakeIngestGB          = 0.05;    // Lake ingestion (lake-only tables)\nlet lakeProcessingGB      = 0.10;    // Lake data processing\nlet lakeStorageGBMo       = 0.026;   // Per GB/month, post-6:1 compression\nlet lakeQueryGB           = 0.005;   // Per GB scanned in lake queries\nlet lakeRetentionDays     = 730;     // 2 years default; adjust for your retention target\nlet compressionRatio      = 6.0;     // Microsoft published uniform 6:1\n//\nunion isfuzzy=true\n    (DeviceProcessEvents     | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceProcessEvents'),\n    (DeviceNetworkEvents     | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceNetworkEvents'),\n    (DeviceFileEvents        | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceFileEvents'),\n    (DeviceRegistryEvents    | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceRegistryEvents'),\n    (DeviceLogonEvents       | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceLogonEvents'),\n    (DeviceImageLoadEvents   | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceImageLoadEvents'),\n    (DeviceEvents            | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceEvents'),\n    (DeviceInfo              | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceInfo'),\n    (DeviceNetworkInfo       | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='DeviceNetworkInfo'),\n    (EmailEvents             | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='EmailEvents'),\n    (EmailUrlInfo            | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='EmailUrlInfo'),\n    (EmailAttachmentInfo     | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='EmailAttachmentInfo'),\n    (EmailPostDeliveryEvents | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='EmailPostDeliveryEvents'),\n    (UrlClickEvents          | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='UrlClickEvents'),\n    (IdentityLogonEvents     | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='IdentityLogonEvents'),\n    (IdentityQueryEvents     | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='IdentityQueryEvents'),\n    (IdentityDirectoryEvents | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='IdentityDirectoryEvents'),\n    (IdentityInfo            | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='IdentityInfo'),\n    (CloudAppEvents          | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='CloudAppEvents'),\n    (AlertInfo               | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='AlertInfo'),\n    (AlertEvidence           | where Timestamp > ago(lookbackDays * 1d) | summarize Rows=count(), Bytes=sum(estimate_data_size(*)) | extend TableName='AlertEvidence')\n| where isnotempty(TableName) and Rows > 0\n| extend TotalGB = Bytes / 1024.0 / 1024.0 / 1024.0\n    , MonthlyGB = (Bytes / 1024.0 / 1024.0 / 1024.0) / lookbackDays * 30.0\n| extend AnalyticsMonthly = MonthlyGB * analyticsIngestGB\n| extend LakeMonthly = (MonthlyGB * lakeIngestGB)\n                    + (MonthlyGB * lakeProcessingGB)\n                    + ((MonthlyGB * (lakeRetentionDays / 30.0) / compressionRatio) * lakeStorageGBMo)\n| extend MonthlySaving = AnalyticsMonthly - LakeMonthly\n    , AnnualSaving  = (AnalyticsMonthly - LakeMonthly) * 12.0\n    , SavingPct     = iif(AnalyticsMonthly > 0, round((AnalyticsMonthly - LakeMonthly) / AnalyticsMonthly * 100.0, 1), real(0))\n| order by MonthlySaving desc\n| project TableName\n    , Rows\n    , ObservedGB    = round(TotalGB, 3)\n    , MonthlyGB     = round(MonthlyGB, 2)\n    , AnalyticsCost = strcat('$', tostring(round(AnalyticsMonthly, 2)))\n    , LakeCost      = strcat('$', tostring(round(LakeMonthly, 2)))\n    , MonthlySaving = strcat('$', tostring(round(MonthlySaving, 2)))\n    , AnnualSaving  = strcat('$', tostring(round(AnnualSaving, 2)))\n    , SavingPct     = strcat(tostring(SavingPct), '%')\n```"
                         },
                         "name": "xdr-standalone-code"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "---\n### \u2139\ufe0f About the XDR cost model\n\nAccuracy considerations specific to XDR tables:\n\n- **`estimate_data_size(*)` vs billed ingestion** \u2014 `estimate_data_size` returns the approximate serialised size of each row, which is close to but **not identical to** billed ingestion. For XDR tables mirrored to Log Analytics, billing uses the same volume measurement as other Sentinel tables.\n- **XDR Advanced Hunting retention is 30 days free by default** \u2014 longer retention (up to 12 years via Defender XDR data lake) incurs cost on the new lake meters.\n- **Not all XDR data is mirrored to Sentinel Analytics** \u2014 by default, Defender XDR sends alert data and select raw tables. Raw Advanced Hunting tables remain in XDR unless explicitly streamed. If you're seeing 0 bytes for a table that should have data, check your Defender XDR connector configuration.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-xdr-about"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "### \ud83c\udfaf XDR-specific migration considerations\n\n- **DeviceNetworkEvents & DeviceProcessEvents** are typically the largest XDR tables by orders of magnitude. Moving these to Lake can yield very large savings but they're also the most queried tables in hunting investigations \u2014 validate query patterns via the **\ud83d\udd0d Query-Weighted Analysis** tab before moving.\n- **AlertInfo / AlertEvidence** are detection-critical \u2014 rules and investigations rely on them. Keep in Analytics.\n- **IdentityInfo / DeviceInfo** are reference/inventory tables (low volume, high reuse). Usually not worth moving.\n- **Email* tables** \u2014 check whether your SOC runs email-investigation playbooks; these reference EmailEvents + UrlClickEvents heavily.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-xdr-considerations"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "### \u26a0\ufe0f Known limitations of this analysis\n\n- **Only ~21 core XDR tables** are in the union. Custom Defender XDR tables (connected apps via Security Copilot / custom connectors) aren't included.\n- **No Advanced Hunting query cost modelling** \u2014 unlike the `LAQueryLogs`-driven Sentinel model, XDR query volume doesn't produce the same telemetry. Manually estimate based on how often your SOC runs custom hunts on the tables listed.\n- **Schema changes can invalidate row-size estimates** \u2014 Microsoft periodically adds columns to XDR tables. Re-run this analysis quarterly to catch drift.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-xdr-limits"
                     }
                 ]
             },
