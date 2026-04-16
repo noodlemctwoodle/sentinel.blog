@@ -337,7 +337,33 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "## \ud83d\udcb7 Pricing Model\n\nChoose your Analytics tier pricing model. Rate and commitment GB/day auto-derive from the selection (USD East US defaults). Override via the text inputs below \u2014 0 = use auto-derived value.\n\n| Model | Auto-derived rate (USD/GB) | Notes |\n|---|---|---|\n| Pay-As-You-Go | **4.30** | Default, no commitment |\n| CT 50 GB/day (preview) | **3.23** | Promo until 31 Mar 2027 if enrolled by 30 Jun 2026 |\n| CT 100 GB/day | **2.96** | Entry point for standard CT |\n| CT 200 / 300 / 400 / 500 GB/day | **2.85 / 2.77 / 2.73 / 2.61** | Mid-range tiers |\n| CT 1 000 / 2 000 / 5 000 GB/day | **2.41 / 2.22 / 2.11** | Max published tier (~51 % off PAYG) |\n| Dedicated Cluster | *falls back to PAYG \u2014 set override* | 100 GB/day minimum aggregated across workspaces |\n| Pre-purchased Commit Units | *falls back to PAYG \u2014 set override* | Applied automatically against eligible costs |"
+                            "json": "### Cost savings aren't the whole story\n\nThis workbook quantifies the cost delta between the Analytics and Data Lake tiers, but the Data Lake tier is the foundation for a broader Microsoft Sentinel platform. When planning a migration, factor in what the lake tier enables alongside the direct cost reduction:\n\n**Storage and retention**\n\n- Up to 12 years of data retention in open-format Parquet files, compressed 6:1 across all sources.\n- Storage and compute decoupled \u2014 scale each independently.\n- Single copy of data \u2014 Analytics tier data is automatically mirrored to the lake at no additional ingestion cost.\n- Native asset store \u2014 `EntraUsers`, `EntraDevices`, Microsoft 365 assets, and Azure Resource Graph (ARG) inventory ingested automatically as system tables alongside activity logs and threat intelligence.\n- Expanded Entra / ARG asset coverage (`EntraDevices`, `EntraOrgContacts`, `ARGRoleDefinitions`) in public preview from 15 April 2026.\n\n**Data shaping at ingest \u2014 filter and split (public preview, RSAC 2026)**\n\n- Native **filter** and **split** transformations configurable directly in the Defender portal's table management UI \u2014 no DCR JSON editing required.\n- **Filter** removes low-value events before ingestion, reducing noise and ingestion cost.\n- **Split** routes data between the Analytics tier and Data Lake tier based on a KQL predicate \u2014 the simplest way to operationalise the tiering decisions this workbook helps you make.\n- Define KQL-based transformations directly in the UI; apply before the data hits any tier.\n\n**Analytics engines \u2014 all operating on the same single data copy**\n\n- **KQL** \u2014 interactive queries via Data lake exploration; scheduled or one-time **KQL jobs** that can promote lake data back to the Analytics tier for real-time detection when needed.\n- **Apache Spark / PySpark** \u2014 Python notebooks hosted in Microsoft-managed Spark pools via the Microsoft Sentinel VS Code extension. Built-in ML libraries for anomaly detection, behavioural baselining, and retrospective IOC matching against long-horizon data.\n- **Notebook jobs** \u2014 schedule recurring Spark-based analyses, write results to custom tables in either tier.\n- **Summary rules** \u2014 aggregate high-cardinality data at ~20-minute cadence to keep detection-useful roll-ups in Analytics while raw rows flow to lake.\n- **Workbooks** \u2014 can use the data lake as a data source for visualisation over long-horizon data.\n\n**UEBA behaviors layer (Defender portal)**\n\n- Transforms high-volume, low-level logs (CloudTrail, firewall, etc.) into normalised behavioural insights with MITRE ATT&CK context.\n- Sits between raw logs and alerts \u2014 an abstraction layer that summarises \"who did what to whom\" across multiple raw events.\n- Feeds hunting, investigation, and detection workflows with pre-aggregated semantic context rather than raw telemetry.\n\n**Microsoft Sentinel graph (preview)**\n\n- Unified graph analytics modelling relationships across assets, identities, activities, and threat intelligence \u2014 enables questions difficult with tabular queries (blast radius, attack paths, hidden lateral movement).\n- **Blast radius** and **attack path** analysis integrated into the Defender incident graph and Microsoft Security Exposure Management.\n- **Custom graphs** \u2014 build tailored security graphs using Graph Query Language (GQL) across lake data plus third-party sources; forms the context layer for AI agents.\n- Custom graph API usage becomes billable from 1 April 2026 on the Sentinel graph meter.\n\n**Microsoft Sentinel MCP server (preview)**\n\n- Hosted Model Context Protocol server interface callable by any MCP-compatible client. Multiple tool collections:\n- **Data exploration** (`sentinel.microsoft.com/mcp/data-exploration`) \u2014 semantic search across the table catalog (`search_tables`), natural-language-to-KQL execution (`query_lake`), multi-workspace scope.\n- **Agent creation** (`sentinel.microsoft.com/mcp/security-copilot-agent-creation`) \u2014 generate Security Copilot agents from natural-language descriptions; discover relevant tools and skills, deploy at user or workspace scope.\n- **Graph tools** (public preview, RSAC 2026) \u2014 visualise and explore relationships between identities, devices, threats, and activities ingested into the data lake.\n- **Entity Analyzer** \u2014 AI-driven explainable risk assessments for users (`analyze_user_entity`) and URLs (`analyze_url_entity`) combining threat intelligence, prevalence, and organisational context. Billable from 1 April 2026 on Security Compute Units (SCUs).\n- Integrates with Microsoft Security Copilot, Microsoft Foundry agent builder, GitHub Copilot in VS Code, and third-party agents (including Anthropic Claude via dedicated connector announced at RSAC 2026).\n\n**AI-assisted authoring**\n\n- **Playbook generator** \u2014 describe the workflow in natural language, receive a fully functional Python playbook with documentation and a visual flowchart.\n- **Sentinel Connector Builder agent** \u2014 low-code agent in VS Code that generates Sentinel data connectors from API documentation end-to-end.\n- **Vibe-coding with Sentinel VS Code extension** \u2014 build custom graphs, hunting queries, and detections using GitHub Copilot inside the extension, testing against real lake data.\n\n**Data federation (GA 1 April 2026)**\n\n- Query data in place from Microsoft Fabric, Azure Data Lake Storage Gen2, and Azure Databricks without ingesting or copying.\n- Federated tables appear alongside native lake tables and work identically with KQL, notebooks, graph, and MCP tools.\n- Billed only when analytics runs against federated data using the existing lake query and insights meters.\n\n**Defender XDR integration**\n\n- Advanced Hunting tables (`DeviceProcessEvents`, `EmailEvents`, `IdentityLogonEvents`, `CloudAppEvents`, etc.) can now be ingested directly into the lake tier (GA, February 2026).\n- Extend XDR retention beyond the default 30 days via the lake tier for forensic, compliance, or long-horizon hunting use cases.\n\n**Operational and access capabilities**\n\n- **Unified RBAC** through Microsoft Defender XDR with **row-level scoping** \u2014 multiple SOC teams operate independently within a shared Sentinel environment without separate workspaces. Data can be tagged at ingestion time and assigned to logical scopes.\n- **Granular Delegated Admin Privileges (GDAP)** extending to all customers in public preview from April 2026, not just CSPs. Three-way handshake consent model for multi-tenant MSSP scenarios.\n- **Auditing** enabled by default for data access, job management, and query activity.\n- **Codeless Connector Framework (CCF) Push** \u2014 high-throughput custom ingestion directly via the Log Ingestion API; Sentinel auto-provisions DCEs, DCRs, app registrations, and RBAC.\n\n---\n\n**Analytics tier remains the right home for detection-critical data.** Real-time analytic rules, scheduled hunting queries, UEBA, Fusion correlation, and interactive investigation all run against the Analytics tier. Moving tables that feed active detections to lake-only will silence those detections. The decision isn't *Analytics vs Lake* \u2014 it's *which tables belong in which tier*, with most environments maintaining a mix driven by detection value, query frequency, and retention requirements.\n\n> Use this workbook as an input to that tiering decision, not as a one-click cost-reduction tool. The savings estimate is accurate; whether realising those savings is the right trade-off for any given table depends on detection value, query patterns, and the analytics capabilities you want to build on top of the lake.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-overview-strategic"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### About this workbook\n\nHelps you decide which Sentinel tables to migrate from the **Analytics tier** to the **Data Lake tier** by comparing two cost models:\n\n- **Ingestion-based** \u2014 uses only the `Usage` table, conservative, works on every workspace. Best for first-pass identification.\n- **Query-weighted** \u2014 adds real query scan patterns from `LAQueryLogs`. Better for honest cost prediction once you've shortlisted candidates.\n\n**Recommended workflow**: shortlist on the Ingestion tab \u2192 confirm on the Query-Weighted tab if LAQueryLogs is enabled \u2192 verify nothing detection-critical depends on the table via Rule Coverage \u2192 apply the change in *Defender \u2192 Sentinel \u2192 Settings \u2192 Tables*.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-overview-about"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Pricing Model\n\nChoose your Analytics tier pricing model. Rate and commitment GB/day auto-derive from the selection (USD East US defaults). Override via the text inputs below \u2014 0 = use auto-derived value.\n\n| Model | Auto-derived rate (USD/GB) | Notes |\n|---|---|---|\n| Pay-As-You-Go | **4.30** | Default, no commitment |\n| CT 50 GB/day (preview) | **3.23** | Promo until 31 Mar 2027 if enrolled by 30 Jun 2026 |\n| CT 100 GB/day | **2.96** | Entry point for standard CT |\n| CT 200 / 300 / 400 / 500 GB/day | **2.85 / 2.77 / 2.73 / 2.61** | Mid-range tiers |\n| CT 1 000 / 2 000 / 5 000 GB/day | **2.41 / 2.22 / 2.11** | Max published tier (~51 % off PAYG) |\n| Dedicated Cluster | *falls back to PAYG \u2014 set override* | 100 GB/day minimum aggregated across workspaces |\n| Pre-purchased Commit Units | *falls back to PAYG \u2014 set override* | Applied automatically against eligible costs |"
                         },
                         "conditionalVisibility": {
                             "parameterName": "ShowGuidance",
@@ -451,12 +477,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-overview-about"
+                        "name": "guidance-ingestion-tree"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83c\udf0d Regional pricing reminder\n\nDefault rates are **USD East US**. North Europe and other regions typically run 5\u201310% higher on Analytics meters and similar on lake meters.\n\nFor customer-facing numbers, always validate via the [Azure pricing calculator](https://azure.microsoft.com/en-gb/pricing/calculator/) and override the *Rate override* field in the pricing inputs above. The auto-derived rates from the dropdown are reference figures only.",
+                            "json": "### Lake tier compatibility\n\nNot every table can actually be moved to the Data Lake tier. The workbook flags these in the **Candidate** column:\n\n- **Not lake-compatible** \u2014 Microsoft explicitly excludes these from Data Lake. Currently only `AzureDiagnostics` is on this list (surprising since it's often huge), but check the [official docs](https://learn.microsoft.com/en-us/azure/sentinel/manage-data-overview) for updates.\n- **System table (skip)** \u2014 `Heartbeat`, `Usage`, `Operation`, `LAQueryLogs` etc. Technically mirrorable but too small or too operationally important to touch.\n- **Custom log (verify V1 vs DCR)** \u2014 `_CL` suffix tables. **Important caveat**: only AMA / Logs Ingestion API / DCR-based custom tables are mirrored. **MMA / Log Analytics Agent v1 custom tables are not.** To verify which agent feeds a custom table, check the table schema in the portal \u2014 a DCR-based table has a `_ResourceId` column populated; an MMA V1 table has a stream-name-prefixed format. Toby's classic V1 custom table audit script (`Invoke-DCRAudit.ps1`) covers this.\n- **Basic log plan tables** \u2014 cannot go to Data Lake directly; must be converted to Analytics plan first.\n- **CMK workspaces** \u2014 Customer-Managed Key encryption is not supported across the entire Data Lake. If your workspace uses CMK, the lake isn't available at all.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -464,12 +490,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-overview-regional"
+                        "name": "guidance-ingestion-compat"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udca1 Pricing model gotchas\n\n- **Commitment Tier**: moving tables out of Analytics reduces consumption but you still pay the daily commitment floor until you downgrade \u2014 **31-day minimum lock**. Model the saving as it would be *after* a CT downgrade, not before.\n- **Dedicated Cluster**: commitment is aggregated across cluster workspaces. Per-workspace moves only translate to actual billing savings if total cluster volume crosses a lower tier boundary.\n- **Pre-purchased Commit Units**: Sentinel cost deducts automatically from the CU pool. Moving tables to lake shifts consumption from the CU meter to the new lake meters, which **don't draw from the CU pool** \u2014 so you may end up paying twice (CU floor + lake usage) until the term ends.",
+                            "json": "### When to use this view vs Query-Weighted\n\n- **Ingestion view (this tab)** \u2014 fastest, no diagnostics required, conservative. Use for first-pass shortlisting. **Excludes query cost** so it's optimistic about lake savings on heavily-queried tables.\n- **Query-Weighted view** \u2014 requires `LAQueryLogs` diagnostic. Adds real query scan volume to the lake cost. Use to confirm shortlist before signing off the saving estimate.\n\nA 70% saving in this view might shrink to 30% in Query-Weighted if the table is constantly scanned by automated detection rules.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -477,12 +503,12 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-overview-pricing"
+                        "name": "guidance-ingestion-when"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83c\udff7\ufe0f Defender for Servers P2 / M365 E5 benefits\n\n- **Defender for Servers P2**: 500 MB/server/day free on eligible tables (primarily SecurityEvent).\n- **M365 E5**: ~5 MB/user/day free on Entra / XDR-related tables.\n\nThe `Usage` table's `IsBillable` flag already excludes these allowances, so workbook figures already reflect them. No manual adjustment needed.",
+                            "json": "### Mitigation patterns\n\nFor tables with detection value but high cost, moving the whole table to lake-only isn't the only option. Four alternatives:\n\n- **Native filter and split (public preview, RSAC 2026)** \u2014 configure KQL-based transformations directly in the Defender portal's table management page. **Filter** drops low-value rows before ingestion; **split** routes matching rows to Analytics and the rest to Data Lake. Replaces manual DCR JSON editing for the common tiering case.\n- **Workspace DCR column split** \u2014 for column-level rather than row-level control. Keep detection-critical columns (actor, target, command line, hash) in Analytics; route verbose columns (raw payload, debug fields, full command output) to lake-only. Still requires DCR JSON where native UI can't express the transformation.\n- **Summary rules** \u2014 pre-aggregate events at ingest time via a Sentinel summary rule running at ~20-minute cadence. Aggregates (row counts, distinct IPs, top N process names per hour) stay in Analytics while raw rows flow to lake. Best for high-cardinality tables where your detections only need roll-ups.\n- **KQL Job promotion** \u2014 schedule a query against the lake tier that promotes matching rows back into Analytics on a cadence. Replaces a real-time scheduled rule with a near-real-time lake-backed one. Lower cost, higher latency.\n\n### Per-table retention\n\nThe savings model assumes a single *Target lake retention* value across all tables. In practice, compliance-sensitive tables (`AzureActivity`, identity logs) often need 1-7 years while operational tables (`Perf`, `Heartbeat`) are fine at 30 days. If your retention plan isn't uniform, scale each table's saving proportionally \u2014 the per-table lake cost scales linearly with its retention.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -490,34 +516,129 @@
                             "comparison": "isEqualTo",
                             "value": "show"
                         },
-                        "name": "guidance-overview-benefits"
-                    }
-                ]
-            },
-            "conditionalVisibility": {
-                "parameterName": "selectedTab",
-                "comparison": "isEqualTo",
-                "value": "overview"
-            },
-            "name": "group-overview"
-        },
-        {
-            "type": 12,
-            "content": {
-                "version": "NotebookGroup/1.0",
-                "groupType": "editable",
-                "items": [
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "## \ud83d\udce5 Ingestion-Based Analysis\n\nConservative model using only `Usage` table telemetry. Works on any workspace \u2014 no extra diagnostics required. Assumes you'd move the entire table to lake-only (fill-forward). **Excludes query cost** \u2014 see *Query-Weighted Analysis* tab for a more honest prediction if `LAQueryLogs` is enabled."
-                        },
-                        "name": "ingestion-header"
+                        "name": "guidance-ingestion-mitigation"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83c\udff7\ufe0f Top Tables by Ingested Volume"
+                            "json": "### Applying the change\n\n*Defender portal \u2192 Microsoft Sentinel \u2192 Settings \u2192 Tables* to switch a table's tier. Validate post-migration actuals in *Defender portal \u2192 Microsoft Sentinel \u2192 Cost management* (currently preview, lake-only meters).",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-ingestion-apply"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### Preview connector considerations\n\nMany Content Hub solutions ship connectors in public preview. These tables look identical to classic tables in the savings model above but can behave differently once moved to lake:\n\n- **Schema evolution** \u2014 preview connectors often change columns/types during GA transition. Lake tier stores data as Parquet files that preserve the schema at write time; downstream queries may need updating after GA.\n- **Mirroring lag** \u2014 some preview connectors have slower Analytics \u2192 Lake mirroring than mature ones.\n- **Solution-managed retention** \u2014 Content Hub solutions sometimes apply table-level retention overrides the uniform-retention calculation doesn't account for.\n\nFor any table ingesting via a preview connector, treat the savings estimate as indicative. Validate actual per-table retention and plan via the *Table Plans & Retention* section below before committing to a migration.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-ingestion-preview"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### What this workbook doesn't see\n\nThe rule-reference checks on the Rule Coverage tab use `Microsoft.SecurityInsights/alertRules` plus string matching against rule bodies. That covers analytic rules only. A table can still be load-bearing via any of the following, **none of which this workbook inspects**:\n\n- **Playbooks / Logic Apps** querying the workspace via the Log Analytics API.\n- **Hunting queries** published in Content Hub solutions or saved as user-defined functions.\n- **Other workbooks** that display data from the table.\n- **Jupyter notebooks** (VS Code Data Lake notebooks, Azure ML) querying the workspace.\n- **External API consumers** hitting the Log Analytics query API directly.\n- **ASIM parsers and custom KQL functions** that wrap tables indirectly \u2014 string matching misses these.\n\nA table flagged with zero rule references can still be detection-critical through any of the above. Before moving a significant table to lake-only, spot-check by (a) reviewing Content Hub solution dependencies, (b) searching your playbook inventory for the table name, and (c) asking your hunting team.",
+                            "style": "info"
+                        },
+                        "conditionalVisibility": {
+                            "parameterName": "ShowGuidance",
+                            "comparison": "isEqualTo",
+                            "value": "show"
+                        },
+                        "name": "guidance-ingestion-blindspots"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### Table Plans & Retention\n\nLive pull of each table's current plan and retention settings via ARM (`Microsoft.OperationalInsights/workspaces/tables`). Sort or filter the `Plan` column:\n\n- **Analytics** \u2014 standard hot tier. Can move directly to Data Lake tier via Defender portal.\n- **Basic** \u2014 cannot go directly to Lake. Must be converted to Analytics plan first (Defender portal \u2192 Sentinel \u2192 Settings \u2192 Tables \u2192 change plan), then migrated.\n- **Auxiliary** \u2014 already backed by data lake technology (same underlying storage as Data Lake tier). A tier change here is effectively a no-op for billing; further savings must come from retention tuning or query optimisation, not tier migration.\n\n`AnalyticsRetentionDays` is the hot-tier retention (the portion you actively pay the Analytics retention rate for after the free 90 days). `TotalRetentionDays` is hot + archive/lake combined."
+                        },
+                        "name": "plans-retention-header"
+                    },
+                    {
+                        "type": 3,
+                        "content": {
+                            "version": "KqlItem/1.0",
+                            "query": "{\"version\":\"ARMEndpoint/1.0\",\"data\":null,\"headers\":[],\"method\":\"GET\",\"path\":\"{Workspace}/tables\",\"urlParams\":[{\"key\":\"api-version\",\"value\":\"2022-10-01\"}],\"batchDisabled\":false,\"transformers\":[{\"type\":\"jsonpath\",\"settings\":{\"tablePath\":\"$.value[*]\",\"columns\":[{\"path\":\"$.name\",\"columnid\":\"Table\",\"columnType\":\"string\"},{\"path\":\"$.properties.plan\",\"columnid\":\"Plan\",\"columnType\":\"string\"},{\"path\":\"$.properties.retentionInDays\",\"columnid\":\"AnalyticsRetentionDays\",\"columnType\":\"number\"},{\"path\":\"$.properties.totalRetentionInDays\",\"columnid\":\"TotalRetentionDays\",\"columnType\":\"number\"}]}}]}",
+                            "size": 0,
+                            "queryType": 12,
+                            "resourceType": "microsoft.operationalinsights/workspaces",
+                            "visualization": "table",
+                            "gridSettings": {
+                                "formatters": [
+                                    {
+                                        "columnMatch": "Plan",
+                                        "formatter": 11,
+                                        "formatOptions": {
+                                            "thresholdsOptions": "icons",
+                                            "thresholdsGrid": [
+                                                {
+                                                    "operator": "==",
+                                                    "thresholdValue": "Basic",
+                                                    "representation": "4",
+                                                    "text": "Basic"
+                                                },
+                                                {
+                                                    "operator": "==",
+                                                    "thresholdValue": "Auxiliary",
+                                                    "representation": "success",
+                                                    "text": "Auxiliary"
+                                                },
+                                                {
+                                                    "operator": "==",
+                                                    "thresholdValue": "Analytics",
+                                                    "representation": "Shield",
+                                                    "text": "Analytics"
+                                                },
+                                                {
+                                                    "operator": "Default",
+                                                    "thresholdValue": null,
+                                                    "representation": "unknown",
+                                                    "text": "{0}"
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "columnMatch": "AnalyticsRetentionDays",
+                                        "formatter": 4,
+                                        "formatOptions": {
+                                            "palette": "blue"
+                                        }
+                                    },
+                                    {
+                                        "columnMatch": "TotalRetentionDays",
+                                        "formatter": 4,
+                                        "formatOptions": {
+                                            "palette": "turquoise"
+                                        }
+                                    }
+                                ],
+                                "rowLimit": 10000,
+                                "filter": true,
+                                "sortBy": [
+                                    {
+                                        "itemKey": "Plan",
+                                        "sortOrder": 1
+                                    }
+                                ]
+                            }
+                        },
+                        "name": "plans-retention-grid"
+                    },
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "### Top Tables by Ingested Volume"
                         },
                         "name": "top-tables-header"
                     },
