@@ -4,7 +4,7 @@
         {
             "type": 1,
             "content": {
-                "json": "# \ud83c\udf0a Sentinel Data Lake \u2014 Migration Savings Audit\n\nAudits your Microsoft Sentinel workspace and identifies tables that are strong candidates for migration to the **Data Lake tier**, with two independent cost models:\n\n1. **Ingestion-based** \u2014 works on any workspace, uses `Usage` only, conservative.\n2. **Query-weighted** \u2014 requires `LAQueryLogs` diagnostic to be enabled, uses real query scan patterns to predict lake-tier query cost alongside ingestion and storage.\n\nUse the tabs below to navigate. All pricing inputs and lookback windows are parameterised \u2014 set them once on the Overview tab, everything recalculates."
+                "json": "# Sentinel Data Lake \u2014 Migration Savings Audit\n\nAudits your Microsoft Sentinel workspace and identifies tables that are strong candidates for migration to the **Data Lake tier**, with two independent cost models:\n\n1. **Ingestion-based** \u2014 works on any workspace, uses `Usage` only, conservative.\n2. **Query-weighted** \u2014 requires `LAQueryLogs` diagnostic to be enabled, uses real query scan patterns to predict lake-tier query cost alongside ingestion and storage.\n\nUse the tabs below to navigate. All pricing inputs and lookback windows are parameterised \u2014 set them once on the Overview tab, everything recalculates."
             },
             "name": "header"
         },
@@ -73,7 +73,7 @@
                         "id": "showGuidance",
                         "version": "KqlParameterItem/1.0",
                         "name": "ShowGuidance",
-                        "label": "\ud83d\udca1 Guidance",
+                        "label": "Guidance",
                         "type": 2,
                         "isRequired": true,
                         "value": "hide",
@@ -114,7 +114,7 @@
                         "id": "tab-overview",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
-                        "linkLabel": "\ud83d\udcca Overview",
+                        "linkLabel": "Overview",
                         "subTarget": "overview",
                         "style": "link"
                     },
@@ -122,7 +122,7 @@
                         "id": "tab-ingestion",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
-                        "linkLabel": "\ud83d\udce5 Ingestion Analysis",
+                        "linkLabel": "Ingestion Analysis",
                         "subTarget": "ingestion",
                         "style": "link"
                     },
@@ -130,7 +130,7 @@
                         "id": "tab-query",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
-                        "linkLabel": "\ud83d\udd0d Query-Weighted Analysis",
+                        "linkLabel": "Query-Weighted Analysis",
                         "subTarget": "queryweighted",
                         "style": "link"
                     },
@@ -138,7 +138,7 @@
                         "id": "tab-rules",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
-                        "linkLabel": "\ud83d\udee1\ufe0f Rule Coverage",
+                        "linkLabel": "Rule Coverage",
                         "subTarget": "rules",
                         "style": "link"
                     },
@@ -146,7 +146,7 @@
                         "id": "tab-xdr",
                         "cellValue": "selectedTab",
                         "linkTarget": "parameter",
-                        "linkLabel": "\ud83d\udee1\ufe0f Defender XDR",
+                        "linkLabel": "Defender XDR",
                         "subTarget": "xdr",
                         "style": "link"
                     }
@@ -508,14 +508,14 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udcb0 Per-Table Savings Model\n\n**Candidate flags (heuristic only \u2014 click any row for the authoritative detection check):**\n- \ud83d\udeab **Not lake-compatible** \u2014 Microsoft explicitly excludes from Data Lake (currently `AzureDiagnostics`). Saving columns blanked.\n- \ud83d\udd27 **System table (skip)** \u2014 operational/metadata tables (`Heartbeat`, `Usage`, `Operation`, `LAQueryLogs` etc.), too small to matter.\n- \u2705 **Verbose/low-fidelity** \u2014 well-known high-volume table (firewall, syslog, IIS, verbose Entra logs). Usually safe to move.\n- \ud83d\udfe2 **Custom log (verify V1 vs DCR)** \u2014 `_CL` tables. **MMA v1 custom tables aren't mirrored**, only AMA/DCR-based ones. See guidance card below.\n- \u26a0\ufe0f **Review detection impact first** \u2014 table doesn't match any heuristic. Click the row for actual rule references.\n\n> \u26a0\ufe0f **Function/parser caveat.** Rule-reference search uses string matching. Rules wrapping tables in ASIM parsers (`_Im_*()`) or custom KQL functions reference tables **indirectly** and won't appear in the drill-down. In ASIM-heavy environments, treat candidate flags as advisory and verify function bodies manually."
+                            "json": "### Per-Table Savings Model\n\n**Candidate flags (heuristic only \u2014 click any row for the authoritative detection check):**\n- **Not lake-compatible** \u2014 Microsoft explicitly excludes from Data Lake (currently `AzureDiagnostics`). Saving columns blanked.\n- **System table (skip)** \u2014 operational/metadata tables (`Heartbeat`, `Usage`, `Operation`, `LAQueryLogs` etc.), too small to matter.\n- **Verbose/low-fidelity** \u2014 well-known high-volume table (firewall, syslog, IIS, verbose Entra logs). Usually safe to move.\n- **Custom log (verify V1 vs DCR)** \u2014 `_CL` tables. **MMA v1 custom tables aren't mirrored**, only AMA/DCR-based ones. See guidance card below.\n- **Review detection impact first** \u2014 table doesn't match any heuristic. Click the row for actual rule references.\n\n> \u26a0\ufe0f **Function/parser caveat.** Rule-reference search uses string matching. Rules wrapping tables in ASIM parsers (`_Im_*()`) or custom KQL functions reference tables **indirectly** and won't appear in the drill-down. In ASIM-heavy environments, treat candidate flags as advisory and verify function bodies manually."
                         },
                         "name": "savings-header"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "\ud83d\udca1 *Click any row in the table below to drill into detection impact for that table \u2014 rules and recent alert activity will appear inline below the savings tiles.*"
+                            "json": "*Click any row in the table below to drill into detection impact for that table \u2014 rules and recent alert activity will appear inline below the savings tiles.*"
                         },
                         "name": "savings-clickhint"
                     },
@@ -625,7 +625,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udd2c Detection Impact for `{selectedTable}`\n\nClicked from the savings table above. The grid below lists rules whose KQL body directly references `{selectedTable}`.\n\n\u26a0\ufe0f Won't catch rules that wrap the table via ASIM parsers (`_Im_*()`, `_Asim_*()`) or custom KQL functions. For alert activity per rule, see the **\ud83d\udee1\ufe0f Rule Coverage** tab."
+                            "json": "### Detection Impact for `{selectedTable}`\n\nClicked from the savings table above. The grid below lists rules whose KQL body directly references `{selectedTable}`.\n\n\u26a0\ufe0f Won't catch rules that wrap the table via ASIM parsers (`_Im_*()`, `_Asim_*()`) or custom KQL functions. For alert activity per rule, see the **Rule Coverage** tab."
                         },
                         "conditionalVisibility": {
                             "parameterName": "selectedTable",
@@ -670,7 +670,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udca1 Top 10 Highest-Impact Moves"
+                            "json": "### Top 10 Highest-Impact Moves"
                         },
                         "name": "top10-header"
                     },
@@ -700,7 +700,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udce6 Total Potential Saving (candidate tables only)"
+                            "json": "### Total Potential Saving (candidate tables only)"
                         },
                         "name": "total-header"
                     },
@@ -729,50 +729,33 @@
                             }
                         },
                         "name": "total-saving-tiles"
+                    }
+                ]
+            },
+            "conditionalVisibility": {
+                "parameterName": "selectedTab",
+                "comparison": "isEqualTo",
+                "value": "ingestion"
+            },
+            "name": "group-ingestion"
+        },
+        {
+            "type": 12,
+            "content": {
+                "version": "NotebookGroup/1.0",
+                "groupType": "editable",
+                "items": [
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Query-Weighted Analysis\n\nUses `LAQueryLogs` to compute **actual query scan volume per table** and project lake-tier query cost alongside ingestion, processing, and storage. This is a much more honest model for cost decisions because:\n\n- A cheap-to-ingest table that's queried constantly by automation will burn through lake query budget.\n- A verbose table that's almost never queried post-90-days is an even stronger lake candidate than the ingestion-only model suggests.\n\n**Prerequisite**: Audit diagnostic settings on the workspace must include `Audit` \u2192 `LAQueryLogs` logs sent to this workspace itself. If the check below shows 0 rows, see the bottom of this tab for enablement instructions.\n\n**Query origin classification**: Queries are tagged *Automated* when `RequestClientApp` is Sentinel internal, SDK, PSClient, AzureMonitorLogsConnector, or M365D Advanced Hunting without a user email. Everything else is *Human*."
+                        },
+                        "name": "queryweighted-header"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udccb Decision tree\n\n1. Identify the top ~10 tables by saving above. Anything marked \u2705 *Verbose/low-fidelity* or \ud83d\udfe2 *Custom log* with no rule references in the drill-down is a safe move.\n2. Cross-check on **\ud83d\udd0d Query-Weighted Analysis** if LAQueryLogs is enabled. A table that looks great in ingestion but shows heavy automated query patterns may cost more in the lake once the query meter is factored in.\n3. For \u26a0\ufe0f tables with rule references: keep in Analytics, DCR-split the verbose columns, or replace the rule with a KQL Job that promotes lake hits to Analytics on a schedule.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-ingestion-tree"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "### \ud83d\udeab Lake tier compatibility\n\nNot every table can actually be moved to the Data Lake tier. The workbook flags these in the **Candidate** column:\n\n- **\ud83d\udeab Not lake-compatible** \u2014 Microsoft explicitly excludes these from Data Lake. Currently only `AzureDiagnostics` is on this list (surprising since it's often huge), but check the [official docs](https://learn.microsoft.com/en-us/azure/sentinel/manage-data-overview) for updates.\n- **\ud83d\udd27 System table (skip)** \u2014 `Heartbeat`, `Usage`, `Operation`, `LAQueryLogs` etc. Technically mirrorable but too small or too operationally important to touch.\n- **\ud83d\udfe2 Custom log (verify V1 vs DCR)** \u2014 `_CL` suffix tables. **Important caveat**: only AMA / Logs Ingestion API / DCR-based custom tables are mirrored. **MMA / Log Analytics Agent v1 custom tables are not.** To verify which agent feeds a custom table, check the table schema in the portal \u2014 a DCR-based table has a `_ResourceId` column populated; an MMA V1 table has a stream-name-prefixed format. Toby's classic V1 custom table audit script (`Invoke-DCRAudit.ps1`) covers this.\n- **Basic log plan tables** \u2014 cannot go to Data Lake directly; must be converted to Analytics plan first.\n- **CMK workspaces** \u2014 Customer-Managed Key encryption is not supported across the entire Data Lake. If your workspace uses CMK, the lake isn't available at all.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-ingestion-compat"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "### \ud83e\udd14 When to use this view vs Query-Weighted\n\n- **Ingestion view (this tab)** \u2014 fastest, no diagnostics required, conservative. Use for first-pass shortlisting. **Excludes query cost** so it's optimistic about lake savings on heavily-queried tables.\n- **Query-Weighted view** \u2014 requires `LAQueryLogs` diagnostic. Adds real query scan volume to the lake cost. Use to confirm shortlist before signing off the saving estimate.\n\nA 70% saving in this view might shrink to 30% in Query-Weighted if the table is constantly scanned by automated detection rules.",
-                            "style": "info"
-                        },
-                        "conditionalVisibility": {
-                            "parameterName": "ShowGuidance",
-                            "comparison": "isEqualTo",
-                            "value": "show"
-                        },
-                        "name": "guidance-ingestion-when"
-                    },
-                    {
-                        "type": 1,
-                        "content": {
-                            "json": "### \ud83d\udee0\ufe0f Mitigation patterns\n\nFor tables with detection value but high cost:\n\n- **Workspace DCR column split**: keep critical columns in Analytics, route verbose ones (raw payload, debug fields) to lake-only. Portal table tier change can't do column-level \u2014 DCR is the only way.\n- **KQL Job promotion**: schedule a query against the lake tier to promote matching rows back into Analytics. Replaces a scheduled rule for non-real-time use cases.\n- **Summary rule**: pre-aggregate at ingest using a transformation rule, keep aggregates in Analytics, raw in lake.",
+                            "json": "### Methodology \u2014 how the query-weighted model works\n\n1. **Establish baseline** \u2014 average hourly ingestion per table over the global *Analysis window* (controlled by the pill at the top of the workbook).\n2. **Inventory queries** \u2014 every query in `LAQueryLogs` over the *Query activity lookback* window (default 7 days, capped at 30 days due to LAQueryLogs default retention), tagged Human or Automated based on `RequestClientApp`.\n3. **Estimate scan volume** per query: `avgHourlyIngestionGB \u00d7 queryTimeRangeHours`. Conservative upper bound \u2014 filtered queries actually scan less.\n4. **Compute lake cost** = ingest + processing + amortised storage + (scan \u00d7 lake query price).\n5. **Verdict** based on Analytics cost vs. Lake total cost with a 1.5\u00d7 safety margin for the strong-candidate label.\n\n**Why two time windows?** The ingestion baseline and query activity window measure different things. The baseline should be long enough for stable per-table averages \u2014 it uses the global *Analysis window*. The query window is separate because LAQueryLogs has its own 30-day retention limit, and recent query patterns are a better predictor of current cost than historical patterns.",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -915,14 +898,36 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \u2699\ufe0f Enabling LAQueryLogs\n\nIf the availability check shows 0 rows:\n\n1. Azure portal \u2192 workspace \u2192 **Diagnostic settings**.\n2. Add setting \u2192 category **Audit** \u2192 destination **Send to Log Analytics workspace** \u2192 target **this same workspace**.\n3. Wait ~15 minutes for data.\n\n`LAQueryLogs` counts toward your workspace volume but is typically < 50 MB/day.\n\n**Methodology caveats**\n- `ScanSizeGB` is an upper bound \u2014 filtered queries scan less.\n- The `extract_all` regex catches pipeline-start table references but may miss `union *` or `search in (*)`.\n- Tables with no queries in the lookback show zero query cost \u2014 they're ideal lake candidates if ingest/storage savings are positive."
+                            "json": "### Enabling LAQueryLogs\n\nIf the availability check shows 0 rows:\n\n1. Azure portal \u2192 workspace \u2192 **Diagnostic settings**.\n2. Add setting \u2192 category **Audit** \u2192 destination **Send to Log Analytics workspace** \u2192 target **this same workspace**.\n3. Wait ~15 minutes for data.\n\n`LAQueryLogs` counts toward your workspace volume but is typically < 50 MB/day.\n\n**Methodology caveats**\n- `ScanSizeGB` is an upper bound \u2014 filtered queries scan less.\n- The `extract_all` regex catches pipeline-start table references but may miss `union *` or `search in (*)`.\n- Tables with no queries in the lookback show zero query cost \u2014 they're ideal lake candidates if ingest/storage savings are positive."
                         },
                         "name": "queryweighted-notes"
+                    }
+                ]
+            },
+            "conditionalVisibility": {
+                "parameterName": "selectedTab",
+                "comparison": "isEqualTo",
+                "value": "queryweighted"
+            },
+            "name": "group-queryweighted"
+        },
+        {
+            "type": 12,
+            "content": {
+                "version": "NotebookGroup/1.0",
+                "groupType": "editable",
+                "items": [
+                    {
+                        "type": 1,
+                        "content": {
+                            "json": "## Analytic Rule Coverage\n\nLive pull from `Microsoft.SecurityInsights/alertRules` via ARM. Use the dropdown below to search rules by table name \u2014 any table that appears is load-bearing for detection and needs a plan before moving to lake-only."
+                        },
+                        "name": "rules-header"
                     },
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udd2c Methodology \u2014 how the query-weighted model works\n\n1. **Establish baseline** \u2014 average hourly ingestion per table over the *Ingestion lookback* window (default 90 days).\n2. **Inventory queries** \u2014 every query in `LAQueryLogs` over the *Query lookback* window (default 7 days), tagged Human or Automated based on `RequestClientApp`.\n3. **Estimate scan volume** per query: `avgHourlyIngestionGB \u00d7 queryTimeRangeHours`. Conservative upper bound \u2014 real filtered queries scan less.\n4. **Compute lake cost** = ingest + processing + amortised storage + (scan \u00d7 lake query price).\n5. **Verdict** based on Analytics cost vs. Lake total cost with a 1.5\u00d7 safety margin for the 'strong candidate' label.",
+                            "json": "### Detection impact decision matrix\n\nWhen a table appears in the rule list AND its rules show recent alerts:\n\n| Rule severity | Recent alerts | Verdict |\n|---|---|---|\n| High / Critical | Any | \ud83d\udd34 Keep in analytics \u2014 detection-critical |\n| Medium | > 10 in window | \ud83d\udfe0 Review \u2014 quantify detection value vs. saving |\n| Medium | < 10 in window | \ud83d\udfe1 Consider DCR column split |\n| Low / Informational | Any | \ud83d\udfe1 Likely safe with DCR split or KQL Job |\n| Any | Zero in 90 days | \u26aa Detection-dormant \u2014 safe to move |",
                             "style": "info"
                         },
                         "conditionalVisibility": {
@@ -986,7 +991,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udd0e Rules referencing a specific table"
+                            "json": "### Rules referencing a specific table"
                         },
                         "name": "table-search-header"
                     },
@@ -1038,7 +1043,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udcc8 Detection Impact \u2014 Alert Activity for the Selected Table\n\nFor each rule that references **{TableSearch}**, this shows how often it actually fired in the chosen window. A rule with rich query history but **zero recent alerts** is detection-dormant \u2014 moving the underlying table is low risk. A rule firing High-severity alerts regularly is load-bearing and needs a mitigation plan before you move."
+                            "json": "### Detection Impact \u2014 Alert Activity for the Selected Table\n\nFor each rule that references **{TableSearch}**, this shows how often it actually fired in the chosen window. A rule with rich query history but **zero recent alerts** is detection-dormant \u2014 moving the underlying table is low risk. A rule firing High-severity alerts regularly is load-bearing and needs a mitigation plan before you move."
                         },
                         "name": "alert-activity-header"
                     },
@@ -1114,7 +1119,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udcca Severity Distribution Across All Active Rules"
+                            "json": "### Severity Distribution Across All Active Rules"
                         },
                         "name": "severity-dist-header"
                     },
@@ -1227,7 +1232,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udce6 Summary"
+                            "json": "### Summary"
                         },
                         "name": "xdr-summary-header"
                     },
@@ -1260,7 +1265,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "### \ud83d\udccb Per-Table Breakdown"
+                            "json": "### Per-Table Breakdown"
                         },
                         "name": "xdr-table-header"
                     },
@@ -1331,7 +1336,7 @@
                     {
                         "type": 1,
                         "content": {
-                            "json": "---\n### \ud83d\udccb Standalone query for Defender Advanced Hunting\n\nCopy the KQL below and run directly at [security.microsoft.com/advanced-hunting](https://security.microsoft.com/advanced-hunting). This version uses hardcoded constants so it works outside the workbook context \u2014 adjust the pricing variables at the top for your region and pricing model."
+                            "json": "### Standalone query for Defender Advanced Hunting\n\nCopy the KQL below and run directly at [security.microsoft.com/advanced-hunting](https://security.microsoft.com/advanced-hunting). This version uses hardcoded constants so it works outside the workbook context \u2014 adjust the pricing variables at the top for your region and pricing model."
                         },
                         "name": "xdr-standalone-header"
                     },
