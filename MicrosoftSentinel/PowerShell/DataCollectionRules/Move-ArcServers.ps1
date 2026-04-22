@@ -278,19 +278,31 @@ elseif ($AcceptDisclaimer) {
 function Resolve-AzContextForSubscription {
     param ([string]$SubscriptionId)
 
-    Set-AzContext -SubscriptionId $SubscriptionId -WarningAction SilentlyContinue | Out-Null
-    $ctx = Get-AzContext
-    if (-not $ctx -or -not $ctx.Subscription) {
-        throw "No Az context active. Run Connect-AzAccount first."
+    # Verify the subscription is accessible to the current login first.
+    # Set-AzContext -SubscriptionId silently no-ops if the sub isn't in the
+    # account's enumerated contexts, leaving you on the previous sub.
+    $sub = Get-AzSubscription -SubscriptionId $SubscriptionId -ErrorAction SilentlyContinue
+    if (-not $sub) {
+        throw "Subscription '$SubscriptionId' is not accessible to the current Az login. " +
+              "Run 'Get-AzSubscription' to see available subscriptions, or 'Connect-AzAccount -Tenant <tenantId>' to log in to the correct tenant."
     }
 
-    $sub = $ctx.Subscription
+    # Pass the subscription object directly — more reliable than -SubscriptionId
+    # because it forces Az.Accounts to build the context from a known-good source.
+    Set-AzContext -Subscription $sub -WarningAction SilentlyContinue | Out-Null
+
+    $ctx = Get-AzContext
+    if (-not $ctx -or -not $ctx.Subscription) {
+        throw "No Az context active after Set-AzContext. Run Connect-AzAccount first."
+    }
+
+    $ctxSub = $ctx.Subscription
     $resolvedId = $null
-    if ($sub.PSObject.Properties['Id']             -and $sub.Id)             { $resolvedId = $sub.Id }
-    elseif ($sub.PSObject.Properties['SubscriptionId'] -and $sub.SubscriptionId) { $resolvedId = $sub.SubscriptionId }
+    if ($ctxSub.PSObject.Properties['Id']             -and $ctxSub.Id)             { $resolvedId = $ctxSub.Id }
+    elseif ($ctxSub.PSObject.Properties['SubscriptionId'] -and $ctxSub.SubscriptionId) { $resolvedId = $ctxSub.SubscriptionId }
 
     if ($resolvedId -ne $SubscriptionId) {
-        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId'). Check that you are logged in and the subscription is accessible in the current tenant."
+        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId') despite the subscription being listed as accessible. This is a known Az.Accounts quirk — try 'Clear-AzContext -Force' followed by 'Connect-AzAccount'."
     }
     return $ctx
 }
