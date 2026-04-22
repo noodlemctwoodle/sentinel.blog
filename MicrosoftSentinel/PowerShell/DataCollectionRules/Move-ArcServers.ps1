@@ -265,6 +265,11 @@ elseif ($AcceptDisclaimer) {
 }
 
 # ---- 1. Tenant check ----
+# Pin each subscription to an explicit context object and pass it via
+# -DefaultProfile to every Az cmdlet. Relying on the ambient context set
+# by Set-AzContext is unreliable when multiple contexts are active — the
+# switch can silently fail to take effect and subsequent cmdlets run
+# against the wrong subscription.
 $srcCtx = Set-AzContext -SubscriptionId $SourceSubscriptionId -WarningAction SilentlyContinue
 $srcTenant = $srcCtx.Tenant.Id
 
@@ -275,19 +280,26 @@ if ($srcTenant -ne $dstTenant) {
     throw "Source tenant ($srcTenant) and destination tenant ($dstTenant) differ. Cross-tenant Arc move is not supported without agent disconnect/reconnect."
 }
 
+# Sanity-check that both contexts resolved to the subscription we asked for.
+if ($srcCtx.Subscription.Id -ne $SourceSubscriptionId) {
+    throw "Failed to acquire source context for $SourceSubscriptionId (got $($srcCtx.Subscription.Id)). Check credentials / tenant."
+}
+if ($dstCtx.Subscription.Id -ne $DestinationSubscriptionId) {
+    throw "Failed to acquire destination context for $DestinationSubscriptionId (got $($dstCtx.Subscription.Id)). Check credentials / tenant."
+}
+
 # ---- 2. Destination RG check ----
-$destRg = Get-AzResourceGroup -Name $DestinationResourceGroup -ErrorAction SilentlyContinue
+$destRg = Get-AzResourceGroup -Name $DestinationResourceGroup -DefaultProfile $dstCtx -ErrorAction SilentlyContinue
 if (-not $destRg) {
     throw "Destination resource group '$DestinationResourceGroup' not found in subscription $DestinationSubscriptionId. Create it first (same region as the Arc servers)."
 }
 $destLocation = $destRg.Location
 
 # ---- 3. Discover Arc machines in source ----
-Set-AzContext -SubscriptionId $SourceSubscriptionId -WarningAction SilentlyContinue | Out-Null
-
 $machines = Get-AzResource `
     -ResourceGroupName $SourceResourceGroup `
-    -ResourceType 'Microsoft.HybridCompute/machines'
+    -ResourceType 'Microsoft.HybridCompute/machines' `
+    -DefaultProfile $srcCtx
 
 if ($MachineNameFilter) {
     $machines = $machines | Where-Object {
@@ -322,7 +334,7 @@ $validateBody = @{
 
 $validatePath = "/subscriptions/$SourceSubscriptionId/resourceGroups/$SourceResourceGroup/validateMoveResources?api-version=2021-04-01"
 Write-Host "Running ARM pre-flight validateMoveResources..." -ForegroundColor Cyan
-$validateResponse = Invoke-AzRestMethod -Path $validatePath -Method POST -Payload $validateBody
+$validateResponse = Invoke-AzRestMethod -Path $validatePath -Method POST -Payload $validateBody -DefaultProfile $srcCtx
 if ($validateResponse.StatusCode -notin 202, 204) {
     throw "Pre-flight validation failed: $($validateResponse.Content)"
 }
@@ -342,6 +354,7 @@ foreach ($batch in $batches) {
             -DestinationSubscriptionId $DestinationSubscriptionId `
             -DestinationResourceGroupName $DestinationResourceGroup `
             -ResourceId $batch `
+            -DefaultProfile $srcCtx `
             -Force
         Write-Host "Batch $batchNum moved." -ForegroundColor Green
     }
@@ -350,10 +363,10 @@ foreach ($batch in $batches) {
 # ---- 7. Post-move verification ----
 if (-not $WhatIfPreference) {
     Start-Sleep -Seconds 15
-    Set-AzContext -SubscriptionId $DestinationSubscriptionId -WarningAction SilentlyContinue | Out-Null
     $moved = Get-AzResource `
         -ResourceGroupName $DestinationResourceGroup `
-        -ResourceType 'Microsoft.HybridCompute/machines' |
+        -ResourceType 'Microsoft.HybridCompute/machines' `
+        -DefaultProfile $dstCtx |
         Where-Object { $machines.Name -contains $_.Name }
 
     Write-Host "`nVerified at destination:" -ForegroundColor Cyan
