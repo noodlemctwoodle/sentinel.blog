@@ -270,22 +270,39 @@ elseif ($AcceptDisclaimer) {
 # by Set-AzContext is unreliable when multiple contexts are active — the
 # switch can silently fail to take effect and subsequent cmdlets run
 # against the wrong subscription.
-$srcCtx = Set-AzContext -SubscriptionId $SourceSubscriptionId -WarningAction SilentlyContinue
+#
+# Set-AzContext's return value can be a stale snapshot depending on the Az
+# module version; always follow with Get-AzContext to get the authoritative
+# current context, and tolerate both .Id and .SubscriptionId property names
+# that have existed in different Az versions.
+function Resolve-AzContextForSubscription {
+    param ([string]$SubscriptionId)
+
+    Set-AzContext -SubscriptionId $SubscriptionId -WarningAction SilentlyContinue | Out-Null
+    $ctx = Get-AzContext
+    if (-not $ctx -or -not $ctx.Subscription) {
+        throw "No Az context active. Run Connect-AzAccount first."
+    }
+
+    $sub = $ctx.Subscription
+    $resolvedId = $null
+    if ($sub.PSObject.Properties['Id']             -and $sub.Id)             { $resolvedId = $sub.Id }
+    elseif ($sub.PSObject.Properties['SubscriptionId'] -and $sub.SubscriptionId) { $resolvedId = $sub.SubscriptionId }
+
+    if ($resolvedId -ne $SubscriptionId) {
+        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId'). Check that you are logged in and the subscription is accessible in the current tenant."
+    }
+    return $ctx
+}
+
+$srcCtx = Resolve-AzContextForSubscription -SubscriptionId $SourceSubscriptionId
 $srcTenant = $srcCtx.Tenant.Id
 
-$dstCtx = Set-AzContext -SubscriptionId $DestinationSubscriptionId -WarningAction SilentlyContinue
+$dstCtx = Resolve-AzContextForSubscription -SubscriptionId $DestinationSubscriptionId
 $dstTenant = $dstCtx.Tenant.Id
 
 if ($srcTenant -ne $dstTenant) {
     throw "Source tenant ($srcTenant) and destination tenant ($dstTenant) differ. Cross-tenant Arc move is not supported without agent disconnect/reconnect."
-}
-
-# Sanity-check that both contexts resolved to the subscription we asked for.
-if ($srcCtx.Subscription.Id -ne $SourceSubscriptionId) {
-    throw "Failed to acquire source context for $SourceSubscriptionId (got $($srcCtx.Subscription.Id)). Check credentials / tenant."
-}
-if ($dstCtx.Subscription.Id -ne $DestinationSubscriptionId) {
-    throw "Failed to acquire destination context for $DestinationSubscriptionId (got $($dstCtx.Subscription.Id)). Check credentials / tenant."
 }
 
 # ---- 2. Destination RG check ----
