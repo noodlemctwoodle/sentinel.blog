@@ -267,7 +267,7 @@ elseif ($AcceptDisclaimer) {
 # ---- 1. Tenant check ----
 # Pin each subscription to an explicit context object and pass it via
 # -DefaultProfile to every Az cmdlet. Relying on the ambient context set
-# by Set-AzContext is unreliable when multiple contexts are active — the
+# by Set-AzContext is unreliable when multiple contexts are active - the
 # switch can silently fail to take effect and subsequent cmdlets run
 # against the wrong subscription.
 #
@@ -287,7 +287,7 @@ function Resolve-AzContextForSubscription {
               "Run 'Get-AzSubscription' to see available subscriptions, or 'Connect-AzAccount -Tenant <tenantId>' to log in to the correct tenant."
     }
 
-    # Pass the subscription object directly — more reliable than -SubscriptionId
+    # Pass the subscription object directly - more reliable than -SubscriptionId
     # because it forces Az.Accounts to build the context from a known-good source.
     Set-AzContext -Subscription $sub -WarningAction SilentlyContinue | Out-Null
 
@@ -302,7 +302,7 @@ function Resolve-AzContextForSubscription {
     elseif ($ctxSub.PSObject.Properties['SubscriptionId'] -and $ctxSub.SubscriptionId) { $resolvedId = $ctxSub.SubscriptionId }
 
     if ($resolvedId -ne $SubscriptionId) {
-        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId') despite the subscription being listed as accessible. This is a known Az.Accounts quirk — try 'Clear-AzContext -Force' followed by 'Connect-AzAccount'."
+        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId') despite the subscription being listed as accessible. This is a known Az.Accounts quirk - try 'Clear-AzContext -Force' followed by 'Connect-AzAccount'."
     }
     return $ctx
 }
