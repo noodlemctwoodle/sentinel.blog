@@ -14,9 +14,11 @@
       1. Validates that source and destination subscriptions are in the same
          Microsoft Entra tenant (cross-tenant Arc moves are not supported via
          this method and require a full disconnect/reconnect).
-      2. Validates that the destination resource group exists and is in the same
-         Azure region as every machine being moved (cross-region Arc moves
-         require extension removal and re-registration, not a metadata move).
+      2. Validates that the destination resource group exists. If the
+         destination RG is in a different region than the machines, the
+         script warns but continues - this is a supported ARM metadata move;
+         resources retain their original location regardless of RG region.
+         Pass -FailOnRegionMismatch to abort instead.
       3. Discovers Arc machines in the source resource group, with optional
          wildcard name filtering.
       4. Calls the ARM validateMoveResources pre-flight API as an authoritative
@@ -53,8 +55,15 @@
 
 .PARAMETER DestinationResourceGroup
     Name of the resource group in the destination subscription that will
-    receive the machines. Must already exist and must be in the same Azure
-    region as every machine being moved.
+    receive the machines. Must already exist. Region can differ from the
+    machines - resources retain their original location across the move.
+    Pass -FailOnRegionMismatch to abort on mismatch instead of warning.
+
+.PARAMETER FailOnRegionMismatch
+    By default the script warns and proceeds when the destination RG is in a
+    different region than the source machines (ARM metadata moves preserve
+    resource location). Set this switch to enforce matching regions and
+    abort otherwise.
 
 .PARAMETER MachineNameFilter
     Optional array of machine name patterns (wildcards supported) used to limit
@@ -179,10 +188,29 @@ param(
     [Parameter(Mandatory)] [string]   $DestinationResourceGroup,
     [string[]] $MachineNameFilter,
     [int]      $BatchSize = 50,
-    [switch]   $AcceptDisclaimer
+    [switch]   $AcceptDisclaimer,
+    # When the destination RG is in a different region than the machines, the
+    # script warns but continues - this is a supported ARM metadata move,
+    # resources retain their original location. Set this switch to fail hard
+    # instead, matching earlier script behaviour.
+    [switch]   $FailOnRegionMismatch
 )
 
 $ErrorActionPreference = 'Stop'
+
+# ---- Module prerequisites ----
+# Az.Accounts provides Get-AzContext / Get-AzSubscription / Invoke-AzRestMethod.
+# We rely on the bearer token Az.Accounts attaches to Invoke-AzRestMethod for
+# every ARM call, so this module is required even though we no longer call
+# Set-AzContext directly.
+foreach ($moduleName in @('Az.Accounts')) {
+    if (-not (Get-Module -Name $moduleName -ListAvailable -ErrorAction SilentlyContinue)) {
+        throw "Required module '$moduleName' is not installed. Run: Install-Module $moduleName -Scope CurrentUser"
+    }
+    if (-not (Get-Module -Name $moduleName -ErrorAction SilentlyContinue)) {
+        Import-Module $moduleName -ErrorAction Stop
+    }
+}
 
 # ---- 0. Warning banner and disclaimer acknowledgement ----
 $banner = @'
@@ -217,7 +245,7 @@ $banner = @'
 #         resource. Re-scope or re-assign at the destination.                  #
 #                                                                              #
 #     [ ] Microsoft Defender for Servers                                       #
-#         The plan is enabled per-subscription. Confirm the destination        #
+#         The plan is enabled per-subscription. Confirm the destination         #
 #         subscription has the correct Defender plan enabled.                  #
 #                                                                              #
 #     [ ] Data Collection Rules (DCRs) for Azure Monitor Agent                 #
@@ -226,7 +254,7 @@ $banner = @'
 #         destination scope.                                                   #
 #                                                                              #
 #     [ ] Resource locks, tags inherited from source scope, and                #
-#         Sentinel analytics rules that filter by subscription ID.             #
+#         Sentinel analytics rules that filter by subscription ID.              #
 #                                                                              #
 #   AGENT BEHAVIOUR                                                            #
 #   After the move, the Connected Machine agent will continue reporting        #
@@ -237,8 +265,9 @@ $banner = @'
 #                                                                              #
 #   CONSTRAINTS ENFORCED BY THIS SCRIPT                                        #
 #     - Source and destination must be in the same Microsoft Entra tenant.     #
-#     - Destination RG must exist and be in the same Azure region as           #
-#       every machine being moved.                                             #
+#     - Destination RG must exist. Region mismatch is tolerated (warning);     #
+#       resources keep their original location. Pre-flight validation will      #
+#       reject the move if Azure cannot honour it.                             #
 #                                                                              #
 ################################################################################
 
@@ -311,7 +340,7 @@ function Invoke-ArmRequest {
     if ($AcceptStatus -notcontains $resp.StatusCode) {
         throw "ARM $Method $Path failed with HTTP $($resp.StatusCode): $($resp.Content)"
     }
-    if ($resp.Content) { return $resp.Content | ConvertFrom-Json -Depth 20 }
+    if ($resp.Content) { return $resp.Content | ConvertFrom-Json }
     return $null
 }
 
@@ -353,11 +382,31 @@ Write-Host "Found $($machines.Count) Arc machine(s) to move:" -ForegroundColor C
 $machines | Format-Table Name, Location, ResourceId -AutoSize
 
 # ---- 4. Region validation ----
-$badRegion = @($machines | Where-Object { $_.Location -ne $destLocation })
-if ($badRegion.Count -gt 0) {
-    Write-Error "Destination RG is in '$destLocation' but these machines are in a different region. Cross-region move is NOT supported via Move-AzResource and requires agent reconnect:"
-    $badRegion | Format-Table Name, Location -AutoSize
-    throw "Aborting. Either create the destination RG in the matching region, or follow the cross-region procedure (disconnect + azcmagent connect) for these hosts."
+# Azure returns region names in either internal form ('uksouth') or display
+# form ('UK South') depending on the endpoint. Normalise by stripping spaces
+# and lowercasing before comparison.
+function ConvertTo-NormalizedRegion {
+    param ([string]$Region)
+    if (-not $Region) { return '' }
+    return ($Region -replace '\s', '').ToLowerInvariant()
+}
+
+# Region mismatch is not a blocker for an ARM metadata move - resources keep
+# their original location regardless of destination RG region. We surface it
+# as a warning so users notice unexpected geography, and only abort if
+# -FailOnRegionMismatch is explicitly requested.
+$destLocationNorm = ConvertTo-NormalizedRegion $destLocation
+$mismatched = @($machines | Where-Object {
+    (ConvertTo-NormalizedRegion $_.Location) -ne $destLocationNorm
+})
+if ($mismatched.Count -gt 0) {
+    if ($FailOnRegionMismatch) {
+        Write-Error "Destination RG is in '$destLocation' but these machines are in a different region (and -FailOnRegionMismatch is set):"
+        $mismatched | Format-Table Name, Location -AutoSize
+        throw "Aborting due to -FailOnRegionMismatch. Resources would retain their original region after the move; remove the switch if that is intended."
+    }
+    Write-Warning "Destination RG is in '$destLocation' but $($mismatched.Count) machine(s) are in a different region. This is fine for a metadata move - resources keep their original location. Pre-flight validation will confirm."
+    $mismatched | Format-Table Name, Location -AutoSize
 }
 
 # ---- 5. Pre-flight validate via ARM (official dry run) ----
