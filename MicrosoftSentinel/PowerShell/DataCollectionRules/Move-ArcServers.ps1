@@ -264,112 +264,121 @@ elseif ($AcceptDisclaimer) {
     Write-Host ""
 }
 
-# ---- 1. Tenant check ----
-# Pin each subscription to an explicit context object and pass it via
-# -DefaultProfile to every Az cmdlet. Relying on the ambient context set
-# by Set-AzContext is unreliable when multiple contexts are active - the
-# switch can silently fail to take effect and subsequent cmdlets run
-# against the wrong subscription.
-#
-# Set-AzContext's return value can be a stale snapshot depending on the Az
-# module version; always follow with Get-AzContext to get the authoritative
-# current context, and tolerate both .Id and .SubscriptionId property names
-# that have existed in different Az versions.
-function Resolve-AzContextForSubscription {
-    param ([string]$SubscriptionId)
+# ---- 1. Verify login, resolve tenant, and confirm both subs are accessible ----
+# We intentionally do NOT call Set-AzContext to switch between subs. On many
+# setups only one context is registered ('My AzContext') and the switch is
+# either a no-op or updates a different named context. Since Arc cross-sub
+# moves require same-tenant, a single bearer token from the active login is
+# valid for both subscriptions; we target each sub via the URL path of
+# Invoke-AzRestMethod / explicit -Scope parameters on resource-level cmdlets.
+$ambientCtx = Get-AzContext
+if (-not $ambientCtx -or -not $ambientCtx.Tenant -or -not $ambientCtx.Tenant.Id) {
+    throw "No active Az login. Run 'Connect-AzAccount' first."
+}
+$activeTenant = $ambientCtx.Tenant.Id
 
-    # Verify the subscription is accessible to the current login first.
-    # Set-AzContext -SubscriptionId silently no-ops if the sub isn't in the
-    # account's enumerated contexts, leaving you on the previous sub.
+function Test-SubscriptionAccessible {
+    param ([string]$SubscriptionId, [string]$ExpectedTenant)
     $sub = Get-AzSubscription -SubscriptionId $SubscriptionId -ErrorAction SilentlyContinue
     if (-not $sub) {
         throw "Subscription '$SubscriptionId' is not accessible to the current Az login. " +
-              "Run 'Get-AzSubscription' to see available subscriptions, or 'Connect-AzAccount -Tenant <tenantId>' to log in to the correct tenant."
+              "Run 'Connect-AzAccount -Tenant $ExpectedTenant' and confirm the account has access."
     }
-
-    # Pass the subscription object directly - more reliable than -SubscriptionId
-    # because it forces Az.Accounts to build the context from a known-good source.
-    Set-AzContext -Subscription $sub -WarningAction SilentlyContinue | Out-Null
-
-    $ctx = Get-AzContext
-    if (-not $ctx -or -not $ctx.Subscription) {
-        throw "No Az context active after Set-AzContext. Run Connect-AzAccount first."
+    $subTenant = if ($sub.PSObject.Properties['TenantId']) { $sub.TenantId } else { $null }
+    if ($subTenant -and $subTenant -ne $ExpectedTenant) {
+        throw "Subscription '$SubscriptionId' lives in tenant $subTenant, not $ExpectedTenant. " +
+              "Cross-tenant Arc move is not supported without agent disconnect/reconnect."
     }
-
-    $ctxSub = $ctx.Subscription
-    $resolvedId = $null
-    if ($ctxSub.PSObject.Properties['Id']             -and $ctxSub.Id)             { $resolvedId = $ctxSub.Id }
-    elseif ($ctxSub.PSObject.Properties['SubscriptionId'] -and $ctxSub.SubscriptionId) { $resolvedId = $ctxSub.SubscriptionId }
-
-    if ($resolvedId -ne $SubscriptionId) {
-        throw "Failed to switch Az context to $SubscriptionId (got '$resolvedId') despite the subscription being listed as accessible. This is a known Az.Accounts quirk - try 'Clear-AzContext -Force' followed by 'Connect-AzAccount'."
-    }
-    return $ctx
+    return $sub
 }
 
-$srcCtx = Resolve-AzContextForSubscription -SubscriptionId $SourceSubscriptionId
-$srcTenant = $srcCtx.Tenant.Id
+Write-Host "Validating source subscription access..." -ForegroundColor Cyan
+$null = Test-SubscriptionAccessible -SubscriptionId $SourceSubscriptionId      -ExpectedTenant $activeTenant
+Write-Host "Validating destination subscription access..." -ForegroundColor Cyan
+$null = Test-SubscriptionAccessible -SubscriptionId $DestinationSubscriptionId -ExpectedTenant $activeTenant
 
-$dstCtx = Resolve-AzContextForSubscription -SubscriptionId $DestinationSubscriptionId
-$dstTenant = $dstCtx.Tenant.Id
-
-if ($srcTenant -ne $dstTenant) {
-    throw "Source tenant ($srcTenant) and destination tenant ($dstTenant) differ. Cross-tenant Arc move is not supported without agent disconnect/reconnect."
+# Helper: throw on non-success status, return parsed JSON content
+function Invoke-ArmRequest {
+    param (
+        [string]$Path,
+        [string]$Method = 'GET',
+        $Body,
+        [int[]]$AcceptStatus = @(200, 201, 202, 204)
+    )
+    $params = @{ Path = $Path; Method = $Method }
+    if ($Body) { $params['Payload'] = ($Body | ConvertTo-Json -Depth 10 -Compress) }
+    $resp = Invoke-AzRestMethod @params
+    if ($AcceptStatus -notcontains $resp.StatusCode) {
+        throw "ARM $Method $Path failed with HTTP $($resp.StatusCode): $($resp.Content)"
+    }
+    if ($resp.Content) { return $resp.Content | ConvertFrom-Json -Depth 20 }
+    return $null
 }
 
-# ---- 2. Destination RG check ----
-$destRg = Get-AzResourceGroup -Name $DestinationResourceGroup -DefaultProfile $dstCtx -ErrorAction SilentlyContinue
-if (-not $destRg) {
+# ---- 2. Destination RG check (ARM GET on destination sub) ----
+$destRgPath = "/subscriptions/$DestinationSubscriptionId/resourceGroups/${DestinationResourceGroup}?api-version=2021-04-01"
+$destRgResp = Invoke-AzRestMethod -Path $destRgPath -Method GET
+if ($destRgResp.StatusCode -eq 404) {
     throw "Destination resource group '$DestinationResourceGroup' not found in subscription $DestinationSubscriptionId. Create it first (same region as the Arc servers)."
 }
-$destLocation = $destRg.Location
+if ($destRgResp.StatusCode -ne 200) {
+    throw "Could not read destination RG (HTTP $($destRgResp.StatusCode)): $($destRgResp.Content)"
+}
+$destLocation = ($destRgResp.Content | ConvertFrom-Json).location
 
-# ---- 3. Discover Arc machines in source ----
-$machines = Get-AzResource `
-    -ResourceGroupName $SourceResourceGroup `
-    -ResourceType 'Microsoft.HybridCompute/machines' `
-    -DefaultProfile $srcCtx
+# ---- 3. Discover Arc machines in source (ARM GET on source sub) ----
+$listPath = "/subscriptions/$SourceSubscriptionId/resourceGroups/$SourceResourceGroup/providers/Microsoft.HybridCompute/machines?api-version=2024-07-10"
+$listResult = Invoke-ArmRequest -Path $listPath -Method GET
+$machines = @($listResult.value | ForEach-Object {
+    [PSCustomObject]@{
+        Name       = $_.name
+        Location   = $_.location
+        ResourceId = $_.id
+    }
+})
 
 if ($MachineNameFilter) {
-    $machines = $machines | Where-Object {
+    $machines = @($machines | Where-Object {
         $name = $_.Name
         $MachineNameFilter | Where-Object { $name -like $_ }
-    }
+    })
 }
 
-if (-not $machines) {
+if (-not $machines -or $machines.Count -eq 0) {
     Write-Warning "No Arc machines found in $SourceSubscriptionId/$SourceResourceGroup matching filter."
     return
 }
 
 Write-Host "Found $($machines.Count) Arc machine(s) to move:" -ForegroundColor Cyan
-$machines | Select-Object Name, Location, ResourceId | Format-Table -AutoSize
+$machines | Format-Table Name, Location, ResourceId -AutoSize
 
 # ---- 4. Region validation ----
-$badRegion = $machines | Where-Object { $_.Location -ne $destLocation }
-if ($badRegion) {
+$badRegion = @($machines | Where-Object { $_.Location -ne $destLocation })
+if ($badRegion.Count -gt 0) {
     Write-Error "Destination RG is in '$destLocation' but these machines are in a different region. Cross-region move is NOT supported via Move-AzResource and requires agent reconnect:"
-    $badRegion | Select-Object Name, Location | Format-Table -AutoSize
+    $badRegion | Format-Table Name, Location -AutoSize
     throw "Aborting. Either create the destination RG in the matching region, or follow the cross-region procedure (disconnect + azcmagent connect) for these hosts."
 }
 
 # ---- 5. Pre-flight validate via ARM (official dry run) ----
 # https://learn.microsoft.com/azure/azure-resource-manager/management/move-resource-group-and-subscription#validate-move
 $resourceIds = @($machines.ResourceId)
-$validateBody = @{
-    resources           = $resourceIds
-    targetResourceGroup = "/subscriptions/$DestinationSubscriptionId/resourceGroups/$DestinationResourceGroup"
-} | ConvertTo-Json -Depth 5
-
+$targetRgId  = "/subscriptions/$DestinationSubscriptionId/resourceGroups/$DestinationResourceGroup"
+$validateBody = @{ resources = $resourceIds; targetResourceGroup = $targetRgId } | ConvertTo-Json -Depth 5
 $validatePath = "/subscriptions/$SourceSubscriptionId/resourceGroups/$SourceResourceGroup/validateMoveResources?api-version=2021-04-01"
 Write-Host "Running ARM pre-flight validateMoveResources..." -ForegroundColor Cyan
-$validateResponse = Invoke-AzRestMethod -Path $validatePath -Method POST -Payload $validateBody -DefaultProfile $srcCtx
+$validateResponse = Invoke-AzRestMethod -Path $validatePath -Method POST -Payload $validateBody
 if ($validateResponse.StatusCode -notin 202, 204) {
-    throw "Pre-flight validation failed: $($validateResponse.Content)"
+    throw "Pre-flight validation failed (HTTP $($validateResponse.StatusCode)): $($validateResponse.Content)"
 }
 Write-Host "Pre-flight accepted (async). Proceeding." -ForegroundColor Green
 
-# ---- 6. Batched move ----
+# ---- 6. Batched move via ARM moveResources ----
+# We call the REST API directly instead of Move-AzResource to avoid any
+# context-switching requirements. The bearer token carried by Invoke-AzRestMethod
+# is tenant-scoped and valid for both source and destination subs.
+$movePath = "/subscriptions/$SourceSubscriptionId/resourceGroups/$SourceResourceGroup/moveResources?api-version=2021-04-01"
+
 $batches = for ($i = 0; $i -lt $resourceIds.Count; $i += $BatchSize) {
     , ($resourceIds[$i..([math]::Min($i + $BatchSize - 1, $resourceIds.Count - 1))])
 }
@@ -378,31 +387,35 @@ $batchNum = 0
 foreach ($batch in $batches) {
     $batchNum++
     $target = "batch $batchNum ($($batch.Count) machine(s)) -> $DestinationSubscriptionId/$DestinationResourceGroup"
-    if ($PSCmdlet.ShouldProcess($target, 'Move-AzResource')) {
-        Move-AzResource `
-            -DestinationSubscriptionId $DestinationSubscriptionId `
-            -DestinationResourceGroupName $DestinationResourceGroup `
-            -ResourceId $batch `
-            -DefaultProfile $srcCtx `
-            -Force
-        Write-Host "Batch $batchNum moved." -ForegroundColor Green
+    if ($PSCmdlet.ShouldProcess($target, 'ARM moveResources')) {
+        $moveBody = @{ resources = @($batch); targetResourceGroup = $targetRgId } | ConvertTo-Json -Depth 5
+        $moveResp = Invoke-AzRestMethod -Path $movePath -Method POST -Payload $moveBody
+        if ($moveResp.StatusCode -notin 200, 202) {
+            throw "Batch $batchNum move failed (HTTP $($moveResp.StatusCode)): $($moveResp.Content)"
+        }
+        Write-Host "Batch $batchNum submitted (async, HTTP $($moveResp.StatusCode))." -ForegroundColor Green
     }
 }
 
-# ---- 7. Post-move verification ----
+# ---- 7. Post-move verification (ARM GET on destination sub) ----
 if (-not $WhatIfPreference) {
     Start-Sleep -Seconds 15
-    $moved = Get-AzResource `
-        -ResourceGroupName $DestinationResourceGroup `
-        -ResourceType 'Microsoft.HybridCompute/machines' `
-        -DefaultProfile $dstCtx |
-        Where-Object { $machines.Name -contains $_.Name }
+    $dstListPath = "/subscriptions/$DestinationSubscriptionId/resourceGroups/$DestinationResourceGroup/providers/Microsoft.HybridCompute/machines?api-version=2024-07-10"
+    $dstList = Invoke-ArmRequest -Path $dstListPath -Method GET
+    $movedNames = @($dstList.value | ForEach-Object { $_.name })
+    $moved = @($dstList.value | Where-Object { $machines.Name -contains $_.name })
 
     Write-Host "`nVerified at destination:" -ForegroundColor Cyan
-    $moved | Select-Object Name, ResourceGroupName, Location | Format-Table -AutoSize
+    $moved | ForEach-Object {
+        [PSCustomObject]@{
+            Name              = $_.name
+            ResourceGroupName = $DestinationResourceGroup
+            Location          = $_.location
+        }
+    } | Format-Table -AutoSize
 
-    $missing = $machines | Where-Object { $moved.Name -notcontains $_.Name }
-    if ($missing) {
+    $missing = @($machines | Where-Object { $movedNames -notcontains $_.Name })
+    if ($missing.Count -gt 0) {
         Write-Warning "These machines did not appear at the destination (move may still be in progress - ARM move can take up to 4 hours):"
         $missing.Name
     }
