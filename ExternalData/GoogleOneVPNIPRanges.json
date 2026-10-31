@@ -1,14 +1,14 @@
 {
   "metadata": {
     "source": "Google One VPN geofeed with MaxMind GeoLite2 enrichment",
-    "updated": "2026-10-30T03:08:47.222488+00:00",
-    "total_ranges": 14432,
-    "ipv4_ranges": 7216,
-    "ipv6_ranges": 7216,
-    "total_addresses": 292484490483014345955490926,
+    "updated": "2026-10-31T02:54:47.585876+00:00",
+    "total_ranges": 14434,
+    "ipv4_ranges": 7217,
+    "ipv6_ranges": 7217,
+    "total_addresses": 292635606210466174602329206,
     "processing_method": "Local database lookup (no API calls)",
     "geo_source_breakdown": {
-      "MaxMind GeoLite2": 14432
+      "MaxMind GeoLite2": 14434
     }
   },
   "GoogleOneVPNRanges": [
@@ -89998,6 +89998,21 @@
       "geo_source": "MaxMind GeoLite2"
     },
     {
+      "ip_range": "162.120.228.216/29",
+      "country_code": "SG",
+      "country_name": "Singapore",
+      "region": "",
+      "city": "Singapore",
+      "latitude": 1.2997,
+      "longitude": 103.8393,
+      "address_family": "IPv4",
+      "num_addresses": 8,
+      "geofeed_country": "US",
+      "geofeed_region": "",
+      "geofeed_city": "",
+      "geo_source": "MaxMind GeoLite2"
+    },
+    {
       "ip_range": "162.120.228.224/32",
       "country_code": "RO",
       "country_name": "Romania",
@@ -108307,6 +108322,21 @@
       "longitude": -97.822,
       "address_family": "IPv6",
       "num_addresses": 18889465931478580854784,
+      "geofeed_country": "US",
+      "geofeed_region": "",
+      "geofeed_city": "",
+      "geo_source": "MaxMind GeoLite2"
+    },
+    {
+      "ip_range": "2606:40:2001:2000::/51",
+      "country_code": "US",
+      "country_name": "United States",
+      "region": "",
+      "city": "",
+      "latitude": 37.751,
+      "longitude": -97.822,
+      "address_family": "IPv6",
+      "num_addresses": 151115727451828646838272,
       "geofeed_country": "US",
       "geofeed_region": "",
       "geofeed_city": "",
